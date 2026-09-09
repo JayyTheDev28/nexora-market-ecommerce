@@ -19,7 +19,9 @@
         @yield('content')
     </main>
 
-    <x-footer />
+    @unless($hideFooter ?? false)
+        <x-footer />
+    @endunless
 
     @stack('scripts')
 

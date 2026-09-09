@@ -6,26 +6,23 @@
 <div
     x-data="registerForm()"
     x-init="loadProvinces()"
-    class="w-full bg-surface-container-low py-16 md:py-24">
+    class="w-full flex flex-col md:flex-row h-[calc(100vh-5rem)] bg-surface-container-lowest">
 
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
-        <div class="max-w-3xl mx-auto bg-surface-container-lowest rounded-3xl shadow-xl overflow-hidden">
+    <x-brand-panel caption="Join thousands of shoppers discovering something new every day." />
 
-            {{-- Header --}}
-            <div class="relative bg-inverse-surface px-8 py-14 md:px-12 text-center overflow-hidden">
-                <div class="absolute inset-0 bg-gradient-to-b from-black/60 via-inverse-surface to-inverse-surface"></div>
-                <div class="relative z-10">
-                    <h1 class="font-display-lg text-headline-lg md:text-display-lg text-on-primary">Create Your Account</h1>
-                    <p class="font-body-md text-body-md text-on-primary/80 mt-3 max-w-md mx-auto">
-                        Join Nexora and unlock access to a world of premium curated goods.
-                    </p>
-                </div>
-            </div>
+    {{-- RIGHT — scrollable form column --}}
+    <div class="flex-1 h-full overflow-y-auto">
+        <div class="max-w-2xl mx-auto px-6 md:px-10 py-10 md:py-14">
+
+            <h1 class="font-display-lg text-headline-lg md:text-3xl text-on-surface">Create Your Account</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-2">
+                Join Nexora and unlock access to a world of premium curated goods.
+            </p>
 
             {{-- This form has no action yet — frontend only, per the current build phase.
                  Validation, submission handling, and the database come in a later phase.
                  Submit currently just opens the pending-approval modal below. --}}
-            <form class="flex flex-col" @submit.prevent="submitForm()">
+            <form class="flex flex-col mt-8 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm overflow-hidden" @submit.prevent="submitForm()">
 
                 {{-- Personal Information --}}
                 <div class="p-8 md:p-12 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
@@ -215,6 +212,23 @@
                 </div>
 
             </form>
+
+            {{-- Compact footer — lives inside the scrollable column, not the full site footer,
+                 since this page suppresses <x-footer /> via hideFooter. --}}
+            <div class="mt-10 pt-6 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none"><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" fill="#ffffff"/></svg>
+                    </span>
+                    <span class="font-body-sm text-body-sm text-on-surface-variant">Nexora Market &copy; {{ now()->year }} Built for Excellence.</span>
+                </div>
+                <div class="flex items-center gap-4 font-body-sm text-body-sm text-on-surface-variant">
+                    <a href="#" class="hover:text-primary">Privacy Policy</a>
+                    <a href="#" class="hover:text-primary">Terms of Service</a>
+                    <a href="#" class="hover:text-primary">Help Center</a>
+                </div>
+            </div>
+
         </div>
     </div>
 
