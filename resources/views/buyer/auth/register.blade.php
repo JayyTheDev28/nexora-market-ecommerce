@@ -6,13 +6,13 @@
 <div
     x-data="registerForm()"
     x-init="loadProvinces()"
-    class="w-full flex flex-col md:flex-row h-[calc(100vh-5rem)] bg-surface-container-lowest">
+    class="w-full flex flex-col md:flex-row h-[calc(100vh-4rem)] bg-surface-container-lowest">
 
     <x-brand-panel caption="Join thousands of shoppers discovering something new every day." />
 
     {{-- RIGHT — scrollable form column --}}
     <div class="flex-1 h-full overflow-y-auto">
-        <div class="max-w-2xl mx-auto px-6 md:px-10 py-10 md:py-14">
+        <div class="max-w-2xl mx-auto px-6 md:px-10 py-6 md:py-8">
 
             <h1 class="font-display-lg text-headline-lg md:text-3xl text-on-surface">Create Your Account</h1>
             <p class="font-body-md text-body-md text-on-surface-variant mt-2">
@@ -25,7 +25,7 @@
             <form class="flex flex-col mt-8 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm overflow-hidden" @submit.prevent="submitForm()">
 
                 {{-- Personal Information --}}
-                <div class="p-8 md:p-12 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
+                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
                     <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
                         <span class="material-symbols-outlined text-primary text-[22px]">person</span>
                         Personal Information
@@ -35,12 +35,12 @@
                         <div class="flex flex-col gap-2">
                             <label for="first_name" class="font-label-md text-label-md text-on-surface-variant">First Name</label>
                             <input type="text" id="first_name" name="first_name" required placeholder="e.g. Jane"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                         <div class="flex flex-col gap-2">
                             <label for="last_name" class="font-label-md text-label-md text-on-surface-variant">Last Name</label>
                             <input type="text" id="last_name" name="last_name" required placeholder="e.g. Doe"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                     </div>
 
@@ -48,12 +48,12 @@
                         <div class="flex flex-col gap-2">
                             <label for="middle_initial" class="font-label-md text-label-md text-on-surface-variant">Middle Initial</label>
                             <input type="text" id="middle_initial" name="middle_initial" maxlength="5" placeholder="M.I."
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                         <div class="flex flex-col gap-2">
                             <label for="sex" class="font-label-md text-label-md text-on-surface-variant">Sex</label>
                             <select id="sex" name="sex" required
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                                 <option value="" disabled selected>Select</option>
                                 <option value="female">Female</option>
                                 <option value="male">Male</option>
@@ -64,19 +64,19 @@
                             <label for="birthday" class="font-label-md text-label-md text-on-surface-variant">Birthday</label>
                             <input type="date" id="birthday" name="birthday" required
                                 x-model="birthday" @change="calculateAge()"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                         <div class="flex flex-col gap-2">
                             <label for="age" class="font-label-md text-label-md text-on-surface-variant">Age</label>
                             <input type="text" id="age" name="age" readonly disabled
                                 x-model="age" placeholder="--"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface-variant bg-surface-container cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface-variant bg-surface-container cursor-not-allowed">
                         </div>
                     </div>
                 </div>
 
                 {{-- Contact Details --}}
-                <div class="p-8 md:p-12 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
+                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
                     <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
                         <span class="material-symbols-outlined text-primary text-[22px]">mail</span>
                         Contact Details
@@ -103,7 +103,7 @@
                 </div>
 
                 {{-- Residential Address --}}
-                <div class="p-8 md:p-12 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
+                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
                     <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
                         <span class="material-symbols-outlined text-primary text-[22px]">location_on</span>
                         Residential Address
@@ -114,7 +114,7 @@
                             <label for="province" class="font-label-md text-label-md text-on-surface-variant">Province / State</label>
                             <select id="province" name="province" required
                                 x-model="selectedProvince" @change="onProvinceChange()"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
                                 <option value="" disabled selected x-text="loadingProvinces ? 'Loading…' : 'Select Province'"></option>
                                 <template x-for="province in provinces" :key="province.code">
                                     <option :value="province.code" x-text="province.name"></option>
@@ -127,7 +127,7 @@
                             <select id="municipality" name="municipality" required
                                 x-model="selectedMunicipality" @change="onMunicipalityChange()"
                                 :disabled="!selectedProvince || loadingMunicipalities"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
                                 <option value="" disabled selected x-text="loadingMunicipalities ? 'Loading…' : 'Select City'"></option>
                                 <template x-for="m in municipalities" :key="m.code">
                                     <option :value="m.code" x-text="m.name"></option>
@@ -140,7 +140,7 @@
                             <select id="barangay" name="barangay" required
                                 x-model="selectedBarangay"
                                 :disabled="!selectedMunicipality || loadingBarangays"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
                                 <option value="" disabled selected x-text="loadingBarangays ? 'Loading…' : 'Select District'"></option>
                                 <template x-for="b in barangays" :key="b.code">
                                     <option :value="b.code" x-text="b.name"></option>
@@ -153,18 +153,18 @@
                         <div class="flex flex-col gap-2">
                             <label for="street" class="font-label-md text-label-md text-on-surface-variant">Street Name</label>
                             <input type="text" id="street" name="street" placeholder="e.g. Ayala Avenue"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                         <div class="flex flex-col gap-2">
                             <label for="house_number" class="font-label-md text-label-md text-on-surface-variant">House / Unit / Bldg Number</label>
                             <input type="text" id="house_number" name="house_number" placeholder="e.g. Unit 14B"
-                                class="rounded-xl border border-outline-variant px-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                     </div>
                 </div>
 
                 {{-- Identity Verification --}}
-                <div class="p-8 md:p-12 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
+                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
                     <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
                         <span class="material-symbols-outlined text-primary text-[22px]">badge</span>
                         Identity Verification
@@ -175,9 +175,9 @@
 
                     <label
                         for="valid_id"
-                        class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary transition-colors bg-surface-container-low flex flex-col items-center justify-center gap-3 py-12 px-6 text-center">
-                        <span class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span class="material-symbols-outlined text-[28px] text-primary">cloud_upload</span>
+                        class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary transition-colors bg-surface-container-low flex flex-col items-center justify-center gap-3 py-8 px-5 text-center">
+                        <span class="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[20px] text-primary">cloud_upload</span>
                         </span>
                         <span class="font-label-md text-label-md text-on-surface" x-text="idFileName || 'Click to upload or drag and drop'"></span>
                         <span class="font-body-sm text-body-sm text-on-surface-variant">SVG, PNG, JPG or PDF (max. 5MB)</span>
@@ -189,7 +189,7 @@
                 </div>
 
                 {{-- Submission --}}
-                <div class="p-8 md:p-12 flex flex-col gap-6">
+                <div class="p-5 md:p-7 flex flex-col gap-5">
                     <label class="flex items-start gap-3 cursor-pointer bg-surface-container-low rounded-xl p-4">
                         <input type="checkbox" required
                             class="mt-1 w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary">
@@ -200,7 +200,7 @@
 
                     <button
                         type="submit"
-                        class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md text-lg px-8 py-4 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] transition-all">
+                        class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] transition-all">
                         Create Nexora Account
                         <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
                     </button>
@@ -256,8 +256,8 @@
                 <span class="material-symbols-outlined text-[20px]">close</span>
             </button>
 
-            <div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                <span class="material-symbols-outlined text-[40px] text-primary" style="font-variation-settings: 'FILL' 1">check_circle</span>
+            <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[30px] text-primary" style="font-variation-settings: 'FILL' 1">check_circle</span>
             </div>
 
             <h2 class="font-headline-lg text-headline-lg text-on-surface">Application Submitted</h2>
@@ -274,7 +274,7 @@
 
             <a
                 href="{{ url('/') }}"
-                class="mt-2 w-full inline-flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-8 py-4 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
+                class="mt-2 w-full inline-flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
                 Back to Home
             </a>
         </div>

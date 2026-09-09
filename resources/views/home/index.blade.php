@@ -6,16 +6,16 @@
 <div class="flex flex-col w-full">
 
     {{-- Hero --}}
-    <section class="relative w-full overflow-hidden bg-surface-container pb-24 pt-12 md:pb-32 lg:pb-48">
-        <div class="max-w-none px-margin-mobile md:px-margin-desktop relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+    <section class="relative w-full overflow-hidden bg-surface-container pb-12 pt-8 md:pb-16 lg:pb-20">
+        <div class="max-w-none px-margin-mobile md:px-margin-desktop relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
 
-            <div class="flex flex-col gap-6 md:gap-8 max-w-2xl pt-16 md:pt-24 lg:pt-32">
-                <span class="inline-flex items-center self-start gap-2 rounded-full bg-primary/10 px-4 py-2 font-label-md text-label-md text-primary">
-                    <span class="material-symbols-outlined text-[16px] font-bold">local_mall</span>
+            <div class="flex flex-col gap-4 md:gap-5 max-w-2xl pt-8 md:pt-10 lg:pt-12">
+                <span class="inline-flex items-center self-start gap-2 rounded-full bg-primary/10 px-3 py-1.5 font-label-md text-label-md text-primary">
+                    <span class="material-symbols-outlined text-[14px] font-bold">local_mall</span>
                     Curated Shopping Experience
                 </span>
 
-                <h1 class="font-display-lg text-display-lg text-on-surface leading-tight text-4xl md:text-5xl lg:text-7xl">
+                <h1 class="font-display-lg text-display-lg text-on-surface leading-tight text-3xl md:text-4xl lg:text-5xl">
                     Find Something <br>
                     <span class="text-primary italic">You'll Love.</span>
                 </h1>
@@ -24,26 +24,26 @@
                     Discover products, explore new arrivals, and shop from a wide selection—all in one place.
                 </p>
 
-                <div class="flex flex-col sm:flex-row gap-4 pt-4">
-                    <a href="{{ url('/products') }}" class="flex items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 font-label-md text-label-md text-on-primary shadow-lg shadow-primary/20 transition-transform hover:scale-105">
+                <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                    <a href="{{ url('/products') }}" class="flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-label-md text-label-md text-on-primary shadow-lg shadow-primary/20 transition-transform hover:scale-105">
                         Shop Now
-                        <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+                        <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
                     </a>
-                    <a href="{{ url('/categories') }}" class="flex items-center justify-center gap-2 rounded-full bg-surface px-8 py-4 font-label-md text-label-md text-on-surface shadow-md shadow-surface-variant transition-transform hover:scale-105">
+                    <a href="{{ url('/categories') }}" class="flex items-center justify-center gap-2 rounded-full bg-surface px-6 py-3 font-label-md text-label-md text-on-surface shadow-md shadow-surface-variant transition-transform hover:scale-105">
                         Explore Categories
                     </a>
                 </div>
 
-                <div class="mt-8 flex items-center gap-6 pt-4 border-t border-outline-variant/50 max-w-md">
+                <div class="mt-4 flex items-center gap-4 pt-3 border-t border-outline-variant/50 max-w-md">
                     <div class="flex -space-x-3">
                         @foreach($heroReviewerAvatars as $avatar)
-                            <img class="w-10 h-10 rounded-full object-cover shadow-sm ring-2 ring-surface" src="{{ $avatar }}" alt="">
+                            <img class="w-8 h-8 rounded-full object-cover shadow-sm ring-2 ring-surface" src="{{ $avatar }}" alt="">
                         @endforeach
                     </div>
                     <div class="flex flex-col">
                         <div class="flex text-tertiary">
                             @for($i = 0; $i < 5; $i++)
-                                <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1">star</span>
+                                <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1">star</span>
                             @endfor
                         </div>
                         <span class="font-label-sm text-label-sm text-on-surface-variant">4.9/5 from 10k+ reviews</span>
@@ -51,25 +51,25 @@
                 </div>
             </div>
 
-            <div class="relative h-[400px] md:h-[600px] w-full mt-12 lg:mt-0">
+            <div class="relative h-[280px] md:h-[400px] w-full mt-8 lg:mt-0">
                 <div class="absolute inset-0 rounded-3xl overflow-hidden shadow-2xl">
                     <img class="w-full h-full object-cover" src="{{ $heroImage }}" alt="Featured product setup">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                 </div>
 
-                <div class="absolute -left-12 bottom-24 bg-surface rounded-2xl p-4 shadow-xl flex items-center gap-4 animate-[bounce_6s_ease-in-out_infinite]">
-                    <img class="w-16 h-16 rounded-xl object-cover" src="{{ $heroFeaturedProduct['image'] }}" alt="">
+                <div class="absolute -left-8 bottom-16 bg-surface rounded-2xl p-3 shadow-xl flex items-center gap-3 animate-[bounce_6s_ease-in-out_infinite]">
+                    <img class="w-12 h-12 rounded-xl object-cover" src="{{ $heroFeaturedProduct['image'] }}" alt="">
                     <div class="flex flex-col">
                         <span class="font-label-md text-label-md text-on-surface">{{ $heroFeaturedProduct['name'] }}</span>
                         <span class="font-headline-sm text-headline-sm text-primary">₱{{ number_format($heroFeaturedProduct['price'], 2) }}</span>
                     </div>
                 </div>
 
-                <div class="absolute -right-8 top-32 bg-surface rounded-2xl p-4 shadow-xl flex items-center gap-3 animate-[bounce_5s_ease-in-out_infinite_reverse]">
-                    <div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
-                        <span class="material-symbols-outlined text-[24px]">verified</span>
+                <div class="absolute -right-6 top-20 bg-surface rounded-2xl p-3 shadow-xl flex items-center gap-2 animate-[bounce_5s_ease-in-out_infinite_reverse]">
+                    <div class="w-9 h-9 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+                        <span class="material-symbols-outlined text-[18px]">verified</span>
                     </div>
-                    <div class="flex flex-col pr-4">
+                    <div class="flex flex-col pr-3">
                         <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Top Rated Seller</span>
                         <span class="font-label-md text-label-md text-on-surface">{{ $heroFeaturedProduct['seller'] }}</span>
                     </div>
@@ -83,9 +83,9 @@
     </section>
 
     {{-- Featured Sellers --}}
-    <section class="py-24 bg-surface w-full">
+    <section class="py-14 bg-surface w-full">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
                     <h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Featured Sellers</h2>
                     <p class="font-body-md text-body-md text-on-surface-variant">Discover top-rated stores with exceptional products.</p>
@@ -104,9 +104,9 @@
     </section>
 
     {{-- Shop by Category --}}
-    <section class="py-24 bg-surface w-full">
+    <section class="py-14 bg-surface w-full">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
                     <h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Shop by Category</h2>
                     <p class="font-body-md text-body-md text-on-surface-variant">Explore thousands of products across trending categories.</p>
@@ -125,20 +125,20 @@
     </section>
 
     {{-- Promotional Banner --}}
-    <section class="py-12 bg-surface">
+    <section class="py-8 bg-surface">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop">
             <div class="relative w-full rounded-[32px] overflow-hidden shadow-2xl flex flex-col md:flex-row bg-inverse-surface items-center">
-                <div class="p-12 md:p-16 lg:p-24 flex-1 flex flex-col gap-6 relative z-10">
+                <div class="p-8 md:p-10 lg:p-14 flex-1 flex flex-col gap-6 relative z-10">
                     <div class="inline-flex px-3 py-1 bg-surface-container-lowest/10 text-on-secondary rounded-full font-label-sm text-label-sm uppercase tracking-widest self-start backdrop-blur-md">
                         {{ $promo['tag'] }}
                     </div>
                     <h2 class="font-display-lg text-display-lg text-on-primary">{!! $promo['headline'] !!}</h2>
                     <p class="font-body-lg text-body-lg text-on-primary/80 max-w-md">{{ $promo['description'] }}</p>
-                    <a href="{{ $promo['url'] ?? '#' }}" class="mt-4 bg-primary text-on-primary font-label-md text-label-md px-8 py-4 rounded-full self-start hover:bg-primary/90 transition-colors shadow-lg">
+                    <a href="{{ $promo['url'] ?? '#' }}" class="mt-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full self-start hover:bg-primary/90 transition-colors shadow-lg">
                         {{ $promo['cta'] }}
                     </a>
                 </div>
-                <div class="flex-1 w-full h-[400px] md:h-full relative">
+                <div class="flex-1 w-full h-[260px] md:h-full relative">
                     <img class="absolute inset-0 w-full h-full object-cover" src="{{ $promo['image'] }}" alt="{{ $promo['headline'] }}">
                     <div class="absolute inset-0 bg-gradient-to-r from-inverse-surface via-inverse-surface/80 to-transparent"></div>
                 </div>
@@ -147,9 +147,9 @@
     </section>
 
     {{-- New Arrivals --}}
-    <section class="py-24 bg-surface w-full">
+    <section class="py-14 bg-surface w-full">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
                     <h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">New Arrivals</h2>
                     <p class="font-body-md text-body-md text-on-surface-variant">Freshly added items you won't want to miss.</p>
@@ -173,9 +173,9 @@
     </section>
 
     {{-- Trending Now --}}
-    <section class="py-24 bg-surface-container-low w-full">
+    <section class="py-14 bg-surface-container-low w-full">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
                     <h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Trending Now</h2>
                     <p class="font-body-md text-body-md text-on-surface-variant">Top-rated items loved by the Nexora community.</p>
@@ -199,9 +199,9 @@
     </section>
 
     {{-- Customer Reviews --}}
-    <section class="py-24 bg-surface w-full border-t border-outline-variant/30">
+    <section class="py-14 bg-surface w-full border-t border-outline-variant/30">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop">
-            <div class="text-center mb-12">
+            <div class="text-center mb-8">
                 <h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">What Our Customers Say</h2>
                 <p class="font-body-md text-body-md text-on-surface-variant">Join thousands of happy shoppers.</p>
             </div>
@@ -232,10 +232,10 @@
     </section>
 
     {{-- Final CTA --}}
-    <section class="py-24 bg-surface-container-high w-full">
+    <section class="py-14 bg-surface-container-high w-full">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop text-center">
-            <h2 class="font-display-lg text-display-lg text-on-surface mb-6">Ready to discover something new?</h2>
-            <a href="{{ url('/products') }}" class="inline-block bg-primary text-on-primary font-label-md text-label-md px-10 py-5 rounded-full hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 hover:scale-105 transition-transform text-lg">
+            <h2 class="font-display-lg text-display-lg text-on-surface mb-4">Ready to discover something new?</h2>
+            <a href="{{ url('/products') }}" class="inline-block bg-primary text-on-primary font-label-md text-label-md px-8 py-3.5 rounded-full hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 Start Shopping
             </a>
         </div>

@@ -5,7 +5,7 @@
 @section('content')
 <div
     x-data="loginForm()"
-    class="w-full flex flex-col md:flex-row h-[calc(100vh-5rem)] bg-surface-container-lowest">
+    class="w-full flex flex-col md:flex-row h-[calc(100vh-4rem)] bg-surface-container-lowest">
 
     <x-brand-panel caption="Sign in to track orders, manage your wishlist, and check out faster." />
 
@@ -13,7 +13,7 @@
          scroll, but overflow-y-auto is kept for consistency with /register
          and for smaller viewports. --}}
     <div class="flex-1 h-full overflow-y-auto flex items-center">
-        <div class="max-w-md mx-auto w-full px-6 md:px-10 py-10">
+        <div class="max-w-md mx-auto w-full px-6 md:px-10 py-6">
 
             <h1 class="font-display-lg text-headline-lg md:text-3xl text-on-surface">Welcome Back</h1>
             <p class="font-body-md text-body-md text-on-surface-variant mt-2">
@@ -21,7 +21,7 @@
             </p>
 
             {{-- No action yet — frontend only. Authentication comes in a later phase. --}}
-            <form class="flex flex-col gap-6 mt-8 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-8" @submit.prevent="submitForm()">
+            <form class="flex flex-col gap-5 mt-6 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-6" @submit.prevent="submitForm()">
 
                 <div class="flex flex-col gap-2">
                     <label for="email" class="font-label-md text-label-md text-on-surface-variant">Email Address</label>
@@ -58,7 +58,7 @@
 
                 <button
                     type="submit"
-                    class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md text-lg px-8 py-4 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] transition-all">
+                    class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] transition-all">
                     Sign In
                     <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
                 </button>

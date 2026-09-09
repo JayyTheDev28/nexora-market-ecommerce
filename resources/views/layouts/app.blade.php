@@ -15,7 +15,7 @@
 
     <x-navbar />
 
-    <main class="w-full pt-20 bg-background">
+    <main class="w-full pt-16 bg-background">
         @yield('content')
     </main>
 

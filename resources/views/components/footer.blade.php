@@ -1,10 +1,10 @@
-<footer class="w-full bg-surface-container-lowest border-t border-outline-variant pt-16 pb-8">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop flex flex-col gap-12">
+<footer class="w-full bg-surface-container-lowest border-t border-outline-variant pt-10 pb-6">
+    <div class="max-w-none px-margin-mobile md:px-margin-desktop flex flex-col gap-8">
 
-        <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-12">
+        <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-8">
 
             <div class="col-span-2 lg:col-span-2">
-                <div class="flex items-center gap-stack-unit mb-6">
+                <div class="flex items-center gap-stack-unit mb-4">
                     <img src="{{ asset('images/nexora-logo.png') }}" alt="Nexora Logo" class="w-6 h-6 rounded-full">
                     <span class="font-headline-sm text-headline-sm text-on-surface">Nexora</span>
                 </div>

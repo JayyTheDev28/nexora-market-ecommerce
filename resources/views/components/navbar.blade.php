@@ -1,5 +1,5 @@
 <header class="fixed top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant">
-    <div class="h-20 max-w-none px-margin-mobile md:px-margin-desktop flex items-center justify-between gap-gutter">
+    <div class="h-16 max-w-none px-margin-mobile md:px-margin-desktop flex items-center justify-between gap-gutter">
 
         {{-- Logo --}}
         <a href="{{ url('/') }}" class="flex items-center gap-stack-unit flex-shrink-0">
