@@ -1,7 +1,7 @@
 # Use official PHP image with Apache
 FROM php:8.4-apache
 
-# Install system dependencies & Node.js (for Vite/Tailwind build)
+# Install system dependencies & Node.js 22 (for Vite/Tailwind build)
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libxml2-dev \
     curl \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs
 
 # Enable Apache mod_rewrite for Laravel
