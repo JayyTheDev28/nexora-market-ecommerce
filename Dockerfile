@@ -1,5 +1,5 @@
 # Use official PHP image with Apache
-FROM php:8.2-apache
+FROM php:8.4-apache
 
 # Install system dependencies & Node.js (for Vite/Tailwind build)
 RUN apt-get update && apt-get install -y \
