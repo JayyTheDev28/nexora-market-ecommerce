@@ -13,8 +13,8 @@
                 All Categories
                 <span class="material-symbols-outlined text-[20px]">expand_more</span>
             </button>
-            {{-- action left as '#' until the products/search route exists (see routes/web.php) --}}
-            <form action="#" method="GET" class="flex-1 flex items-center px-4">
+            {{-- Live search on /catalog --}}
+            <form action="{{ url('/catalog') }}" method="GET" class="flex-1 flex items-center px-4">
                 <input
                     type="text"
                     name="q"
@@ -27,9 +27,15 @@
         </div>
 
         {{-- Cart / Account / Seller --}}
-        <nav class="flex items-center gap-6">
-            <a href="{{ url('/cart') }}" class="hidden sm:flex items-center text-on-surface-variant hover:text-on-surface">
+        <nav class="flex items-center gap-6" x-data="{}">
+            <a href="{{ url('/cart') }}" class="relative hidden sm:flex items-center text-on-surface-variant hover:text-on-surface">
                 <span class="material-symbols-outlined">shopping_cart</span>
+                <span
+                    x-show="$store.cart.count > 0"
+                    x-cloak
+                    x-text="$store.cart.count"
+                    class="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
+                </span>
             </a>
 
             <a href="#" class="hidden lg:block font-label-md text-label-md text-on-surface-variant hover:text-on-surface">

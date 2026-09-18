@@ -25,11 +25,11 @@
                 </p>
 
                 <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                    <a href="{{ url('/products') }}" class="flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-label-md text-label-md text-on-primary shadow-lg shadow-primary/20 transition-transform hover:scale-105">
+                    <a href="{{ url('/catalog') }}" class="flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-label-md text-label-md text-on-primary shadow-lg shadow-primary/20 transition-transform hover:scale-105">
                         Shop Now
                         <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
                     </a>
-                    <a href="{{ url('/categories') }}" class="flex items-center justify-center gap-2 rounded-full bg-surface px-6 py-3 font-label-md text-label-md text-on-surface shadow-md shadow-surface-variant transition-transform hover:scale-105">
+                    <a href="{{ url('/catalog') }}" class="flex items-center justify-center gap-2 rounded-full bg-surface px-6 py-3 font-label-md text-label-md text-on-surface shadow-md shadow-surface-variant transition-transform hover:scale-105">
                         Explore Categories
                     </a>
                 </div>
@@ -111,7 +111,7 @@
                     <h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Shop by Category</h2>
                     <p class="font-body-md text-body-md text-on-surface-variant">Explore thousands of products across trending categories.</p>
                 </div>
-                <a href="{{ url('/categories') }}" class="text-primary font-label-md text-label-md hover:underline flex items-center gap-1">
+                <a href="{{ url('/catalog') }}" class="text-primary font-label-md text-label-md hover:underline flex items-center gap-1">
                     View All Categories <span class="material-symbols-outlined text-[18px]">chevron_right</span>
                 </a>
             </div>
@@ -235,7 +235,7 @@
     <section class="py-14 bg-surface-container-high w-full">
         <div class="max-w-none px-margin-mobile md:px-margin-desktop text-center">
             <h2 class="font-display-lg text-display-lg text-on-surface mb-4">Ready to discover something new?</h2>
-            <a href="{{ url('/products') }}" class="inline-block bg-primary text-on-primary font-label-md text-label-md px-8 py-3.5 rounded-full hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+            <a href="{{ url('/catalog') }}" class="inline-block bg-primary text-on-primary font-label-md text-label-md px-8 py-3.5 rounded-full hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 Start Shopping
             </a>
         </div>

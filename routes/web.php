@@ -1,6 +1,11 @@
 <?php
 
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\OrdersController;
+use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -22,3 +27,13 @@ Route::get('/register/pending', function () {
 Route::get('/login', function () {
     return view('buyer.auth.login', ['hideFooter' => true]);
 })->name('login');
+
+// Shopping flow — all still frontend-only. Product/catalog data comes from
+// App\Support\SampleCatalog; cart and orders live in the browser via the
+// Alpine stores in resources/js/app.js (localStorage), not a database.
+Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
+Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
+Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+Route::get('/buyer/orders', [OrdersController::class, 'index'])->name('buyer.orders');
+

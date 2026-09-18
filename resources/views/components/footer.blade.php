@@ -15,16 +15,16 @@
 
             <div class="flex flex-col gap-4">
                 <h4 class="font-label-md text-label-md text-on-surface uppercase tracking-wider">Marketplace</h4>
-                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">All Products</a>
-                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">New Arrivals</a>
+                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="{{ url('/catalog') }}">All Products</a>
+                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="{{ url('/catalog') }}">New Arrivals</a>
                 <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">Best Sellers</a>
                 <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">Curated Collections</a>
             </div>
 
             <div class="flex flex-col gap-4">
                 <h4 class="font-label-md text-label-md text-on-surface uppercase tracking-wider">Customer</h4>
-                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">My Orders</a>
-                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">Track Order</a>
+                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="{{ url('/buyer/orders') }}">My Orders</a>
+                <a class="text-body-sm text-on-surface-variant hover:text-primary" href="{{ url('/buyer/orders') }}">Track Order</a>
                 <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">My Account</a>
                 <a class="text-body-sm text-on-surface-variant hover:text-primary" href="#">Help Center</a>
             </div>
