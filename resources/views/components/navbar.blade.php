@@ -43,12 +43,25 @@
             </a>
 
             <div class="flex items-center gap-4 border-l border-outline-variant pl-6">
-                <a href="{{ url('/login') }}" class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">
-                    Sign In
-                </a>
-                <a href="{{ url('/register') }}" class="bg-primary text-on-primary font-label-md text-label-md px-5 py-2 rounded-full hover:bg-primary/90 transition-colors">
-                    Get Started
-                </a>
+                @auth
+                    <a href="{{ auth()->user()->homeRoute() }}" class="flex items-center gap-2 font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">
+                        <span class="material-symbols-outlined text-[20px]">account_circle</span>
+                        <span class="hidden sm:inline">{{ auth()->user()->first_name }}</span>
+                    </a>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">
+                            Log Out
+                        </button>
+                    </form>
+                @else
+                    <a href="{{ url('/login') }}" class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">
+                        Sign In
+                    </a>
+                    <a href="{{ url('/register') }}" class="bg-primary text-on-primary font-label-md text-label-md px-5 py-2 rounded-full hover:bg-primary/90 transition-colors">
+                        Get Started
+                    </a>
+                @endauth
             </div>
         </nav>
 

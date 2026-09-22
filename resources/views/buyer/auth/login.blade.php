@@ -20,14 +20,28 @@
                 Sign in to continue to your Nexora account.
             </p>
 
-            {{-- No action yet — frontend only. Authentication comes in a later phase. --}}
-            <form class="flex flex-col gap-5 mt-6 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-6" @submit.prevent="submitForm()">
+            @if ($errors->any())
+                <div class="mt-6 bg-error-container border border-error/30 rounded-2xl p-4">
+                    <p class="font-body-sm text-body-sm text-on-error-container">{{ $errors->first() }}</p>
+                </div>
+            @endif
+
+            @if (session('verified'))
+                <div class="mt-6 bg-primary/10 border border-primary/30 rounded-2xl p-4">
+                    <p class="font-body-sm text-body-sm text-primary">Email verified! Sign in to continue.</p>
+                </div>
+            @endif
+
+            <form
+                class="flex flex-col gap-5 mt-6 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-6"
+                action="{{ route('login.store') }}" method="POST">
+                @csrf
 
                 <div class="flex flex-col gap-2">
                     <label for="email" class="font-label-md text-label-md text-on-surface-variant">Email Address</label>
                     <div class="relative">
                         <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">mail</span>
-                        <input type="email" id="email" name="email" required placeholder="jane.doe@example.com"
+                        <input type="email" id="email" name="email" value="{{ old('email') }}" required placeholder="jane.doe@example.com"
                             class="w-full rounded-xl border border-outline-variant pl-11 pr-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
                 </div>
@@ -52,7 +66,7 @@
                 </div>
 
                 <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary">
+                    <input type="checkbox" name="remember" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary">
                     <span class="font-body-sm text-body-sm text-on-surface-variant">Keep me signed in</span>
                 </label>
 
@@ -79,10 +93,6 @@
     function loginForm() {
         return {
             showPassword: false,
-            // No backend/auth yet — this is a frontend-only placeholder.
-            submitForm() {
-                // Intentionally a no-op for now. Authentication is a later phase.
-            },
         };
     }
 </script>
