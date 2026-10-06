@@ -186,6 +186,7 @@
             selectedSize: sizes.length === 1 ? sizes[0] : null,
             qty: 1,
             justAdded: false,
+            addingToCart: false,
 
             get canAddToCart() {
                 const colorOk = this.colors.length === 0 || !!this.selectedColor;
@@ -194,13 +195,28 @@
             },
 
             addToCart() {
-                if (!this.canAddToCart || this.stock === 0) return;
+                if (!this.canAddToCart || this.stock === 0 || this.addingToCart) return;
                 const variant = {};
                 if (this.selectedColor) variant.color = this.selectedColor;
                 if (this.selectedSize) variant.size = this.selectedSize;
-                $store.cart.add(this.product, Object.keys(variant).length ? variant : null, this.qty);
-                this.justAdded = true;
-                setTimeout(() => (this.justAdded = false), 1500);
+
+                this.addingToCart = true;
+                api('/cart/items', {
+                    method: 'POST',
+                    body: {
+                        product_id: this.product.id,
+                        variant: Object.keys(variant).length ? variant : null,
+                        quantity: this.qty,
+                    },
+                })
+                    .then((data) => {
+                        if (!data) return; // 401 -> redirected to /login
+                        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                        this.justAdded = true;
+                        setTimeout(() => (this.justAdded = false), 1500);
+                    })
+                    .catch((e) => alert(e.message))
+                    .finally(() => (this.addingToCart = false));
             },
         };
     }

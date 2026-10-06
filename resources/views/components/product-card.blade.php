@@ -10,7 +10,7 @@
     $reviewCount = $product->reviewCount ?? null;
 @endphp
 
-<div class="group flex flex-col bg-surface-container-lowest rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300" x-data="{ justAdded: false }">
+<div class="group flex flex-col bg-surface-container-lowest rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300" x-data="{ justAdded: false, adding: false }">
 
     <div class="relative w-full aspect-square rounded-t-2xl overflow-hidden bg-surface-container">
         <img
@@ -58,11 +58,19 @@
             <button
                 type="button"
                 @click.stop.prevent="
-                    $store.cart.add({ id: {{ (int) ($product->id ?? 0) }}, name: @js($product->name), price: {{ (float) $product->price }}, image: @js($product->image), seller: @js($product->seller ?? '') });
-                    justAdded = true;
-                    setTimeout(() => justAdded = false, 1200);
+                    adding = true;
+                    api('/cart/items', { method: 'POST', body: { product_id: {{ (int) ($product->id ?? 0) }}, quantity: 1 } })
+                        .then((data) => {
+                            if (!data) return; // 401 -> redirected to /login
+                            window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                            justAdded = true;
+                            setTimeout(() => justAdded = false, 1200);
+                        })
+                        .catch((e) => alert(e.message))
+                        .finally(() => adding = false);
                 "
-                class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                :disabled="adding"
+                class="w-9 h-9 rounded-full flex items-center justify-center transition-colors disabled:opacity-60"
                 :class="justAdded ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary'"
                 aria-label="Add to cart">
                 <span class="material-symbols-outlined text-[20px]" x-text="justAdded ? 'check' : 'shopping_cart'"></span>

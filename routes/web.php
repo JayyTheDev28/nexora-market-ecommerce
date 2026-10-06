@@ -84,14 +84,28 @@ Route::middleware('role:admin')->group(function () {
 |--------------------------------------------------------------------------
 | Shopping flow
 |--------------------------------------------------------------------------
-| Product/catalog data comes from App\Support\SampleCatalog. Cart and
-| orders still live client-side via the Alpine stores in resources/js/app.js
-| (localStorage) — this is the next thing to migrate onto the database now
-| that accounts are real, but isn't wired up yet.
+| Catalog/product browsing stays public. Cart, checkout, and orders now
+| require a fully cleared account (role middleware: verified + approved +
+| active) since they're tied to a real account in the database — not
+| fully public localStorage state anymore.
 */
 Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
 Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
-Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
-Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-Route::get('/buyer/orders', [OrdersController::class, 'index'])->name('buyer.orders');
+
+Route::middleware('role')->group(function () {
+    Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+    Route::post('/cart/items', [CartController::class, 'store'])->name('cart.items.store');
+    Route::patch('/cart/items/{cartItem}', [CartController::class, 'update'])->name('cart.items.update');
+    Route::delete('/cart/items/{cartItem}', [CartController::class, 'destroy'])->name('cart.items.destroy');
+    Route::patch('/cart/select-all', [CartController::class, 'selectAll'])->name('cart.select-all');
+
+    Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+    Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+
+    Route::get('/buyer/orders', [OrdersController::class, 'index'])->name('buyer.orders');
+    Route::post('/buyer/orders/{order}/confirm-receipt', [OrdersController::class, 'confirmReceipt'])->name('buyer.orders.confirm-receipt');
+    Route::post('/buyer/orders/{order}/feedback', [OrdersController::class, 'submitFeedback'])->name('buyer.orders.feedback');
+    Route::post('/buyer/orders/{order}/dispute', [OrdersController::class, 'submitDispute'])->name('buyer.orders.dispute');
+});
+
 

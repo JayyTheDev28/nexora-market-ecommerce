@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\SampleCatalog;
+use App\Models\Product;
 
 class HomeController extends Controller
 {
@@ -49,22 +49,27 @@ class HomeController extends Controller
             'image' => 'https://placehold.co/1200x800/27313e/adc6ff?text=Season+of+Tech',
         ];
 
-        // New Arrivals / Trending are pulled from the same SampleCatalog that
-        // powers /catalog and /products/{id}, so IDs, prices, and "Add to
-        // Cart" all stay consistent no matter where a product is shown.
-        $catalog = SampleCatalog::products();
+        // New Arrivals / Trending now pull from the real products table
+        // (seeded by ProductSeeder from the same data SampleCatalog used to
+        // provide statically), so IDs/prices/"Add to Cart" stay consistent
+        // with /catalog and /products/{id}.
+        $newArrivals = Product::where('status', 'active')
+            ->with('seller.sellerProfile')
+            ->latest()
+            ->limit(4)
+            ->get()
+            ->map(fn (Product $p) => $this->toCard($p))
+            ->values()
+            ->all();
 
-        $newArrivals = array_map(
-            fn ($p) => $this->toCard($p),
-            array_slice($catalog, 0, 4)
-        );
-
-        $trending = $catalog;
-        usort($trending, fn ($a, $b) => $b['reviewCount'] <=> $a['reviewCount']);
-        $trendingProducts = array_map(
-            fn ($p) => $this->toCard($p),
-            array_slice($trending, 0, 4)
-        );
+        $trendingProducts = Product::where('status', 'active')
+            ->with('seller.sellerProfile')
+            ->inRandomOrder()
+            ->limit(4)
+            ->get()
+            ->map(fn (Product $p) => $this->toCard($p))
+            ->values()
+            ->all();
 
         $reviews = [
             ['name' => 'Sarah J.', 'rating' => 5, 'quote' => 'Amazing selection and fast shipping. I found exactly what I was looking for and the quality is outstanding.', 'avatar' => 'https://placehold.co/100x100/d9dff5/121c28?text=SJ'],
@@ -86,21 +91,21 @@ class HomeController extends Controller
     }
 
     /**
-     * Map a SampleCatalog product into the shape <x-product-card> expects.
+     * Map a real Product model into the shape <x-product-card> expects.
      */
-    private function toCard(array $p): array
+    private function toCard(Product $p): array
     {
         return [
-            'id' => $p['id'],
-            'seller' => $p['seller'],
-            'name' => $p['name'],
-            'price' => $p['price'],
-            'comparePrice' => $p['comparePrice'],
-            'rating' => $p['rating'],
-            'reviewCount' => $p['reviewCount'],
-            'badge' => $p['badge'],
-            'image' => $p['image'],
-            'url' => url("/products/{$p['id']}"),
+            'id' => $p->id,
+            'seller' => $p->seller->sellerProfile->business_name ?? $p->seller->full_name,
+            'name' => $p->name,
+            'price' => (float) $p->price,
+            'comparePrice' => $p->compare_price ? (float) $p->compare_price : null,
+            'rating' => null,
+            'reviewCount' => null,
+            'badge' => null,
+            'image' => $p->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($p->name),
+            'url' => url("/products/{$p->id}"),
         ];
     }
 }

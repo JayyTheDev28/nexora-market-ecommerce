@@ -3,13 +3,25 @@
 @section('title', 'Your Cart — Nexora Market')
 
 @section('content')
-<div x-data="cartPage()" class="w-full bg-surface py-8 min-h-[70vh]">
+<div
+    x-data="cartPage({{ $items->map(fn ($item) => [
+        'key' => (string) $item->id,
+        'id' => $item->product_id,
+        'name' => $item->product->name,
+        'image' => $item->product->gallery[0] ?? 'https://placehold.co/200x200/e5eeff/0058be?text=' . urlencode($item->product->name),
+        'price' => (float) $item->product->price,
+        'seller' => $item->product->seller->sellerProfile->business_name ?? '',
+        'variant' => $item->variant,
+        'qty' => $item->quantity,
+        'selected' => (bool) $item->selected,
+    ])->values()->toJson() }})"
+    class="w-full bg-surface py-8 min-h-[70vh]">
     <div class="max-w-none px-margin-mobile md:px-margin-desktop">
 
         <h1 class="font-headline-lg text-headline-lg text-on-surface mb-6">Shopping Cart</h1>
 
         {{-- Empty state --}}
-        <div x-show="$store.cart.items.length === 0" x-cloak class="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div x-show="items.length === 0" x-cloak class="flex flex-col items-center justify-center py-20 text-center gap-4">
             <span class="material-symbols-outlined text-[48px] text-outline">shopping_cart</span>
             <p class="font-headline-sm text-headline-sm text-on-surface">Your cart is empty</p>
             <p class="font-body-sm text-body-sm text-on-surface-variant max-w-sm">Looks like you haven't added anything yet. Explore the catalog to find something you'll love.</p>
@@ -19,7 +31,7 @@
         </div>
 
         {{-- Cart contents --}}
-        <div x-show="$store.cart.items.length > 0" x-cloak class="flex flex-col lg:flex-row gap-6 items-start">
+        <div x-show="items.length > 0" x-cloak class="flex flex-col lg:flex-row gap-6 items-start">
 
             {{-- Item list --}}
             <div class="flex-1 w-full bg-surface-container-lowest rounded-2xl border border-outline-variant overflow-hidden">
@@ -28,20 +40,20 @@
                     <input
                         type="checkbox"
                         :checked="selectAllChecked"
-                        @change="$store.cart.selectAll($event.target.checked)"
+                        @change="toggleSelectAll($event.target.checked)"
                         class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary">
                     <span class="font-label-md text-label-md text-on-surface-variant">Select All</span>
                     <span class="ml-auto font-body-sm text-body-sm text-on-surface-variant">
-                        <span x-text="$store.cart.selectedItems.length"></span> of <span x-text="$store.cart.items.length"></span> selected
+                        <span x-text="selectedItems.length"></span> of <span x-text="items.length"></span> selected
                     </span>
                 </div>
 
-                <template x-for="item in $store.cart.items" :key="item.key">
+                <template x-for="item in items" :key="item.key">
                     <div class="flex items-center gap-4 px-5 py-4 border-b border-outline-variant last:border-b-0">
                         <input
                             type="checkbox"
                             :checked="item.selected"
-                            @change="$store.cart.toggle(item.key)"
+                            @change="toggleItem(item)"
                             class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary flex-shrink-0">
 
                         <img :src="item.image" :alt="item.name" class="w-16 h-16 rounded-xl object-cover flex-shrink-0 bg-surface-container">
@@ -58,16 +70,16 @@
                         </div>
 
                         <div class="flex items-center border border-outline-variant rounded-full flex-shrink-0">
-                            <button type="button" @click="$store.cart.setQty(item.key, item.qty - 1)" class="w-8 h-8 flex items-center justify-center text-on-surface hover:text-primary" aria-label="Decrease quantity">
+                            <button type="button" @click="setQty(item, item.qty - 1)" class="w-8 h-8 flex items-center justify-center text-on-surface hover:text-primary" aria-label="Decrease quantity">
                                 <span class="material-symbols-outlined text-[16px]">remove</span>
                             </button>
                             <span class="w-8 text-center font-label-md text-label-md" x-text="item.qty"></span>
-                            <button type="button" @click="$store.cart.setQty(item.key, item.qty + 1)" class="w-8 h-8 flex items-center justify-center text-on-surface hover:text-primary" aria-label="Increase quantity">
+                            <button type="button" @click="setQty(item, item.qty + 1)" class="w-8 h-8 flex items-center justify-center text-on-surface hover:text-primary" aria-label="Increase quantity">
                                 <span class="material-symbols-outlined text-[16px]">add</span>
                             </button>
                         </div>
 
-                        <button type="button" @click="$store.cart.remove(item.key)" class="text-on-surface-variant hover:text-error flex-shrink-0" aria-label="Remove item">
+                        <button type="button" @click="removeItem(item)" class="text-on-surface-variant hover:text-error flex-shrink-0" aria-label="Remove item">
                             <span class="material-symbols-outlined text-[20px]">delete</span>
                         </button>
                     </div>
@@ -95,7 +107,7 @@
                     <p x-show="appliedVoucher" x-cloak class="font-body-sm text-body-sm text-primary flex items-center gap-1">
                         <span class="material-symbols-outlined text-[14px]">check_circle</span>
                         <span x-text="appliedVoucher?.code"></span> applied
-                        <button type="button" class="ml-auto text-on-surface-variant hover:text-error" @click="removeVoucher()">
+                        <button type="button" class="ml-auto text-on-surface-variant hover:text-error" @click="appliedVoucher = null">
                             <span class="material-symbols-outlined text-[14px]">close</span>
                         </button>
                     </p>
@@ -106,7 +118,7 @@
                 <div class="flex flex-col gap-2 font-body-sm text-body-sm">
                     <div class="flex justify-between text-on-surface-variant">
                         <span>Subtotal</span>
-                        <span>₱<span x-text="$store.cart.subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})"></span></span>
+                        <span>₱<span x-text="subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})"></span></span>
                     </div>
                     <div class="flex justify-between text-on-surface-variant" x-show="discount > 0">
                         <span>Discount</span>
@@ -127,9 +139,9 @@
 
                 <a
                     href="{{ url('/checkout') }}"
-                    @click="if ($store.cart.selectedItems.length === 0) $event.preventDefault()"
+                    @click="if (selectedItems.length === 0) $event.preventDefault()"
                     class="w-full flex items-center justify-center gap-2 font-label-md text-label-md px-6 py-3 rounded-full transition-all"
-                    :class="$store.cart.selectedItems.length > 0 ? 'bg-primary text-on-primary hover:bg-primary/90 shadow-lg shadow-primary/20' : 'bg-surface-container text-outline cursor-not-allowed'">
+                    :class="selectedItems.length > 0 ? 'bg-primary text-on-primary hover:bg-primary/90 shadow-lg shadow-primary/20' : 'bg-surface-container text-outline cursor-not-allowed'">
                     Proceed to Checkout
                     <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </a>
@@ -141,20 +153,55 @@
 
 @push('scripts')
 <script>
-    function cartPage() {
+    function cartPage(initialItems) {
         return {
+            items: initialItems,
+
             voucherInput: '',
             appliedVoucher: null,
             voucherError: '',
 
-            // Demo voucher codes — no backend, just illustrating the UI.
+            // Demo voucher codes — no voucher backend yet, just the UI.
             vouchers: {
                 'NEXORA10': { code: 'NEXORA10', type: 'percent', value: 0.10 },
                 'WELCOME50': { code: 'WELCOME50', type: 'flat', value: 50 },
             },
 
+            get selectedItems() {
+                return this.items.filter((i) => i.selected);
+            },
+
             get selectAllChecked() {
-                return this.$store.cart.items.length > 0 && this.$store.cart.items.every((i) => i.selected);
+                return this.items.length > 0 && this.items.every((i) => i.selected);
+            },
+
+            toggleItem(item) {
+                item.selected = !item.selected;
+                api(`/cart/items/${item.key}`, { method: 'PATCH', body: { selected: item.selected } })
+                    .catch((e) => { alert(e.message); item.selected = !item.selected; });
+            },
+
+            toggleSelectAll(state) {
+                this.items.forEach((i) => (i.selected = state));
+                api('/cart/select-all', { method: 'PATCH', body: { selected: state } })
+                    .catch((e) => alert(e.message));
+            },
+
+            setQty(item, qty) {
+                qty = Math.max(1, qty);
+                const previous = item.qty;
+                item.qty = qty;
+                api(`/cart/items/${item.key}`, { method: 'PATCH', body: { quantity: qty } })
+                    .catch((e) => { alert(e.message); item.qty = previous; });
+            },
+
+            removeItem(item) {
+                this.items = this.items.filter((i) => i.key !== item.key);
+                api(`/cart/items/${item.key}`, { method: 'DELETE' })
+                    .then((data) => {
+                        if (data) window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                    })
+                    .catch((e) => alert(e.message));
             },
 
             applyVoucher() {
@@ -171,27 +218,25 @@
                 this.voucherInput = '';
             },
 
-            removeVoucher() {
-                this.appliedVoucher = null;
+            get subtotal() {
+                return this.selectedItems.reduce((sum, i) => sum + i.price * i.qty, 0);
             },
 
             get discount() {
                 if (!this.appliedVoucher) return 0;
-                const subtotal = this.$store.cart.subtotal;
                 if (this.appliedVoucher.type === 'percent') {
-                    return Math.round(subtotal * this.appliedVoucher.value * 100) / 100;
+                    return Math.round(this.subtotal * this.appliedVoucher.value * 100) / 100;
                 }
-                return Math.min(this.appliedVoucher.value, subtotal);
+                return Math.min(this.appliedVoucher.value, this.subtotal);
             },
 
             get shipping() {
-                const subtotal = this.$store.cart.subtotal;
-                if (subtotal === 0) return 0;
-                return subtotal >= 2000 ? 0 : 60;
+                if (this.subtotal === 0) return 0;
+                return this.subtotal >= 2000 ? 0 : 60;
             },
 
             get total() {
-                return Math.max(0, this.$store.cart.subtotal - this.discount + this.shipping);
+                return Math.max(0, this.subtotal - this.discount + this.shipping);
             },
         };
     }

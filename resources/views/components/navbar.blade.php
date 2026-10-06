@@ -27,13 +27,13 @@
         </div>
 
         {{-- Cart / Account / Seller --}}
-        <nav class="flex items-center gap-6" x-data="{}">
+        <nav class="flex items-center gap-6" x-data="{ cartCount: {{ auth()->check() ? auth()->user()->cartItems()->sum('quantity') : 0 }} }" @cart-updated.window="cartCount = $event.detail.count">
             <a href="{{ url('/cart') }}" class="relative hidden sm:flex items-center text-on-surface-variant hover:text-on-surface">
                 <span class="material-symbols-outlined">shopping_cart</span>
                 <span
-                    x-show="$store.cart.count > 0"
+                    x-show="cartCount > 0"
                     x-cloak
-                    x-text="$store.cart.count"
+                    x-text="cartCount"
                     class="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
                 </span>
             </a>
