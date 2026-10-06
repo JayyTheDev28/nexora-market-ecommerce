@@ -19,10 +19,43 @@
                 Join Nexora and unlock access to a world of premium curated goods.
             </p>
 
-            {{-- This form has no action yet — frontend only, per the current build phase.
-                 Validation, submission handling, and the database come in a later phase.
-                 Submit currently just opens the pending-approval modal below. --}}
-            <form class="flex flex-col mt-8 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm overflow-hidden" @submit.prevent="submitForm()">
+            @if ($errors->any())
+                <div class="mt-6 bg-error-container border border-error/30 rounded-2xl p-4 flex flex-col gap-1">
+                    <p class="font-label-md text-label-md text-on-error-container">Please fix the following:</p>
+                    <ul class="list-disc list-inside font-body-sm text-body-sm text-on-error-container">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            <form
+                class="flex flex-col mt-8 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm overflow-hidden"
+                action="{{ route('register.store') }}" method="POST" enctype="multipart/form-data">
+                @csrf
+
+                {{-- Account Type --}}
+                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-4">
+                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
+                        <span class="material-symbols-outlined text-primary text-[22px]">switch_account</span>
+                        Register As
+                    </h2>
+                    <div class="grid grid-cols-3 gap-3">
+                        <template x-for="option in roleOptions" :key="option.value">
+                            <label
+                                class="flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-colors text-center"
+                                :class="role === option.value ? 'border-primary bg-primary/5' : 'border-outline-variant hover:border-outline'">
+                                <input type="radio" name="role" :value="option.value" x-model="role" class="sr-only">
+                                <span class="material-symbols-outlined text-[22px]" :class="role === option.value ? 'text-primary' : 'text-on-surface-variant'" x-text="option.icon"></span>
+                                <span class="font-label-md text-label-md text-on-surface" x-text="option.label"></span>
+                            </label>
+                        </template>
+                    </div>
+                    <p class="font-body-sm text-body-sm text-on-surface-variant">
+                        This determines which dashboard you'll get access to once your application is approved.
+                    </p>
+                </div>
 
                 {{-- Personal Information --}}
                 <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
@@ -100,6 +133,31 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="flex flex-col gap-2">
+                            <label for="password" class="font-label-md text-label-md text-on-surface-variant">Password</label>
+                            <div class="relative">
+                                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
+                                <input :type="showPassword ? 'text' : 'password'" id="password" name="password" required minlength="8" placeholder="At least 8 characters"
+                                    class="w-full rounded-xl border border-outline-variant pl-11 pr-11 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                <button type="button" @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant" aria-label="Toggle password visibility">
+                                    <span class="material-symbols-outlined text-[20px]" x-text="showPassword ? 'visibility_off' : 'visibility'"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="password_confirmation" class="font-label-md text-label-md text-on-surface-variant">Confirm Password</label>
+                            <div class="relative">
+                                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
+                                <input :type="showPasswordConfirm ? 'text' : 'password'" id="password_confirmation" name="password_confirmation" required placeholder="Re-enter your password"
+                                    class="w-full rounded-xl border border-outline-variant pl-11 pr-11 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                <button type="button" @click="showPasswordConfirm = !showPasswordConfirm" class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant" aria-label="Toggle password visibility">
+                                    <span class="material-symbols-outlined text-[20px]" x-text="showPasswordConfirm ? 'visibility_off' : 'visibility'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- Residential Address --}}
@@ -161,6 +219,54 @@
                                 class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                     </div>
+
+                    {{-- Selects above carry the PSGC code as their value (needed to fetch children);
+                         these hidden fields carry the resolved display name alongside it. --}}
+                    <input type="hidden" name="province_name" :value="selectedProvinceName">
+                    <input type="hidden" name="municipality_name" :value="selectedMunicipalityName">
+                    <input type="hidden" name="barangay_name" :value="selectedBarangayName">
+                </div>
+
+                {{-- Business Information — only for Seller / Logistics --}}
+                <div x-show="role === 'seller' || role === 'sorting_center'" x-cloak class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
+                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
+                        <span class="material-symbols-outlined text-primary text-[22px]">store</span>
+                        Business Information
+                    </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="flex flex-col gap-2">
+                            <label for="business_name" class="font-label-md text-label-md text-on-surface-variant">Business Name</label>
+                            <input type="text" id="business_name" name="business_name" :required="role === 'seller' || role === 'sorting_center'" placeholder="e.g. Nexus Home"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div class="flex flex-col gap-2" x-show="role === 'seller'">
+                            <label for="category" class="font-label-md text-label-md text-on-surface-variant">Line of Business</label>
+                            <select id="category" name="category" :required="role === 'seller'"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="" disabled selected>Select a category</option>
+                                @foreach($categories as $cat)
+                                    <option value="{{ $cat['slug'] }}">{{ $cat['name'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-2">
+                        <label class="font-label-md text-label-md text-on-surface-variant">Upload Business / DTI Permit</label>
+                        <label
+                            for="business_permit"
+                            class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary transition-colors bg-surface-container-low flex flex-col items-center justify-center gap-2 py-6 px-5 text-center">
+                            <span class="material-symbols-outlined text-[22px] text-primary">upload_file</span>
+                            <span class="font-label-md text-label-md text-on-surface" x-text="businessPermitFileName || 'Click to upload or drag and drop'"></span>
+                            <span class="font-body-sm text-body-sm text-on-surface-variant">PDF, JPG, or PNG (max. 5MB)</span>
+                        </label>
+                        <input
+                            type="file" id="business_permit" name="business_permit"
+                            :required="role === 'seller' || role === 'sorting_center'"
+                            accept=".jpg,.jpeg,.png,.pdf" class="hidden"
+                            @change="businessPermitFileName = $event.target.files[0]?.name ?? ''">
+                    </div>
                 </div>
 
                 {{-- Identity Verification --}}
@@ -191,7 +297,7 @@
                 {{-- Submission --}}
                 <div class="p-5 md:p-7 flex flex-col gap-5">
                     <label class="flex items-start gap-3 cursor-pointer bg-surface-container-low rounded-xl p-4">
-                        <input type="checkbox" required
+                        <input type="checkbox" name="terms" required
                             class="mt-1 w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary">
                         <span class="font-body-sm text-body-sm text-on-surface-variant">
                             I hereby certify that the information provided above is true, accurate, and complete. I understand that any false statements may result in the termination of my Nexora account.
@@ -232,60 +338,24 @@
         </div>
     </div>
 
-    {{-- Pending-approval modal — shown on submit instead of navigating anywhere.
-         No backend call happens yet; this is purely the frontend confirmation state. --}}
-    <div
-        x-show="showPendingModal"
-        x-cloak
-        x-transition.opacity
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-inverse-surface/60 backdrop-blur-sm"
-        @keydown.escape.window="showPendingModal = false">
-        <div
-            x-show="showPendingModal"
-            x-transition:enter="transition ease-out duration-200"
-            x-transition:enter-start="opacity-0 scale-95"
-            x-transition:enter-end="opacity-100 scale-100"
-            @click.outside="showPendingModal = false"
-            class="relative max-w-md w-full bg-surface-container-lowest rounded-3xl shadow-2xl p-10 text-center flex flex-col items-center gap-5">
-
-            <button
-                type="button"
-                @click="showPendingModal = false"
-                class="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
-                aria-label="Close">
-                <span class="material-symbols-outlined text-[20px]">close</span>
-            </button>
-
-            <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <span class="material-symbols-outlined text-[30px] text-primary" style="font-variation-settings: 'FILL' 1">check_circle</span>
-            </div>
-
-            <h2 class="font-headline-lg text-headline-lg text-on-surface">Application Submitted</h2>
-
-            <p class="font-body-md text-body-md text-on-surface-variant">
-                Your registration has been submitted successfully.
-            </p>
-            <p class="font-body-md text-body-md text-on-surface-variant">
-                Please wait while an administrator reviews your application.
-            </p>
-            <p class="font-body-md text-body-md text-on-surface-variant">
-                You will receive an email regarding the result of your application.
-            </p>
-
-            <a
-                href="{{ url('/') }}"
-                class="mt-2 w-full inline-flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
-                Back to Home
-            </a>
-        </div>
-    </div>
-
 </div>
 
 @push('scripts')
 <script>
     function registerForm() {
         return {
+            // Account type
+            role: 'buyer',
+            roleOptions: [
+                { value: 'buyer', label: 'Buyer', icon: 'shopping_bag' },
+                { value: 'seller', label: 'Seller', icon: 'storefront' },
+                { value: 'sorting_center', label: 'Logistics', icon: 'local_shipping' },
+            ],
+
+            // Password visibility
+            showPassword: false,
+            showPasswordConfirm: false,
+
             // Birthday → age
             birthday: '',
             age: '',
@@ -311,6 +381,16 @@
             loadingProvinces: false,
             loadingMunicipalities: false,
             loadingBarangays: false,
+
+            get selectedProvinceName() {
+                return this.provinces.find((p) => p.code === this.selectedProvince)?.name ?? '';
+            },
+            get selectedMunicipalityName() {
+                return this.municipalities.find((m) => m.code === this.selectedMunicipality)?.name ?? '';
+            },
+            get selectedBarangayName() {
+                return this.barangays.find((b) => b.code === this.selectedBarangay)?.name ?? '';
+            },
 
             async loadProvinces() {
                 this.loadingProvinces = true;
@@ -361,14 +441,9 @@
                 }
             },
 
-            // ID upload — filename display only, no actual upload yet
+            // File inputs — filename display only
             idFileName: '',
-
-            // Submission — no backend yet, just show the confirmation modal
-            showPendingModal: false,
-            submitForm() {
-                this.showPendingModal = true;
-            },
+            businessPermitFileName: '',
         };
     }
 </script>

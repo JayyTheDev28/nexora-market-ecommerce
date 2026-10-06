@@ -1,5 +1,5 @@
 @props([
-    'product', // array|object: image, alt, seller, name, price, comparePrice, rating, reviewCount, badge, wishlisted, url
+    'product', // array|object: id, image, alt, seller, name, price, comparePrice, rating, reviewCount, badge, wishlisted, url
     'currency' => '₱',
 ])
 
@@ -10,7 +10,7 @@
     $reviewCount = $product->reviewCount ?? null;
 @endphp
 
-<div class="group flex flex-col bg-surface-container-lowest rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
+<div class="group flex flex-col bg-surface-container-lowest rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300" x-data="{ justAdded: false, adding: false }">
 
     <div class="relative w-full aspect-square rounded-t-2xl overflow-hidden bg-surface-container">
         <img
@@ -57,9 +57,23 @@
             </div>
             <button
                 type="button"
-                class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-primary hover:text-on-primary transition-colors"
+                @click.stop.prevent="
+                    adding = true;
+                    api('/cart/items', { method: 'POST', body: { product_id: {{ (int) ($product->id ?? 0) }}, quantity: 1 } })
+                        .then((data) => {
+                            if (!data) return; // 401 -> redirected to /login
+                            window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                            justAdded = true;
+                            setTimeout(() => justAdded = false, 1200);
+                        })
+                        .catch((e) => alert(e.message))
+                        .finally(() => adding = false);
+                "
+                :disabled="adding"
+                class="w-9 h-9 rounded-full flex items-center justify-center transition-colors disabled:opacity-60"
+                :class="justAdded ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary'"
                 aria-label="Add to cart">
-                <span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+                <span class="material-symbols-outlined text-[20px]" x-text="justAdded ? 'check' : 'shopping_cart'"></span>
             </button>
         </div>
     </a>

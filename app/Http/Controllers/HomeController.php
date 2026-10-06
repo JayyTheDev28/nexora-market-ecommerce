@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
+
 class HomeController extends Controller
 {
     public function index()
@@ -28,14 +30,14 @@ class HomeController extends Controller
         ];
 
         $categories = [
-            ['name' => 'Electronics', 'icon' => 'devices', 'iconBg' => 'bg-primary-fixed-dim/30', 'iconColor' => 'text-primary', 'url' => '#'],
-            ['name' => 'Fashion', 'icon' => 'checkroom', 'iconBg' => 'bg-tertiary-fixed-dim/30', 'iconColor' => 'text-tertiary', 'url' => '#'],
-            ['name' => 'Home & Living', 'icon' => 'chair', 'iconBg' => 'bg-secondary-fixed/50', 'iconColor' => 'text-secondary', 'url' => '#'],
-            ['name' => 'Beauty', 'icon' => 'face_retouching_natural', 'iconBg' => 'bg-error-container/50', 'iconColor' => 'text-error', 'url' => '#'],
-            ['name' => 'Sports', 'icon' => 'sports_soccer', 'iconBg' => 'bg-primary-container/20', 'iconColor' => 'text-primary', 'url' => '#'],
-            ['name' => 'Gaming', 'icon' => 'sports_esports', 'iconBg' => 'bg-inverse-primary/30', 'iconColor' => 'text-on-surface', 'url' => '#'],
-            ['name' => 'Accessories', 'icon' => 'watch', 'iconBg' => 'bg-surface-variant', 'iconColor' => 'text-on-surface-variant', 'url' => '#'],
-            ['name' => 'Kids', 'icon' => 'child_care', 'iconBg' => 'bg-tertiary-fixed/50', 'iconColor' => 'text-on-tertiary-fixed', 'url' => '#'],
+            ['name' => 'Electronics', 'icon' => 'devices', 'iconBg' => 'bg-primary-fixed-dim/30', 'iconColor' => 'text-primary', 'url' => url('/catalog?category=electronics')],
+            ['name' => 'Fashion', 'icon' => 'checkroom', 'iconBg' => 'bg-tertiary-fixed-dim/30', 'iconColor' => 'text-tertiary', 'url' => url('/catalog?category=fashion')],
+            ['name' => 'Home & Living', 'icon' => 'chair', 'iconBg' => 'bg-secondary-fixed/50', 'iconColor' => 'text-secondary', 'url' => url('/catalog?category=home-living')],
+            ['name' => 'Beauty', 'icon' => 'face_retouching_natural', 'iconBg' => 'bg-error-container/50', 'iconColor' => 'text-error', 'url' => url('/catalog?category=beauty')],
+            ['name' => 'Sports', 'icon' => 'sports_soccer', 'iconBg' => 'bg-primary-container/20', 'iconColor' => 'text-primary', 'url' => url('/catalog?category=sports')],
+            ['name' => 'Gaming', 'icon' => 'sports_esports', 'iconBg' => 'bg-inverse-primary/30', 'iconColor' => 'text-on-surface', 'url' => url('/catalog?category=gaming')],
+            ['name' => 'Accessories', 'icon' => 'watch', 'iconBg' => 'bg-surface-variant', 'iconColor' => 'text-on-surface-variant', 'url' => url('/catalog?category=accessories')],
+            ['name' => 'Kids', 'icon' => 'child_care', 'iconBg' => 'bg-tertiary-fixed/50', 'iconColor' => 'text-on-tertiary-fixed', 'url' => url('/catalog?category=kids')],
         ];
 
         $promo = [
@@ -43,23 +45,31 @@ class HomeController extends Controller
             'headline' => 'Season of Tech:<br> Up to 40% Off',
             'description' => "Upgrade your setup with the latest gadgets from top verified sellers. Don't miss out on these exclusive deals.",
             'cta' => 'Grab the Deal',
-            'url' => '#',
+            'url' => url('/catalog?category=electronics'),
             'image' => 'https://placehold.co/1200x800/27313e/adc6ff?text=Season+of+Tech',
         ];
 
-        $newArrivals = [
-            ['seller' => 'Premium Sports', 'name' => 'AeroMax Elite Running Shoe', 'price' => 140.00, 'badge' => 'new', 'image' => 'https://placehold.co/600x600/e5eeff/0058be?text=Shoe', 'url' => '#'],
-            ['seller' => 'Echo Home', 'name' => 'Artisan Ceramic Pour-Over Set', 'price' => 65.00, 'badge' => 'new', 'image' => 'https://placehold.co/600x600/e5eeff/0058be?text=Ceramic', 'url' => '#'],
-            ['seller' => 'Tech Haven', 'name' => 'Nimbus Mechanical Keyboard', 'price' => 129.00, 'comparePrice' => 159.00, 'badge' => 'sale', 'image' => 'https://placehold.co/600x600/e5eeff/0058be?text=Keyboard', 'url' => '#'],
-            ['seller' => 'Luxe Goods Co.', 'name' => 'Classic Leather Tote', 'price' => 215.00, 'badge' => 'new', 'wishlisted' => true, 'image' => 'https://placehold.co/600x600/e5eeff/0058be?text=Tote', 'url' => '#'],
-        ];
+        // New Arrivals / Trending now pull from the real products table
+        // (seeded by ProductSeeder from the same data SampleCatalog used to
+        // provide statically), so IDs/prices/"Add to Cart" stay consistent
+        // with /catalog and /products/{id}.
+        $newArrivals = Product::where('status', 'active')
+            ->with('seller.sellerProfile')
+            ->latest()
+            ->limit(4)
+            ->get()
+            ->map(fn (Product $p) => $this->toCard($p))
+            ->values()
+            ->all();
 
-        $trendingProducts = [
-            ['seller' => 'Premium Sports', 'name' => 'AeroMax Elite Running Shoe', 'price' => 140.00, 'rating' => 4.9, 'reviewCount' => 340, 'image' => 'https://placehold.co/600x600/eef4ff/0058be?text=Shoe', 'url' => '#'],
-            ['seller' => 'Echo Home', 'name' => 'Artisan Ceramic Pour-Over Set', 'price' => 65.00, 'rating' => 4.8, 'reviewCount' => 128, 'image' => 'https://placehold.co/600x600/eef4ff/0058be?text=Ceramic', 'url' => '#'],
-            ['seller' => 'Tech Haven', 'name' => 'Nimbus Mechanical Keyboard', 'price' => 129.00, 'comparePrice' => 159.00, 'badge' => 'sale', 'rating' => 4.7, 'reviewCount' => 210, 'image' => 'https://placehold.co/600x600/eef4ff/0058be?text=Keyboard', 'url' => '#'],
-            ['seller' => 'Luxe Goods Co.', 'name' => 'Classic Leather Tote', 'price' => 215.00, 'rating' => 5.0, 'reviewCount' => 42, 'wishlisted' => true, 'image' => 'https://placehold.co/600x600/eef4ff/0058be?text=Tote', 'url' => '#'],
-        ];
+        $trendingProducts = Product::where('status', 'active')
+            ->with('seller.sellerProfile')
+            ->inRandomOrder()
+            ->limit(4)
+            ->get()
+            ->map(fn (Product $p) => $this->toCard($p))
+            ->values()
+            ->all();
 
         $reviews = [
             ['name' => 'Sarah J.', 'rating' => 5, 'quote' => 'Amazing selection and fast shipping. I found exactly what I was looking for and the quality is outstanding.', 'avatar' => 'https://placehold.co/100x100/d9dff5/121c28?text=SJ'],
@@ -79,4 +89,24 @@ class HomeController extends Controller
             'reviews'
         ));
     }
+
+    /**
+     * Map a real Product model into the shape <x-product-card> expects.
+     */
+    private function toCard(Product $p): array
+    {
+        return [
+            'id' => $p->id,
+            'seller' => $p->seller->sellerProfile->business_name ?? $p->seller->full_name,
+            'name' => $p->name,
+            'price' => (float) $p->price,
+            'comparePrice' => $p->compare_price ? (float) $p->compare_price : null,
+            'rating' => null,
+            'reviewCount' => null,
+            'badge' => null,
+            'image' => $p->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($p->name),
+            'url' => url("/products/{$p->id}"),
+        ];
+    }
 }
+
