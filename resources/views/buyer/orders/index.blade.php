@@ -30,6 +30,8 @@
     class="w-full bg-surface py-8 min-h-[70vh]">
     <div class="max-w-none px-margin-mobile md:px-margin-desktop">
 
+        <x-buyer-nav active="orders" />
+
         <h1 class="font-headline-lg text-headline-lg text-on-surface mb-6">My Orders</h1>
 
         @if (session('status'))

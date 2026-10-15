@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\ApplicationController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Buyer;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\Seller;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -65,11 +67,33 @@ Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
 | lands in the right place after logging in.
 */
 
-Route::get('/buyer/dashboard', [DashboardController::class, 'buyer'])
-    ->middleware('role:buyer')->name('buyer.dashboard');
+Route::middleware('role:buyer')->group(function () {
+    Route::get('/buyer/dashboard', [DashboardController::class, 'buyer'])->name('buyer.dashboard');
 
-Route::get('/seller/dashboard', [DashboardController::class, 'seller'])
-    ->middleware('role:seller')->name('seller.dashboard');
+    Route::get('/buyer/account', [Buyer\AccountController::class, 'show'])->name('buyer.account');
+    Route::put('/buyer/account/profile', [Buyer\AccountController::class, 'updateProfile'])->name('buyer.account.profile');
+    Route::put('/buyer/account/address', [Buyer\AccountController::class, 'updateAddress'])->name('buyer.account.address');
+    Route::put('/buyer/account/password', [Buyer\AccountController::class, 'updatePassword'])->name('buyer.account.password');
+});
+
+Route::middleware('role:seller')->prefix('seller')->name('seller.')->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'seller'])->name('dashboard');
+
+    Route::get('/products', [Seller\ProductController::class, 'index'])->name('products.index');
+    Route::get('/products/create', [Seller\ProductController::class, 'create'])->name('products.create');
+    Route::post('/products', [Seller\ProductController::class, 'store'])->name('products.store');
+    Route::get('/products/{product}/edit', [Seller\ProductController::class, 'edit'])->name('products.edit');
+    Route::put('/products/{product}', [Seller\ProductController::class, 'update'])->name('products.update');
+    Route::post('/products/{product}/archive', [Seller\ProductController::class, 'archive'])->name('products.archive');
+    Route::post('/products/{product}/activate', [Seller\ProductController::class, 'activate'])->name('products.activate');
+
+    Route::get('/orders', [Seller\OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order}', [Seller\OrderController::class, 'show'])->name('orders.show');
+    Route::post('/orders/{order}/advance', [Seller\OrderController::class, 'advance'])->name('orders.advance');
+
+    Route::get('/reports', [Seller\ReportController::class, 'index'])->name('reports.index');
+    Route::get('/feedback', [Seller\FeedbackController::class, 'index'])->name('feedback.index');
+});
 
 Route::get('/logistics/dashboard', [DashboardController::class, 'logistics'])
     ->middleware('role:sorting_center')->name('logistics.dashboard');
