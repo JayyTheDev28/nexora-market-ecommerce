@@ -43,8 +43,8 @@ Legend: `[x]` built and working · `[~]` schema/backend exists, no UI yet · `[ 
 - [x] View order status — To Ship / In Transit / Out for Delivery / Completed tabs, with a timeline widget mapping all 13 ERP statuses
 - [x] Confirm Receipt, Leave Feedback (writes to `reviews`), Raise Dispute (writes to `disputes`)
 - [ ] Chat/Messaging — schema exists (`conversations`, `messages`), no UI
-- [ ] Account Management — view/edit profile, change password — not started
-- [x] Buyer dashboard (links into the real storefront)
+- [x] Account Management — edit profile, edit address (PSGC dropdowns), change password
+- [x] Buyer dashboard — real stats (cart/active/completed orders), recent orders, menu (Overview / My Orders / My Account)
 
 ---
 
@@ -56,15 +56,16 @@ Legend: `[x]` built and working · `[~]` schema/backend exists, no UI yet · `[ 
 - [x] Login, routed to `/seller/dashboard`
 - [x] Logout
 
-**Seller Dashboard** — currently a placeholder (shows account info + business profile only)
-- [ ] Dashboard overview — stats, charts
-- [ ] Manage inventory — add/update/archive products, prices, discounts, vouchers, stock levels (the `products`/`vouchers` tables are ready; no seller-facing CRUD UI)
-- [ ] Order notifications — view new orders, review details
-- [ ] Accept/confirm order, prepare, pack, print waybill/shipping label
-- [ ] Hand over to courier, track shipment status
-- [ ] Confirm delivery (notified once buyer receives)
-- [ ] Handle customer feedback
-- [ ] Generate financial/profit reports (date range)
+**Seller Dashboard** — real now, not a placeholder
+- [x] Dashboard overview — stat cards (active products, low stock, new orders, revenue this month) + recent orders list. Charts not built (numbers only).
+- [x] Manage inventory — add/edit/archive/activate products, prices, compare-at price, stock, status filters, search, low-stock flag
+- [x] Order notifications — new-orders count badge, orders list grouped new/active/shipped
+- [x] Accept/confirm order, prepare, mark ready for pickup — real status transitions with a history timeline; buyer is emailed on every change
+- [~] Hand over to courier, track shipment — "confirm pickup" is a manual seller action standing in for real courier confirmation until that role exists; no live tracking yet
+- [x] Confirm delivery (seller notified) — buyer's Confirm Receipt is unchanged; seller side still needs its own "notified" surface beyond email
+- [x] Handle customer feedback — reviews list + average rating, scoped to their own products
+- [x] Generate financial/profit reports — date range picker, gross sales, 10% commission, net payout, orders-by-status
+- [ ] Vouchers/discounts — `vouchers` table exists, no seller-facing UI to create them yet
 - [ ] Chat/Messaging
 - [ ] Account management
 
@@ -123,17 +124,21 @@ at_sorting_center → sorted → assigned_to_rider → out_for_delivery →
 delivered → completed` (plus `delivery_failed` / `returned`).
 
 - [x] Buyer places order (creates real `Order` + `OrderItem` rows, in a DB transaction)
-- [ ] Seller accepts/confirms order → `confirmed`
-- [ ] Seller prepares, packs, prints shipping label → `preparing` → `ready_for_pickup`
-- [ ] Rider picks up from seller → `picked_up` (needs courier phase)
+- [x] Seller accepts/confirms order → `confirmed`
+- [x] Seller prepares, marks ready for pickup → `preparing` → `ready_for_pickup`
+- [~] Rider picks up from seller → `picked_up` — currently a manual seller-side button standing in for this, since the courier role doesn't exist yet to confirm pickup themselves
 - [ ] Sorting center receives, scans, sorts, assigns rider → `at_sorting_center` → `sorted` → `assigned_to_rider`
 - [ ] Rider delivers to buyer → `out_for_delivery` → `delivered`
 - [x] Buyer confirms receipt → `completed`
 - [~] Failed delivery / reschedule / return — `delivery_attempts` table exists, no trigger UI yet
 
-Right now, every status transition **between** "placed" and "completed" has
-no UI to actually move an order through it — that's the seller/courier/
-logistics dashboards above.
+Every transition now has a real path from `placed` through `picked_up`
+(seller dashboard). From `picked_up` onward — sorting center receiving/
+sorting/assigning, and courier pickup/delivery — still has no UI; that's
+the logistics dashboard and courier role, next up per the suggested order
+below. Print waybill/shipping label (part of "prepare orders" in the ERP
+doc) also isn't built yet — "Mark Ready for Pickup" updates status but
+doesn't generate a label.
 
 ---
 
@@ -148,9 +153,9 @@ logistics dashboards above.
 
 ## Suggested Order for What's Left
 
-1. **Seller dashboard** — inventory CRUD + order management. Nothing moves past "placed" without this.
-2. **Logistics dashboard** — rider approval (unblocks courier registration), parcel sorting, delivery assignment.
-3. **Courier registration + dashboard** — the two-stage pickup/delivery flow.
+1. ~~**Seller dashboard**~~ — done (inventory CRUD, order management through `picked_up`, reports, feedback).
+2. **Logistics dashboard** — rider approval (unblocks courier registration), incoming parcel management, sorting, delivery assignment per area/rider.
+3. **Courier registration + dashboard** — the two-stage pickup/delivery flow; this is what actually drives `picked_up → at_sorting_center → ... → delivered`.
 4. **Admin: the rest** — account activate/suspend, seller compliance, dispute resolution, commission/sales reports, announcements.
 5. **Chat/Messaging** — cuts across every role, probably easiest once the dashboards that need it (seller↔buyer, courier↔logistics) already exist.
-6. **Password reset**, polish, and anything cosmetic.
+6. **Password reset**, shipping label generation, voucher creation UI, polish.

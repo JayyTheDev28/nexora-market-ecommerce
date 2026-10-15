@@ -1,8 +1,8 @@
 <header class="fixed top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant">
     <div class="h-16 max-w-none px-margin-mobile md:px-margin-desktop flex items-center justify-between gap-gutter">
 
-        {{-- Logo --}}
-        <a href="{{ url('/') }}" class="flex items-center gap-stack-unit flex-shrink-0">
+        {{-- Logo — goes to the user's own dashboard when logged in, the landing page otherwise --}}
+        <a href="{{ auth()->check() ? auth()->user()->homeRoute() : url('/') }}" class="flex items-center gap-stack-unit flex-shrink-0">
             <img src="{{ asset('images/nexora-logo.png') }}" alt="Nexora Logo" class="w-8 h-8 rounded-full object-cover">
             <span class="font-headline-md text-headline-md text-on-surface">Nexora</span>
         </a>
@@ -36,10 +36,6 @@
                     x-text="cartCount"
                     class="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
                 </span>
-            </a>
-
-            <a href="#" class="hidden lg:block font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
-                Become a Seller
             </a>
 
             <div class="flex items-center gap-4 border-l border-outline-variant pl-6">

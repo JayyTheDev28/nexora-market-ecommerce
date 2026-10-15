@@ -54,9 +54,14 @@ class Order extends Model
         return $this->hasMany(DeliveryAttempt::class);
     }
 
-    public function commission()
+    /**
+     * An order can have multiple commission rows — CheckoutController
+     * creates one per line item, so an order with products from two
+     * different sellers ends up with two (or more) commission records.
+     */
+    public function commissions()
     {
-        return $this->hasOne(Commission::class);
+        return $this->hasMany(Commission::class);
     }
 
     public function sortingCenter()
