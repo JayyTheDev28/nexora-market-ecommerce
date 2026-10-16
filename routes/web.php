@@ -11,6 +11,7 @@ use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\Logistics;
 use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\ProductController;
@@ -18,6 +19,16 @@ use App\Http\Controllers\Seller;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+
+/*
+|--------------------------------------------------------------------------
+| Legal & Compliance (Publicly viewable)
+|--------------------------------------------------------------------------
+*/
+Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
+Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
+Route::get('/privacy', fn () => redirect()->route('privacy'));
+Route::get('/terms', fn () => redirect()->route('terms'));
 
 /*
 |--------------------------------------------------------------------------
@@ -46,14 +57,15 @@ Route::middleware('auth')->group(function () {
     })->name('buyer.pending');
 
     Route::get('/email/verify', [EmailVerificationNotificationController::class, 'notice'])->name('verification.notice');
+    Route::post('/email/verify', [VerifyEmailController::class, 'verifyOtp'])->name('verification.verify');
     Route::post('/email/verification-notification', [EmailVerificationNotificationController::class, 'send'])
         ->middleware('throttle:6,1')
         ->name('verification.send');
 });
 
-Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
+Route::get('/email/verify/{id}/{hash}', [VerifyEmailController::class, 'verifyLink'])
     ->middleware(['auth', 'signed', 'throttle:6,1'])
-    ->name('verification.verify');
+    ->name('verification.verify.link');
 
 /*
 |--------------------------------------------------------------------------

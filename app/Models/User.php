@@ -28,6 +28,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'status_reason',
         'valid_id_path',
         'email_verified_at',
+        'email_verification_otp',
+        'email_verification_otp_expires_at',
     ];
 
     protected $hidden = [
@@ -39,9 +41,48 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'email_verification_otp_expires_at' => 'datetime',
             'birthday' => 'date',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Generate a new 6-digit numeric OTP and set 15-minute expiration.
+     */
+    public function generateEmailVerificationOtp(): string
+    {
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $this->forceFill([
+            'email_verification_otp' => $otp,
+            'email_verification_otp_expires_at' => now()->addMinutes(15),
+        ])->save();
+
+        return $otp;
+    }
+
+    /**
+     * Send 6-pin OTP email to user.
+     */
+    public function sendEmailVerificationOtp(): string
+    {
+        $otp = $this->generateEmailVerificationOtp();
+
+        try {
+            $this->notify(new \App\Notifications\EmailVerificationOtpNotification($otp));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to send OTP email: " . $e->getMessage());
+        }
+
+        return $otp;
+    }
+
+    /**
+     * Override standard Laravel notification to send 6-pin OTP instead of a link.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->sendEmailVerificationOtp();
     }
 
     public function getFullNameAttribute(): string

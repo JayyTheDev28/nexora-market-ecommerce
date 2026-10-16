@@ -124,9 +124,9 @@
             <div class="flex items-center gap-4">
                 <span class="text-emerald-700 font-semibold text-xs">256-Bit SSL Secure Checkout</span>
                 <span class="text-outline-variant">•</span>
-                <a href="#" class="hover:text-primary transition-colors">Privacy Policy</a>
+                <a href="{{ route('privacy') }}" class="hover:text-primary transition-colors">Privacy Policy</a>
                 <span class="text-outline-variant">•</span>
-                <a href="#" class="hover:text-primary transition-colors">Terms of Service</a>
+                <a href="{{ route('terms') }}" class="hover:text-primary transition-colors">Terms of Service</a>
             </div>
         </div>
 
