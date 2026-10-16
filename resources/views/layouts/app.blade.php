@@ -12,11 +12,11 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-background font-body-md text-on-background">
+<body class="bg-background font-body-md text-on-background min-h-screen flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
 
     <x-navbar />
 
-    <main class="w-full pt-16 bg-background">
+    <main class="w-full flex-1 bg-background">
         @yield('content')
     </main>
 

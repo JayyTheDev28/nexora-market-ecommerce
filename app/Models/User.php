@@ -27,6 +27,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'account_status',
         'status_reason',
         'valid_id_path',
+        'email_verified_at',
     ];
 
     protected $hidden = [
@@ -102,6 +103,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(Address::class);
     }
 
+    public function addresses()
+    {
+        return $this->hasMany(Address::class);
+    }
+
     public function sellerProfile()
     {
         return $this->hasOne(SellerProfile::class);
@@ -132,13 +138,35 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Order::class, 'buyer_id');
     }
 
+    public function deliveryAreas()
+    {
+        return $this->hasMany(DeliveryArea::class, 'courier_id');
+    }
+
+    public function managedDeliveryAreas()
+    {
+        return $this->hasMany(DeliveryArea::class, 'sorting_center_id');
+    }
+
+    public function activeDeliveries()
+    {
+        return $this->hasMany(Order::class, 'delivery_courier_id')
+            ->whereIn('status', ['assigned_to_rider', 'out_for_delivery']);
+    }
+
+    public function completedDeliveries()
+    {
+        return $this->hasMany(Order::class, 'delivery_courier_id')
+            ->where('status', 'delivered');
+    }
+
     /**
      * Where this user lands after logging in, based on their role.
      */
     public function homeRoute(): string
     {
         return match ($this->role) {
-            'buyer' => '/buyer/dashboard',
+            'buyer' => '/catalog',
             'seller' => '/seller/dashboard',
             'sorting_center' => '/logistics/dashboard',
             'courier' => '/courier/dashboard',

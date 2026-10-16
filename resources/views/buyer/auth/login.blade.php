@@ -5,81 +5,89 @@
 @section('content')
 <div
     x-data="loginForm()"
-    class="w-full flex flex-col md:flex-row h-[calc(100vh-4rem)] bg-surface-container-lowest">
+    class="w-full flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-surface-container-lowest">
 
     <x-brand-panel caption="Sign in to track orders, manage your wishlist, and check out faster." />
 
-    {{-- RIGHT — form column. Content is short enough it usually won't need to
-         scroll, but overflow-y-auto is kept for consistency with /register
-         and for smaller viewports. --}}
-    <div class="flex-1 h-full overflow-y-auto flex items-center">
-        <div class="max-w-md mx-auto w-full px-6 md:px-10 py-6">
+    {{-- Form Column --}}
+    <div class="flex-1 overflow-y-auto flex items-center justify-center py-10 px-6 md:px-12">
+        <div class="max-w-md w-full">
 
-            <h1 class="font-display-lg text-headline-lg md:text-3xl text-on-surface">Welcome Back</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-2">
-                Sign in to continue to your Nexora account.
-            </p>
+            <div class="mb-6">
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Welcome Back</h1>
+                <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1.5">
+                    Sign in to continue to your Nexora Market account.
+                </p>
+            </div>
 
             @if ($errors->any())
-                <div class="mt-6 bg-error-container border border-error/30 rounded-2xl p-4">
-                    <p class="font-body-sm text-body-sm text-on-error-container">{{ $errors->first() }}</p>
+                <div class="mb-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4">
+                    <p class="font-body-sm text-xs font-semibold text-rose-700">{{ $errors->first() }}</p>
                 </div>
             @endif
 
             @if (session('verified'))
-                <div class="mt-6 bg-primary/10 border border-primary/30 rounded-2xl p-4">
-                    <p class="font-body-sm text-body-sm text-primary">Email verified! Sign in to continue.</p>
+                <div class="mb-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+                    <p class="font-body-sm text-xs font-semibold text-emerald-700">Email verified successfully! Please sign in to continue.</p>
                 </div>
             @endif
 
             <form
-                class="flex flex-col gap-5 mt-6 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-6"
+                class="flex flex-col gap-4 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-xs p-6 md:p-8"
                 action="{{ route('login.store') }}" method="POST">
                 @csrf
 
-                <div class="flex flex-col gap-2">
-                    <label for="email" class="font-label-md text-label-md text-on-surface-variant">Email Address</label>
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">mail</span>
-                        <input type="email" id="email" name="email" value="{{ old('email') }}" required placeholder="jane.doe@example.com"
-                            class="w-full rounded-xl border border-outline-variant pl-11 pr-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
-                    </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="email" class="font-label-md text-xs font-semibold text-on-surface-variant">Email Address</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value="{{ old('email') }}"
+                        required
+                        placeholder="name@example.com"
+                        class="w-full rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                 </div>
 
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-1.5">
                     <div class="flex items-center justify-between">
-                        <label for="password" class="font-label-md text-label-md text-on-surface-variant">Password</label>
-                        <a href="#" class="font-label-md text-label-md text-primary hover:underline">Forgot password?</a>
+                        <label for="password" class="font-label-md text-xs font-semibold text-on-surface-variant">Password</label>
+                        <a href="#" class="font-label-md text-[11px] text-primary hover:underline">Forgot password?</a>
                     </div>
                     <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-                        <input :type="showPassword ? 'text' : 'password'" id="password" name="password" required placeholder="••••••••"
-                            class="w-full rounded-xl border border-outline-variant pl-11 pr-11 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                        <input
+                            :type="showPassword ? 'text' : 'password'"
+                            id="password"
+                            name="password"
+                            required
+                            placeholder="••••••••"
+                            class="w-full rounded-xl border border-outline-variant pl-3.5 pr-11 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         <button
                             type="button"
                             @click="showPassword = !showPassword"
-                            class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant p-1 cursor-pointer"
                             aria-label="Toggle password visibility">
-                            <span class="material-symbols-outlined text-[20px]" x-text="showPassword ? 'visibility_off' : 'visibility'"></span>
+                            <span class="material-symbols-outlined text-[18px]" x-text="showPassword ? 'visibility_off' : 'visibility'"></span>
                         </button>
                     </div>
                 </div>
 
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" name="remember" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary">
-                    <span class="font-body-sm text-body-sm text-on-surface-variant">Keep me signed in</span>
-                </label>
+                <div class="flex items-center justify-between py-1">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" name="remember" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary">
+                        <span class="text-xs text-on-surface-variant">Remember me</span>
+                    </label>
+                </div>
 
                 <button
                     type="submit"
-                    class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] transition-all">
+                    class="w-full flex items-center justify-center py-2.5 px-4 rounded-full bg-primary text-on-primary font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all mt-1 cursor-pointer">
                     Sign In
-                    <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
                 </button>
 
-                <p class="text-center font-body-sm text-body-sm text-on-surface-variant">
+                <p class="text-center text-xs text-on-surface-variant mt-2">
                     Don't have an account?
-                    <a href="{{ url('/register') }}" class="text-primary font-label-md hover:underline">Create one</a>
+                    <a href="{{ url('/register') }}" class="text-primary font-semibold hover:underline">Create an account</a>
                 </p>
 
             </form>
@@ -97,5 +105,4 @@
     }
 </script>
 @endpush
-
 @endsection

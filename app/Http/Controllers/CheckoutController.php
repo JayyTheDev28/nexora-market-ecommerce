@@ -16,26 +16,38 @@ class CheckoutController extends Controller
 {
     public function index(Request $request): View
     {
-        $items = $request->user()->cartItems()->with('product.seller.sellerProfile')
+        $user  = $request->user();
+        $items = $user->cartItems()->with('product.seller.sellerProfile')
             ->where('selected', true)->get();
 
-        return view('buyer.checkout.index', compact('items'));
+        // Pre-seed address from the user's most recent delivery so they
+        // don't have to fill in province/city/barangay from scratch each time.
+        $lastAddress = $user->addresses()->latest()->first();
+
+        return view('buyer.checkout.index', compact('items', 'lastAddress'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:20'],
-            'province_code' => ['required', 'string'],
-            'province_name' => ['required', 'string'],
-            'municipality_code' => ['required', 'string'],
-            'municipality_name' => ['required', 'string'],
-            'barangay_code' => ['required', 'string'],
-            'barangay_name' => ['required', 'string'],
-            'street' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['required', 'in:cod,ewallet,card'],
+            'name'               => ['required', 'string', 'max:255'],
+            'phone'              => ['required', 'string', 'max:20'],
+            'province_code'      => ['required', 'string'],
+            'province_name'      => ['nullable', 'string'],
+            'municipality_code'  => ['required', 'string'],
+            'municipality_name'  => ['nullable', 'string'],
+            'barangay_code'      => ['required', 'string'],
+            'barangay_name'      => ['nullable', 'string'],
+            'street'             => ['nullable', 'string', 'max:255'],
+            'payment_method'     => ['required', 'in:cod,ewallet,card'],
         ]);
+
+        // Alpine.js populates the *_name hidden fields from PSGC API responses.
+        // If the API was slow and names are missing, fall back to the codes so
+        // the address row is still meaningful rather than silently empty.
+        $validated['province_name']     = $validated['province_name']     ?: $validated['province_code'];
+        $validated['municipality_name'] = $validated['municipality_name'] ?: $validated['municipality_code'];
+        $validated['barangay_name']     = $validated['barangay_name']     ?: $validated['barangay_code'];
 
         $user = $request->user();
         $items = $user->cartItems()->with('product')->where('selected', true)->get();

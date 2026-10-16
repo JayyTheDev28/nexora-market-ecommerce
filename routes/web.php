@@ -11,6 +11,7 @@ use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Logistics;
 use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\Seller;
@@ -95,8 +96,57 @@ Route::middleware('role:seller')->prefix('seller')->name('seller.')->group(funct
     Route::get('/feedback', [Seller\FeedbackController::class, 'index'])->name('feedback.index');
 });
 
-Route::get('/logistics/dashboard', [DashboardController::class, 'logistics'])
-    ->middleware('role:sorting_center')->name('logistics.dashboard');
+Route::middleware('role:sorting_center')->prefix('logistics')->name('logistics.')->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'logistics'])->name('dashboard');
+
+    // Rider Management
+    Route::get('/riders', [Logistics\RiderController::class, 'index'])->name('riders.index');
+    Route::get('/riders/{rider}', [Logistics\RiderController::class, 'show'])->name('riders.show');
+    Route::post('/riders/{rider}/approve', [Logistics\RiderController::class, 'approve'])->name('riders.approve');
+    Route::post('/riders/{rider}/disapprove', [Logistics\RiderController::class, 'disapprove'])->name('riders.disapprove');
+    Route::post('/riders/{rider}/toggle-status', [Logistics\RiderController::class, 'toggleStatus'])->name('riders.toggle-status');
+    Route::post('/riders/{rider}/assign-areas', [Logistics\RiderController::class, 'assignAreas'])->name('riders.assign-areas');
+
+    // Delivery Areas
+    Route::post('/areas', [Logistics\RiderController::class, 'storeArea'])->name('areas.store');
+    Route::delete('/areas/{area}', [Logistics\RiderController::class, 'destroyArea'])->name('areas.destroy');
+
+    // Pickup Requests
+    Route::get('/pickups', [Logistics\PickupController::class, 'index'])->name('pickups.index');
+    Route::get('/pickups/{order}', [Logistics\PickupController::class, 'show'])->name('pickups.show');
+    Route::post('/pickups/{order}/schedule', [Logistics\PickupController::class, 'schedule'])->name('pickups.schedule');
+    Route::post('/pickups/{order}/confirm', [Logistics\PickupController::class, 'confirmPickup'])->name('pickups.confirm');
+    Route::post('/pickups/{order}/reject', [Logistics\PickupController::class, 'reject'])->name('pickups.reject');
+
+    // Incoming Parcels
+    Route::get('/incoming', [Logistics\IncomingController::class, 'index'])->name('incoming.index');
+    Route::post('/incoming/scan', [Logistics\IncomingController::class, 'scan'])->name('incoming.scan');
+    Route::post('/incoming/{order}/flag', [Logistics\IncomingController::class, 'flag'])->name('incoming.flag');
+
+    // Sorting Hub
+    Route::get('/sorting', [Logistics\SortingController::class, 'index'])->name('sorting.index');
+    Route::post('/sorting/{order}/confirm', [Logistics\SortingController::class, 'confirm'])->name('sorting.confirm');
+    Route::post('/sorting/batch', [Logistics\SortingController::class, 'batchSort'])->name('sorting.batch');
+
+    // Rider Assignments
+    Route::get('/assignments', [Logistics\AssignmentController::class, 'index'])->name('assignments.index');
+    Route::post('/assignments/{order}/assign', [Logistics\AssignmentController::class, 'assign'])->name('assignments.assign');
+    Route::post('/assignments/areas/{area}/batch', [Logistics\AssignmentController::class, 'batchAreaAssign'])->name('assignments.batch-area');
+
+    // Delivery Monitoring
+    Route::get('/deliveries', [Logistics\MonitoringController::class, 'index'])->name('deliveries.index');
+    Route::get('/deliveries/{order}', [Logistics\MonitoringController::class, 'show'])->name('deliveries.show');
+    Route::post('/deliveries/{order}/resolve', [Logistics\MonitoringController::class, 'resolveException'])->name('deliveries.resolve');
+
+    // Reports
+    Route::get('/reports', [Logistics\ReportController::class, 'index'])->name('reports.index');
+
+    // Account & Settings
+    Route::get('/account', [Logistics\AccountController::class, 'show'])->name('account.show');
+    Route::post('/account/profile', [Logistics\AccountController::class, 'updateProfile'])->name('account.profile');
+    Route::post('/account/address', [Logistics\AccountController::class, 'updateAddress'])->name('account.address');
+    Route::post('/account/password', [Logistics\AccountController::class, 'updatePassword'])->name('account.password');
+});
 
 Route::middleware('role:admin')->group(function () {
     Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');

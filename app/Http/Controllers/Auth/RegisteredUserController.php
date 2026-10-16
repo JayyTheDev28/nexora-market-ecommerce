@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Address;
+use App\Models\CourierProfile;
 use App\Models\SellerProfile;
 use App\Models\SortingCenterProfile;
 use App\Models\User;
@@ -23,7 +24,7 @@ class RegisteredUserController extends Controller
      * through a separate flow (not built yet), and admins are never
      * self-registered.
      */
-    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'sorting_center'];
+    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'sorting_center', 'courier'];
 
     public function create(): View
     {
@@ -66,6 +67,11 @@ class RegisteredUserController extends Controller
             'business_name' => ['required_if:role,seller,sorting_center', 'nullable', 'string', 'max:255'],
             'category' => ['required_if:role,seller', 'nullable', 'string'],
             'business_permit' => ['required_if:role,seller,sorting_center', 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+
+            // Required for couriers / riders per ERP specification
+            'vehicle_type' => ['required_if:role,courier', 'nullable', 'string', 'max:255'],
+            'plate_number' => ['required_if:role,courier', 'nullable', 'string', 'max:50'],
+            'or_cr' => ['required_if:role,courier', 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
             'terms' => ['accepted'],
         ]);
@@ -128,6 +134,15 @@ class RegisteredUserController extends Controller
                 'user_id' => $user->id,
                 'business_name' => $validated['business_name'],
                 'business_permit_path' => $permitPath,
+            ]);
+        } elseif ($validated['role'] === 'courier') {
+            $orCrPath = $request->file('or_cr') ? $request->file('or_cr')->store('couriers/or_cr', 'public') : null;
+            CourierProfile::create([
+                'user_id' => $user->id,
+                'vehicle_type' => $validated['vehicle_type'],
+                'plate_number' => $validated['plate_number'],
+                'or_cr_path' => $orCrPath,
+                'license_path' => $validIdPath,
             ]);
         }
 

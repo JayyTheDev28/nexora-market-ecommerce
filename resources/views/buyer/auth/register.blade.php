@@ -6,23 +6,25 @@
 <div
     x-data="registerForm()"
     x-init="loadProvinces()"
-    class="w-full flex flex-col md:flex-row h-[calc(100vh-4rem)] bg-surface-container-lowest">
+    class="w-full flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-surface-container-lowest">
 
-    <x-brand-panel caption="Join thousands of shoppers discovering something new every day." />
+    <x-brand-panel caption="Join thousands of shoppers discovering authentic products every day." />
 
-    {{-- RIGHT — scrollable form column --}}
-    <div class="flex-1 h-full overflow-y-auto">
-        <div class="max-w-2xl mx-auto px-6 md:px-10 py-6 md:py-8">
+    {{-- Form Column --}}
+    <div class="flex-1 overflow-y-auto">
+        <div class="max-w-2xl mx-auto px-6 md:px-10 py-8 md:py-10">
 
-            <h1 class="font-display-lg text-headline-lg md:text-3xl text-on-surface">Create Your Account</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-2">
-                Join Nexora and unlock access to a world of premium curated goods.
-            </p>
+            <div class="mb-6">
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Create Your Account</h1>
+                <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1.5">
+                    Register with Nexora to enjoy curated marketplace deals and fast deliveries.
+                </p>
+            </div>
 
             @if ($errors->any())
-                <div class="mt-6 bg-error-container border border-error/30 rounded-2xl p-4 flex flex-col gap-1">
-                    <p class="font-label-md text-label-md text-on-error-container">Please fix the following:</p>
-                    <ul class="list-disc list-inside font-body-sm text-body-sm text-on-error-container">
+                <div class="mb-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4">
+                    <p class="font-label-md text-xs md:text-sm font-bold text-rose-700">Please review the following errors:</p>
+                    <ul class="list-disc list-inside text-xs text-rose-600 mt-1 space-y-0.5">
                         @foreach ($errors->all() as $error)
                             <li>{{ $error }}</li>
                         @endforeach
@@ -31,129 +33,133 @@
             @endif
 
             <form
-                class="flex flex-col mt-8 bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm overflow-hidden"
+                class="flex flex-col bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-xs overflow-hidden"
                 action="{{ route('register.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
 
                 {{-- Account Type --}}
-                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-4">
-                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-                        <span class="material-symbols-outlined text-primary text-[22px]">switch_account</span>
-                        Register As
-                    </h2>
-                    <div class="grid grid-cols-3 gap-3">
+                <div class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-3">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Register As</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Choose your account type on the platform.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <template x-for="option in roleOptions" :key="option.value">
                             <label
-                                class="flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-colors text-center"
-                                :class="role === option.value ? 'border-primary bg-primary/5' : 'border-outline-variant hover:border-outline'">
+                                class="flex flex-col items-center gap-1.5 p-3 rounded-2xl border cursor-pointer transition-all text-center select-none"
+                                :class="role === option.value ? 'border-primary bg-primary/5 text-primary font-bold shadow-xs' : 'border-outline-variant text-on-surface-variant hover:border-outline hover:bg-surface-container-low'">
                                 <input type="radio" name="role" :value="option.value" x-model="role" class="sr-only">
-                                <span class="material-symbols-outlined text-[22px]" :class="role === option.value ? 'text-primary' : 'text-on-surface-variant'" x-text="option.icon"></span>
-                                <span class="font-label-md text-label-md text-on-surface" x-text="option.label"></span>
+                                <span class="text-xs font-semibold" x-text="option.label"></span>
                             </label>
                         </template>
                     </div>
-                    <p class="font-body-sm text-body-sm text-on-surface-variant">
-                        This determines which dashboard you'll get access to once your application is approved.
-                    </p>
                 </div>
 
                 {{-- Personal Information --}}
-                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
-                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-                        <span class="material-symbols-outlined text-primary text-[22px]">person</span>
-                        Personal Information
-                    </h2>
+                <div class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-4">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Personal Information</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Enter your legal name and demographic details.</p>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="first_name" class="font-label-md text-label-md text-on-surface-variant">First Name</label>
-                            <input type="text" id="first_name" name="first_name" required placeholder="e.g. Jane"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="first_name" class="font-label-md text-xs font-semibold text-on-surface-variant">First Name</label>
+                            <input
+                                type="text" id="first_name" name="first_name" required placeholder="e.g. Maria"
+                                value="{{ old('first_name') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="last_name" class="font-label-md text-label-md text-on-surface-variant">Last Name</label>
-                            <input type="text" id="last_name" name="last_name" required placeholder="e.g. Doe"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="last_name" class="font-label-md text-xs font-semibold text-on-surface-variant">Last Name</label>
+                            <input
+                                type="text" id="last_name" name="last_name" required placeholder="e.g. Santos"
+                                value="{{ old('last_name') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="middle_initial" class="font-label-md text-label-md text-on-surface-variant">Middle Initial</label>
-                            <input type="text" id="middle_initial" name="middle_initial" maxlength="5" placeholder="M.I."
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="middle_initial" class="font-label-md text-xs font-semibold text-on-surface-variant">Middle Initial</label>
+                            <input
+                                type="text" id="middle_initial" name="middle_initial" maxlength="5" placeholder="M.I."
+                                value="{{ old('middle_initial') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="sex" class="font-label-md text-label-md text-on-surface-variant">Sex</label>
-                            <select id="sex" name="sex" required
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="sex" class="font-label-md text-xs font-semibold text-on-surface-variant">Sex</label>
+                            <select
+                                id="sex" name="sex" required
+                                class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                                 <option value="" disabled selected>Select</option>
-                                <option value="female">Female</option>
-                                <option value="male">Male</option>
-                                <option value="other">Other</option>
+                                <option value="female" {{ old('sex') === 'female' ? 'selected' : '' }}>Female</option>
+                                <option value="male" {{ old('sex') === 'male' ? 'selected' : '' }}>Male</option>
+                                <option value="other" {{ old('sex') === 'other' ? 'selected' : '' }}>Other</option>
                             </select>
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="birthday" class="font-label-md text-label-md text-on-surface-variant">Birthday</label>
-                            <input type="date" id="birthday" name="birthday" required
+                        <div class="flex flex-col gap-1.5">
+                            <label for="birthday" class="font-label-md text-xs font-semibold text-on-surface-variant">Birthday</label>
+                            <input
+                                type="date" id="birthday" name="birthday" required
                                 x-model="birthday" @change="calculateAge()"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="age" class="font-label-md text-label-md text-on-surface-variant">Age</label>
-                            <input type="text" id="age" name="age" readonly disabled
+                        <div class="flex flex-col gap-1.5">
+                            <label for="age" class="font-label-md text-xs font-semibold text-on-surface-variant">Age</label>
+                            <input
+                                type="text" id="age" name="age" readonly disabled
                                 x-model="age" placeholder="--"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface-variant bg-surface-container cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface-variant bg-surface-container cursor-not-allowed">
                         </div>
                     </div>
                 </div>
 
                 {{-- Contact Details --}}
-                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
-                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-                        <span class="material-symbols-outlined text-primary text-[22px]">mail</span>
-                        Contact Details
-                    </h2>
+                <div class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-4">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Account & Security</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Set up your credentials for logging into Nexora.</p>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="email" class="font-label-md text-label-md text-on-surface-variant">Email Address</label>
-                            <div class="relative">
-                                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">mail</span>
-                                <input type="email" id="email" name="email" required placeholder="jane.doe@example.com"
-                                    class="w-full rounded-xl border border-outline-variant pl-11 pr-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
-                            </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="email" class="font-label-md text-xs font-semibold text-on-surface-variant">Email Address</label>
+                            <input
+                                type="email" id="email" name="email" required placeholder="name@example.com"
+                                value="{{ old('email') }}"
+                                class="w-full rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="contact_number" class="font-label-md text-label-md text-on-surface-variant">Contact Number</label>
-                            <div class="relative">
-                                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">call</span>
-                                <input type="tel" id="contact_number" name="contact_number" required placeholder="+63 9XX XXX XXXX"
-                                    class="w-full rounded-xl border border-outline-variant pl-11 pr-4 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
-                            </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label for="contact_number" class="font-label-md text-xs font-semibold text-on-surface-variant">Contact Number</label>
+                            <input
+                                type="tel" id="contact_number" name="contact_number" required placeholder="+63 9XX XXX XXXX"
+                                value="{{ old('contact_number') }}"
+                                class="w-full rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="password" class="font-label-md text-label-md text-on-surface-variant">Password</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="password" class="font-label-md text-xs font-semibold text-on-surface-variant">Password</label>
                             <div class="relative">
-                                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-                                <input :type="showPassword ? 'text' : 'password'" id="password" name="password" required minlength="8" placeholder="At least 8 characters"
-                                    class="w-full rounded-xl border border-outline-variant pl-11 pr-11 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
-                                <button type="button" @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant" aria-label="Toggle password visibility">
-                                    <span class="material-symbols-outlined text-[20px]" x-text="showPassword ? 'visibility_off' : 'visibility'"></span>
+                                <input
+                                    :type="showPassword ? 'text' : 'password'" id="password" name="password" required minlength="8" placeholder="At least 8 characters"
+                                    class="w-full rounded-xl border border-outline-variant pl-3.5 pr-11 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant p-1 cursor-pointer" aria-label="Toggle password visibility">
+                                    <span class="material-symbols-outlined text-[18px]" x-text="showPassword ? 'visibility_off' : 'visibility'"></span>
                                 </button>
                             </div>
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="password_confirmation" class="font-label-md text-label-md text-on-surface-variant">Confirm Password</label>
+                        <div class="flex flex-col gap-1.5">
+                            <label for="password_confirmation" class="font-label-md text-xs font-semibold text-on-surface-variant">Confirm Password</label>
                             <div class="relative">
-                                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-                                <input :type="showPasswordConfirm ? 'text' : 'password'" id="password_confirmation" name="password_confirmation" required placeholder="Re-enter your password"
-                                    class="w-full rounded-xl border border-outline-variant pl-11 pr-11 py-3 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
-                                <button type="button" @click="showPasswordConfirm = !showPasswordConfirm" class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant" aria-label="Toggle password visibility">
-                                    <span class="material-symbols-outlined text-[20px]" x-text="showPasswordConfirm ? 'visibility_off' : 'visibility'"></span>
+                                <input
+                                    :type="showPasswordConfirm ? 'text' : 'password'" id="password_confirmation" name="password_confirmation" required placeholder="Re-enter password"
+                                    class="w-full rounded-xl border border-outline-variant pl-3.5 pr-11 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                                <button type="button" @click="showPasswordConfirm = !showPasswordConfirm" class="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant p-1 cursor-pointer" aria-label="Toggle password visibility">
+                                    <span class="material-symbols-outlined text-[18px]" x-text="showPasswordConfirm ? 'visibility_off' : 'visibility'"></span>
                                 </button>
                             </div>
                         </div>
@@ -161,18 +167,19 @@
                 </div>
 
                 {{-- Residential Address --}}
-                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
-                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-                        <span class="material-symbols-outlined text-primary text-[22px]">location_on</span>
-                        Residential Address
-                    </h2>
+                <div class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-4">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Residential Address</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Your official residence for order delivery and verification.</p>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="province" class="font-label-md text-label-md text-on-surface-variant">Province / State</label>
-                            <select id="province" name="province" required
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="province" class="font-label-md text-xs font-semibold text-on-surface-variant">Province</label>
+                            <select
+                                id="province" name="province" required
                                 x-model="selectedProvince" @change="onProvinceChange()"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
                                 <option value="" disabled selected x-text="loadingProvinces ? 'Loading…' : 'Select Province'"></option>
                                 <template x-for="province in provinces" :key="province.code">
                                     <option :value="province.code" x-text="province.name"></option>
@@ -180,12 +187,13 @@
                             </select>
                         </div>
 
-                        <div class="flex flex-col gap-2">
-                            <label for="municipality" class="font-label-md text-label-md text-on-surface-variant">City / Municipality</label>
-                            <select id="municipality" name="municipality" required
+                        <div class="flex flex-col gap-1.5">
+                            <label for="municipality" class="font-label-md text-xs font-semibold text-on-surface-variant">City / Municipality</label>
+                            <select
+                                id="municipality" name="municipality" required
                                 x-model="selectedMunicipality" @change="onMunicipalityChange()"
                                 :disabled="!selectedProvince || loadingMunicipalities"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
+                                class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
                                 <option value="" disabled selected x-text="loadingMunicipalities ? 'Loading…' : 'Select City'"></option>
                                 <template x-for="m in municipalities" :key="m.code">
                                     <option :value="m.code" x-text="m.name"></option>
@@ -193,13 +201,14 @@
                             </select>
                         </div>
 
-                        <div class="flex flex-col gap-2">
-                            <label for="barangay" class="font-label-md text-label-md text-on-surface-variant">Barangay / District</label>
-                            <select id="barangay" name="barangay" required
+                        <div class="flex flex-col gap-1.5">
+                            <label for="barangay" class="font-label-md text-xs font-semibold text-on-surface-variant">Barangay</label>
+                            <select
+                                id="barangay" name="barangay" required
                                 x-model="selectedBarangay"
                                 :disabled="!selectedMunicipality || loadingBarangays"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
-                                <option value="" disabled selected x-text="loadingBarangays ? 'Loading…' : 'Select District'"></option>
+                                class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:cursor-not-allowed">
+                                <option value="" disabled selected x-text="loadingBarangays ? 'Loading…' : 'Select Barangay'"></option>
                                 <template x-for="b in barangays" :key="b.code">
                                     <option :value="b.code" x-text="b.name"></option>
                                 </template>
@@ -207,43 +216,48 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="street" class="font-label-md text-label-md text-on-surface-variant">Street Name</label>
-                            <input type="text" id="street" name="street" placeholder="e.g. Ayala Avenue"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="street" class="font-label-md text-xs font-semibold text-on-surface-variant">Street Name</label>
+                            <input
+                                type="text" id="street" name="street" placeholder="e.g. Ayala Avenue"
+                                value="{{ old('street') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="house_number" class="font-label-md text-label-md text-on-surface-variant">House / Unit / Bldg Number</label>
-                            <input type="text" id="house_number" name="house_number" placeholder="e.g. Unit 14B"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="house_number" class="font-label-md text-xs font-semibold text-on-surface-variant">House / Unit No.</label>
+                            <input
+                                type="text" id="house_number" name="house_number" placeholder="e.g. Unit 14B"
+                                value="{{ old('house_number') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
                     </div>
 
-                    {{-- Selects above carry the PSGC code as their value (needed to fetch children);
-                         these hidden fields carry the resolved display name alongside it. --}}
                     <input type="hidden" name="province_name" :value="selectedProvinceName">
                     <input type="hidden" name="municipality_name" :value="selectedMunicipalityName">
                     <input type="hidden" name="barangay_name" :value="selectedBarangayName">
                 </div>
 
                 {{-- Business Information — only for Seller / Logistics --}}
-                <div x-show="role === 'seller' || role === 'sorting_center'" x-cloak class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
-                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-                        <span class="material-symbols-outlined text-primary text-[22px]">store</span>
-                        Business Information
-                    </h2>
+                <div x-show="role === 'seller' || role === 'sorting_center'" x-cloak class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-4">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Business Information</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Required for verified sellers and logistics hubs.</p>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label for="business_name" class="font-label-md text-label-md text-on-surface-variant">Business Name</label>
-                            <input type="text" id="business_name" name="business_name" :required="role === 'seller' || role === 'sorting_center'" placeholder="e.g. Nexus Home"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="business_name" class="font-label-md text-xs font-semibold text-on-surface-variant">Business Name</label>
+                            <input
+                                type="text" id="business_name" name="business_name" :required="role === 'seller' || role === 'sorting_center'" placeholder="e.g. Nexus Electronics"
+                                value="{{ old('business_name') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
                         </div>
-                        <div class="flex flex-col gap-2" x-show="role === 'seller'">
-                            <label for="category" class="font-label-md text-label-md text-on-surface-variant">Line of Business</label>
-                            <select id="category" name="category" :required="role === 'seller'"
-                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 font-body-md text-body-md text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="flex flex-col gap-1.5" x-show="role === 'seller'">
+                            <label for="category" class="font-label-md text-xs font-semibold text-on-surface-variant">Primary Product Category</label>
+                            <select
+                                id="category" name="category" :required="role === 'seller'"
+                                class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                                 <option value="" disabled selected>Select a category</option>
                                 @foreach($categories as $cat)
                                     <option value="{{ $cat['slug'] }}">{{ $cat['name'] }}</option>
@@ -252,14 +266,13 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-col gap-2">
-                        <label class="font-label-md text-label-md text-on-surface-variant">Upload Business / DTI Permit</label>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="font-label-md text-xs font-semibold text-on-surface-variant">Business / DTI Permit</label>
                         <label
                             for="business_permit"
-                            class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary transition-colors bg-surface-container-low flex flex-col items-center justify-center gap-2 py-6 px-5 text-center">
-                            <span class="material-symbols-outlined text-[22px] text-primary">upload_file</span>
-                            <span class="font-label-md text-label-md text-on-surface" x-text="businessPermitFileName || 'Click to upload or drag and drop'"></span>
-                            <span class="font-body-sm text-body-sm text-on-surface-variant">PDF, JPG, or PNG (max. 5MB)</span>
+                            class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary/60 transition-colors bg-surface-container-low/50 flex flex-col items-center justify-center gap-1.5 py-5 px-4 text-center">
+                            <span class="text-xs font-semibold text-on-surface" x-text="businessPermitFileName || 'Click to select permit file'"></span>
+                            <span class="text-[11px] text-on-surface-variant">Supported formats: PDF, JPG, PNG (max. 5MB)</span>
                         </label>
                         <input
                             type="file" id="business_permit" name="business_permit"
@@ -269,24 +282,65 @@
                     </div>
                 </div>
 
+                {{-- Courier / Rider Information --}}
+                <div x-show="role === 'courier'" x-cloak class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-4">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Vehicle & Rider Information</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Required for registered delivery partners and couriers.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label for="vehicle_type" class="font-label-md text-xs font-semibold text-on-surface-variant">Vehicle Type</label>
+                            <select
+                                id="vehicle_type" name="vehicle_type" :required="role === 'courier'"
+                                class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="" disabled selected>Select Vehicle Type</option>
+                                <option value="Motorcycle" {{ old('vehicle_type') === 'Motorcycle' ? 'selected' : '' }}>Motorcycle</option>
+                                <option value="Scooter" {{ old('vehicle_type') === 'Scooter' ? 'selected' : '' }}>Scooter</option>
+                                <option value="Bicycle" {{ old('vehicle_type') === 'Bicycle' ? 'selected' : '' }}>Bicycle</option>
+                                <option value="Sedan / Car" {{ old('vehicle_type') === 'Sedan / Car' ? 'selected' : '' }}>Sedan / Car</option>
+                                <option value="Van / MPV" {{ old('vehicle_type') === 'Van / MPV' ? 'selected' : '' }}>Van / MPV</option>
+                                <option value="Light Truck" {{ old('vehicle_type') === 'Light Truck' ? 'selected' : '' }}>Light Truck</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label for="plate_number" class="font-label-md text-xs font-semibold text-on-surface-variant">Plate Number / Conduction Sticker</label>
+                            <input
+                                type="text" id="plate_number" name="plate_number" :required="role === 'courier'" placeholder="e.g. ABC 1234"
+                                value="{{ old('plate_number') }}"
+                                class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <label class="font-label-md text-xs font-semibold text-on-surface-variant">Vehicle OR/CR Document</label>
+                        <label
+                            for="or_cr"
+                            class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary/60 transition-colors bg-surface-container-low/50 flex flex-col items-center justify-center gap-1.5 py-5 px-4 text-center">
+                            <span class="text-xs font-semibold text-on-surface" x-text="orCrFileName || 'Click to select OR/CR file'"></span>
+                            <span class="text-[11px] text-on-surface-variant">Supported formats: PDF, JPG, PNG (max. 5MB)</span>
+                        </label>
+                        <input
+                            type="file" id="or_cr" name="or_cr"
+                            :required="role === 'courier'"
+                            accept=".jpg,.jpeg,.png,.pdf" class="hidden"
+                            @change="orCrFileName = $event.target.files[0]?.name ?? ''">
+                    </div>
+                </div>
+
                 {{-- Identity Verification --}}
-                <div class="p-5 md:p-7 border-b border-outline-variant border-l-4 border-l-primary flex flex-col gap-6">
-                    <h2 class="flex items-center gap-2 font-headline-sm text-headline-sm text-on-surface">
-                        <span class="material-symbols-outlined text-primary text-[22px]">badge</span>
-                        Identity Verification
-                    </h2>
-                    <p class="font-body-sm text-body-sm text-on-surface-variant -mt-4">
-                        To ensure a secure marketplace, please upload a clear photo of a valid government-issued ID.
-                    </p>
+                <div class="p-5 md:p-6 border-b border-outline-variant/60 flex flex-col gap-4">
+                    <div>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Identity Verification</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Upload a clear photo or scan of a valid government-issued ID.</p>
+                    </div>
 
                     <label
                         for="valid_id"
-                        class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary transition-colors bg-surface-container-low flex flex-col items-center justify-center gap-3 py-8 px-5 text-center">
-                        <span class="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span class="material-symbols-outlined text-[20px] text-primary">cloud_upload</span>
-                        </span>
-                        <span class="font-label-md text-label-md text-on-surface" x-text="idFileName || 'Click to upload or drag and drop'"></span>
-                        <span class="font-body-sm text-body-sm text-on-surface-variant">SVG, PNG, JPG or PDF (max. 5MB)</span>
+                        class="cursor-pointer rounded-2xl border-2 border-dashed border-outline-variant hover:border-primary/60 transition-colors bg-surface-container-low/50 flex flex-col items-center justify-center gap-1.5 py-6 px-4 text-center">
+                        <span class="text-xs font-semibold text-on-surface" x-text="idFileName || 'Click to choose government ID'"></span>
+                        <span class="text-[11px] text-on-surface-variant">Supported formats: JPG, PNG, PDF (max. 5MB)</span>
                     </label>
                     <input
                         type="file" id="valid_id" name="valid_id" required
@@ -294,44 +348,38 @@
                         @change="idFileName = $event.target.files[0]?.name ?? ''">
                 </div>
 
-                {{-- Submission --}}
-                <div class="p-5 md:p-7 flex flex-col gap-5">
-                    <label class="flex items-start gap-3 cursor-pointer bg-surface-container-low rounded-xl p-4">
-                        <input type="checkbox" name="terms" required
-                            class="mt-1 w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary">
-                        <span class="font-body-sm text-body-sm text-on-surface-variant">
-                            I hereby certify that the information provided above is true, accurate, and complete. I understand that any false statements may result in the termination of my Nexora account.
+                {{-- Agreement & Submit --}}
+                <div class="p-5 md:p-6 flex flex-col gap-4">
+                    <label class="flex items-start gap-3 cursor-pointer bg-surface-container-low rounded-xl p-3.5 select-none">
+                        <input
+                            type="checkbox" name="terms" required
+                            class="mt-0.5 w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary">
+                        <span class="text-xs text-on-surface-variant leading-relaxed">
+                            I certify that the information provided is accurate and true. I agree to comply with Nexora Market Terms of Service and Privacy Policy.
                         </span>
                     </label>
 
                     <button
                         type="submit"
-                        class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] transition-all">
-                        Create Nexora Account
-                        <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+                        class="w-full flex items-center justify-center py-2.5 px-4 rounded-full bg-primary text-on-primary font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all mt-1 cursor-pointer">
+                        Complete Registration
                     </button>
 
-                    <p class="text-center font-body-sm text-body-sm text-on-surface-variant">
+                    <p class="text-center text-xs text-on-surface-variant mt-1">
                         Already have an account?
-                        <a href="{{ url('/login') }}" class="text-primary font-label-md hover:underline">Sign in</a>
+                        <a href="{{ url('/login') }}" class="text-primary font-semibold hover:underline">Sign in</a>
                     </p>
                 </div>
 
             </form>
 
-            {{-- Compact footer — lives inside the scrollable column, not the full site footer,
-                 since this page suppresses <x-footer /> via hideFooter. --}}
-            <div class="mt-10 pt-6 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div class="flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none"><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" fill="#ffffff"/></svg>
-                    </span>
-                    <span class="font-body-sm text-body-sm text-on-surface-variant">Nexora Market &copy; {{ now()->year }} Built for Excellence.</span>
-                </div>
-                <div class="flex items-center gap-4 font-body-sm text-body-sm text-on-surface-variant">
-                    <a href="#" class="hover:text-primary">Privacy Policy</a>
-                    <a href="#" class="hover:text-primary">Terms of Service</a>
-                    <a href="#" class="hover:text-primary">Help Center</a>
+            {{-- Compact Footer --}}
+            <div class="mt-8 pt-6 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-on-surface-variant">
+                <span>&copy; {{ now()->year }} Nexora Market. All rights reserved.</span>
+                <div class="flex items-center gap-4">
+                    <a href="#" class="hover:text-primary transition-colors">Privacy Policy</a>
+                    <a href="#" class="hover:text-primary transition-colors">Terms of Service</a>
+                    <a href="#" class="hover:text-primary transition-colors">Help Center</a>
                 </div>
             </div>
 
@@ -344,19 +392,17 @@
 <script>
     function registerForm() {
         return {
-            // Account type
             role: 'buyer',
             roleOptions: [
-                { value: 'buyer', label: 'Buyer', icon: 'shopping_bag' },
-                { value: 'seller', label: 'Seller', icon: 'storefront' },
-                { value: 'sorting_center', label: 'Logistics', icon: 'local_shipping' },
+                { value: 'buyer', label: 'Buyer' },
+                { value: 'seller', label: 'Seller' },
+                { value: 'sorting_center', label: 'Logistics' },
+                { value: 'courier', label: 'Rider / Courier' },
             ],
 
-            // Password visibility
             showPassword: false,
             showPasswordConfirm: false,
 
-            // Birthday → age
             birthday: '',
             age: '',
             calculateAge() {
@@ -371,7 +417,6 @@
                 this.age = age >= 0 ? age : '';
             },
 
-            // Address — PSGC public API (province → municipality/city → barangay)
             provinces: [],
             municipalities: [],
             barangays: [],
@@ -441,9 +486,9 @@
                 }
             },
 
-            // File inputs — filename display only
             idFileName: '',
             businessPermitFileName: '',
+            orCrFileName: '',
         };
     }
 </script>

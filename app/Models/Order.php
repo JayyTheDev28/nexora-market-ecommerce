@@ -88,4 +88,14 @@ class Order extends Model
     {
         return $this->hasOne(Review::class);
     }
+
+    public function getPrimarySellerAttribute(): ?User
+    {
+        return $this->items->first()?->product?->seller;
+    }
+
+    public function getSellerAddressAttribute(): ?Address
+    {
+        return $this->primary_seller?->address;
+    }
 }

@@ -54,9 +54,55 @@ class DashboardController extends Controller
         return view('seller.dashboard', compact('stats', 'recentOrders'));
     }
 
-    public function logistics(): View
+    public function logistics(\Illuminate\Http\Request $request): View
     {
-        return view('logistics.dashboard');
+        $sortingCenterId = $request->user()->id;
+
+        $stats = [
+            'pendingPickups' => Order::where('status', 'ready_for_pickup')->whereNull('pickup_courier_id')->count(),
+            'scheduledPickups' => Order::where('status', 'ready_for_pickup')->whereNotNull('pickup_courier_id')->count(),
+            'awaitingReceipt' => Order::where('status', 'picked_up')->count(),
+            'receivedUnsorted' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'at_sorting_center')->count(),
+            'sortedUnassigned' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'sorted')->count(),
+            'assignedToRider' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'assigned_to_rider')->count(),
+            'outForDelivery' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'out_for_delivery')->count(),
+            'exceptionsCount' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['delivery_failed', 'returned'])->count(),
+            'pendingRiders' => User::where('role', 'courier')->where('approval_status', 'pending')->count(),
+        ];
+
+        $pendingPickups = Order::where('status', 'ready_for_pickup')
+            ->with(['items.product.seller', 'address', 'pickupCourier'])
+            ->latest('placed_at')
+            ->limit(5)
+            ->get();
+
+        $incomingParcels = Order::where('status', 'picked_up')
+            ->with(['buyer', 'address', 'pickupCourier', 'items.product.seller'])
+            ->latest('updated_at')
+            ->limit(5)
+            ->get();
+
+        $unsortedParcels = Order::where('sorting_center_id', $sortingCenterId)
+            ->where('status', 'at_sorting_center')
+            ->with(['buyer', 'address', 'deliveryArea'])
+            ->latest('updated_at')
+            ->limit(5)
+            ->get();
+
+        $unassignedDeliveries = Order::where('sorting_center_id', $sortingCenterId)
+            ->where('status', 'sorted')
+            ->with(['buyer', 'address', 'deliveryArea'])
+            ->latest('updated_at')
+            ->limit(5)
+            ->get();
+
+        return view('logistics.dashboard', compact(
+            'stats',
+            'pendingPickups',
+            'incomingParcels',
+            'unsortedParcels',
+            'unassignedDeliveries'
+        ));
     }
 
     public function admin(): View

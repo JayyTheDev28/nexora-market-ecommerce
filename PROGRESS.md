@@ -86,16 +86,16 @@ Legend: `[x]` built and working · `[~]` schema/backend exists, no UI yet · `[ 
 - [x] Login, routed to `/logistics/dashboard`
 - [x] Logout
 
-**Logistics Dashboard** — currently a placeholder
-- [ ] Rider management — approve/disapprove courier applications, activate/deactivate (per the ERP doc, this is where courier approval actually belongs, not admin)
-- [ ] Confirm/approve parcel pickup requests from sellers
-- [ ] Management of incoming parcels (Receive → Scan → Read Address)
-- [ ] Sorting parcels by destination area
-- [ ] Delivery assignment per area/rider — `delivery_areas` table exists, no assignment UI
-- [ ] Delivery monitoring
-- [ ] Generation of reports
-- [ ] Chat/Messaging
-- [ ] Account management
+**Logistics Dashboard** — real, database-driven operational sorting-center management system
+- [x] Rider management — approve/disapprove courier applications, activate/deactivate, zone assignment, live workload monitoring
+- [x] Confirm/approve parcel pickup requests from sellers — assign pickup rider, physical collection confirmation, reject with reason
+- [x] Management of incoming parcels (Receive → Scan → Read Address) — barcode scanner check-in, tracking lookup, address validation
+- [x] Sorting parcels by destination area — automatic municipality matching, manual override with reason, batch sorting
+- [x] Delivery assignment per area/rider — live courier workload, zone eligibility enforcement, concurrency-safe dispatch
+- [x] Delivery monitoring — in-flight tracking, failure exceptions resolution (reschedule or return to seller)
+- [x] Generation of reports — date-range filters, volume throughput, zone breakdown, rider delivery performance
+- [~] Chat/Messaging — schema exists (`conversations`, `messages`), documented integration point
+- [x] Account management — sorting center profile, facility physical address, password management
 
 ---
 
@@ -127,10 +127,10 @@ delivered → completed` (plus `delivery_failed` / `returned`).
 - [x] Seller accepts/confirms order → `confirmed`
 - [x] Seller prepares, marks ready for pickup → `preparing` → `ready_for_pickup`
 - [~] Rider picks up from seller → `picked_up` — currently a manual seller-side button standing in for this, since the courier role doesn't exist yet to confirm pickup themselves
-- [ ] Sorting center receives, scans, sorts, assigns rider → `at_sorting_center` → `sorted` → `assigned_to_rider`
+- [x] Sorting center receives, scans, sorts, assigns rider → `at_sorting_center` → `sorted` → `assigned_to_rider`
 - [ ] Rider delivers to buyer → `out_for_delivery` → `delivered`
 - [x] Buyer confirms receipt → `completed`
-- [~] Failed delivery / reschedule / return — `delivery_attempts` table exists, no trigger UI yet
+- [x] Failed delivery / reschedule / return — `delivery_attempts` table integrated with sorting center monitoring and resolution UI
 
 Every transition now has a real path from `placed` through `picked_up`
 (seller dashboard). From `picked_up` onward — sorting center receiving/

@@ -8,6 +8,10 @@ class HomeController extends Controller
 {
     public function index()
     {
+        if (auth()->check()) {
+            return redirect(auth()->user()->homeRoute());
+        }
+
         $heroImage = 'https://placehold.co/1200x1200/e5eeff/0058be?text=Nexora';
 
         $heroFeaturedProduct = [
