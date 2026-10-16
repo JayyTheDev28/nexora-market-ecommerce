@@ -166,7 +166,7 @@ Route::middleware('role:admin')->group(function () {
 Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
 Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
 
-Route::middleware('role')->group(function () {
+Route::middleware('role:buyer')->group(function () {
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
     Route::post('/cart/items', [CartController::class, 'store'])->name('cart.items.store');
     Route::patch('/cart/items/{cartItem}', [CartController::class, 'update'])->name('cart.items.update');

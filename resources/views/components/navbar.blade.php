@@ -2,7 +2,8 @@
     $navCategories = \App\Models\Category::orderBy('name')->get();
     $currentCategory = request('category');
     $currentQuery = request('q');
-    $cartCount = auth()->check() ? (int) auth()->user()->cartItems()->sum('quantity') : 0;
+    $isBuyerOrGuest = !auth()->check() || auth()->user()->isBuyer();
+    $cartCount = (auth()->check() && auth()->user()->isBuyer()) ? (int) auth()->user()->cartItems()->sum('quantity') : 0;
 @endphp
 
 <header
@@ -10,8 +11,8 @@
         mobileMenuOpen: false,
         categoryDropdownOpen: false,
         accountDropdownOpen: false,
-        selectedCategory: '{{ $currentCategory ?? '' }}',
-        selectedCategoryName: '{{ $currentCategory ? ($navCategories->firstWhere('slug', $currentCategory)->name ?? 'All Categories') : 'All Categories' }}',
+        selectedCategory: '{{ $isBuyerOrGuest ? ($currentCategory ?? '') : '' }}',
+        selectedCategoryName: '{{ $isBuyerOrGuest ? ($currentCategory ? ($navCategories->firstWhere('slug', $currentCategory)->name ?? 'All Categories') : 'All Categories') : '' }}',
         cartCount: {{ $cartCount }},
         searchQuery: '{{ addslashes($currentQuery ?? '') }}',
 
@@ -28,9 +29,26 @@
     <div class="hidden sm:block border-b border-outline-variant/60 bg-surface-container-low/60 text-on-surface-variant text-[11px] font-medium">
         <div class="max-w-none px-4 md:px-8 h-8 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <span class="text-primary font-semibold">100% Authentic Products</span>
-                <span class="text-outline-variant">•</span>
-                <span>Free Delivery over ₱2,000</span>
+                @if($isBuyerOrGuest)
+                    <span class="text-primary font-semibold">100% Authentic Products</span>
+                    <span class="text-outline-variant">•</span>
+                    <span>Free Delivery over ₱2,000</span>
+                @else
+                    <span class="text-primary font-semibold flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {{ auth()->user()->roleLabel() }} Workspace
+                    </span>
+                    <span class="text-outline-variant">•</span>
+                    <span>
+                        @if(auth()->user()->isSeller())
+                            {{ auth()->user()->sellerProfile?->business_name ?? 'Store Operations' }}
+                        @elseif(auth()->user()->isSortingCenter())
+                            {{ auth()->user()->sortingCenterProfile?->business_name ?? 'Sorting & Logistics Hub' }}
+                        @else
+                            Operations Portal
+                        @endif
+                    </span>
+                @endif
             </div>
 
             <div class="flex items-center gap-4">
@@ -38,6 +56,14 @@
                     @if(auth()->user()->isSeller())
                         <a href="{{ route('seller.dashboard') }}" class="hover:text-primary transition-colors">
                             Seller Dashboard
+                        </a>
+                    @elseif(auth()->user()->isSortingCenter())
+                        <a href="{{ route('logistics.dashboard') }}" class="hover:text-primary transition-colors">
+                            Logistics Hub
+                        </a>
+                    @elseif(auth()->user()->isAdmin())
+                        <a href="{{ route('admin.dashboard') }}" class="hover:text-primary transition-colors">
+                            Admin Dashboard
                         </a>
                     @else
                         <a href="{{ route('buyer.orders') }}" class="hover:text-primary transition-colors">
@@ -74,92 +100,122 @@
             </div>
         </a>
 
-        {{-- Search Bar (Desktop & Tablet) --}}
+        {{-- Search Bar / Workspace Indicator (Desktop & Tablet) --}}
         <div class="flex-1 max-w-2xl hidden md:flex items-center">
-            <form action="{{ url('/catalog') }}" method="GET" class="w-full flex items-center bg-surface-container rounded-full border border-outline-variant hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs pl-2 pr-1.5 py-1">
-                
-                {{-- Category Selector Dropdown --}}
-                <div class="relative flex-shrink-0" @click.outside="categoryDropdownOpen = false">
-                    <button
-                        type="button"
-                        @click="categoryDropdownOpen = !categoryDropdownOpen"
-                        class="flex items-center gap-1.5 px-3 py-1.5 border-r border-outline-variant text-on-surface-variant font-label-md text-xs hover:text-on-surface transition-colors cursor-pointer select-none">
-                        <span class="max-w-[110px] truncate" x-text="selectedCategoryName"></span>
-                        <span class="material-symbols-outlined text-[18px] text-outline transition-transform duration-200" :class="categoryDropdownOpen ? 'rotate-180' : ''">expand_more</span>
-                    </button>
-
-                    {{-- Dropdown Menu --}}
-                    <div
-                        x-show="categoryDropdownOpen"
-                        x-cloak
-                        x-transition:enter="transition ease-out duration-150"
-                        x-transition:enter-start="opacity-0 scale-95 translate-y-1"
-                        x-transition:enter-end="opacity-100 scale-100 translate-y-0"
-                        x-transition:leave="transition ease-in duration-100"
-                        x-transition:leave-start="opacity-100 scale-100 translate-y-0"
-                        x-transition:leave-end="opacity-0 scale-95 translate-y-1"
-                        class="absolute left-0 top-full mt-2 w-56 max-h-72 overflow-y-auto bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-xl py-2 z-50">
-                        
+            @if($isBuyerOrGuest)
+                <form action="{{ url('/catalog') }}" method="GET" class="w-full flex items-center bg-surface-container rounded-full border border-outline-variant hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs pl-2 pr-1.5 py-1">
+                    
+                    {{-- Category Selector Dropdown --}}
+                    <div class="relative flex-shrink-0" @click.outside="categoryDropdownOpen = false">
                         <button
                             type="button"
-                            @click="setCategory('', 'All Categories')"
-                            class="w-full flex items-center gap-2.5 px-4 py-2 text-left font-body-sm text-xs hover:bg-surface-container transition-colors"
-                            :class="!selectedCategory ? 'text-primary font-semibold bg-primary/5' : 'text-on-surface'">
-                            <span class="material-symbols-outlined text-[18px]">category</span>
-                            All Categories
+                            @click="categoryDropdownOpen = !categoryDropdownOpen"
+                            class="flex items-center gap-1.5 px-3 py-1.5 border-r border-outline-variant text-on-surface-variant font-label-md text-xs hover:text-on-surface transition-colors cursor-pointer select-none">
+                            <span class="max-w-[110px] truncate" x-text="selectedCategoryName"></span>
+                            <span class="material-symbols-outlined text-[18px] text-outline transition-transform duration-200" :class="categoryDropdownOpen ? 'rotate-180' : ''">expand_more</span>
                         </button>
 
-                        <div class="border-t border-outline-variant my-1"></div>
-
-                        @foreach($navCategories as $cat)
+                        {{-- Dropdown Menu --}}
+                        <div
+                            x-show="categoryDropdownOpen"
+                            x-cloak
+                            x-transition:enter="transition ease-out duration-150"
+                            x-transition:enter-start="opacity-0 scale-95 translate-y-1"
+                            x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                            x-transition:leave="transition ease-in duration-100"
+                            x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                            x-transition:leave-end="opacity-0 scale-95 translate-y-1"
+                            class="absolute left-0 top-full mt-2 w-56 max-h-72 overflow-y-auto bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-xl py-2 z-50">
+                            
                             <button
                                 type="button"
-                                @click="setCategory('{{ $cat->slug }}', '{{ addslashes($cat->name) }}')"
+                                @click="setCategory('', 'All Categories')"
                                 class="w-full flex items-center gap-2.5 px-4 py-2 text-left font-body-sm text-xs hover:bg-surface-container transition-colors"
-                                :class="selectedCategory === '{{ $cat->slug }}' ? 'text-primary font-semibold bg-primary/5' : 'text-on-surface'">
-                                <span class="material-symbols-outlined text-[18px] text-on-surface-variant">{{ $cat->icon ?? 'label' }}</span>
-                                <span class="truncate">{{ $cat->name }}</span>
+                                :class="!selectedCategory ? 'text-primary font-semibold bg-primary/5' : 'text-on-surface'">
+                                <span class="material-symbols-outlined text-[18px]">category</span>
+                                All Categories
                             </button>
-                        @endforeach
+
+                            <div class="border-t border-outline-variant my-1"></div>
+
+                            @foreach($navCategories as $cat)
+                                <button
+                                    type="button"
+                                    @click="setCategory('{{ $cat->slug }}', '{{ addslashes($cat->name) }}')"
+                                    class="w-full flex items-center gap-2.5 px-4 py-2 text-left font-body-sm text-xs hover:bg-surface-container transition-colors"
+                                    :class="selectedCategory === '{{ $cat->slug }}' ? 'text-primary font-semibold bg-primary/5' : 'text-on-surface'">
+                                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant">{{ $cat->icon ?? 'label' }}</span>
+                                    <span class="truncate">{{ $cat->name }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="category" :value="selectedCategory">
+
+                    {{-- Search Input --}}
+                    <input
+                        type="text"
+                        name="q"
+                        x-model="searchQuery"
+                        class="flex-1 bg-transparent px-3 py-1.5 outline-none text-on-surface placeholder:text-on-surface-variant/70 font-body-sm text-sm"
+                        placeholder="Search products, brands, or verified sellers...">
+
+                    {{-- Search Button --}}
+                    <button
+                        type="submit"
+                        class="bg-primary text-on-primary hover:bg-primary/90 px-4 py-2 rounded-full font-label-md text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all hover:shadow-md cursor-pointer flex-shrink-0">
+                        <span class="material-symbols-outlined text-[18px]">search</span>
+                        <span>Search</span>
+                    </button>
+                </form>
+            @else
+                <div class="w-full flex items-center justify-between bg-surface-container-low px-4 py-2 rounded-2xl border border-outline-variant/60">
+                    <div class="flex items-center gap-3">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <div class="flex flex-col">
+                            <span class="font-headline-sm text-xs font-bold text-on-surface">
+                                {{ auth()->user()->roleLabel() }} Management Workspace
+                            </span>
+                            <span class="text-[11px] text-on-surface-variant font-medium">
+                                @if(auth()->user()->isSeller())
+                                    {{ auth()->user()->sellerProfile?->business_name ?? 'Store Operations' }}
+                                @elseif(auth()->user()->isSortingCenter())
+                                    {{ auth()->user()->sortingCenterProfile?->business_name ?? 'Sorting & Logistics Hub' }}
+                                @else
+                                    Nexora Operations Portal
+                                @endif
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="{{ auth()->user()->homeRoute() }}" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 font-label-md text-xs font-semibold transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">dashboard</span>
+                            <span>Open Dashboard</span>
+                        </a>
                     </div>
                 </div>
-
-                <input type="hidden" name="category" :value="selectedCategory">
-
-                {{-- Search Input --}}
-                <input
-                    type="text"
-                    name="q"
-                    x-model="searchQuery"
-                    class="flex-1 bg-transparent px-3 py-1.5 outline-none text-on-surface placeholder:text-on-surface-variant/70 font-body-sm text-sm"
-                    placeholder="Search products, brands, or verified sellers...">
-
-                {{-- Search Button --}}
-                <button
-                    type="submit"
-                    class="bg-primary text-on-primary hover:bg-primary/90 px-4 py-2 rounded-full font-label-md text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all hover:shadow-md cursor-pointer flex-shrink-0">
-                    <span class="material-symbols-outlined text-[18px]">search</span>
-                    <span>Search</span>
-                </button>
-            </form>
+            @endif
         </div>
 
         {{-- Right Side Actions (Cart & User Account) --}}
         <div class="flex items-center gap-2 md:gap-4">
 
-            {{-- Cart Button (Always visible on all screens!) --}}
-            <a
-                href="{{ url('/cart') }}"
-                class="relative flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface transition-all cursor-pointer"
-                aria-label="Shopping Cart">
-                <span class="material-symbols-outlined text-[22px]">shopping_cart</span>
-                <span
-                    x-show="cartCount > 0"
-                    x-cloak
-                    x-text="cartCount > 99 ? '99+' : cartCount"
-                    class="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center border-2 border-surface-container-lowest shadow-sm animate-in fade-in">
-                </span>
-            </a>
+            {{-- Cart Button (Only visible for buyers and guests) --}}
+            @if($isBuyerOrGuest)
+                <a
+                    href="{{ url('/cart') }}"
+                    class="relative flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface transition-all cursor-pointer"
+                    aria-label="Shopping Cart">
+                    <span class="material-symbols-outlined text-[22px]">shopping_cart</span>
+                    <span
+                        x-show="cartCount > 0"
+                        x-cloak
+                        x-text="cartCount > 99 ? '99+' : cartCount"
+                        class="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center border-2 border-surface-container-lowest shadow-sm animate-in fade-in">
+                    </span>
+                </a>
+            @endif
 
             {{-- Account Menu / Auth Buttons --}}
             @auth
@@ -210,6 +266,44 @@
                                     <span class="material-symbols-outlined text-[18px] text-primary">manage_accounts</span>
                                     Account Settings
                                 </a>
+                            @elseif(auth()->user()->isSeller())
+                                <a href="{{ route('seller.dashboard') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">dashboard</span>
+                                    Seller Dashboard
+                                </a>
+                                <a href="{{ route('seller.products.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">inventory_2</span>
+                                    Manage Products
+                                </a>
+                                <a href="{{ route('seller.orders.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
+                                    Customer Orders
+                                </a>
+                                <a href="{{ route('seller.reports.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">bar_chart</span>
+                                    Analytics & Reports
+                                </a>
+                                <a href="{{ route('seller.feedback.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">rate_review</span>
+                                    Customer Reviews
+                                </a>
+                            @elseif(auth()->user()->isSortingCenter())
+                                <a href="{{ route('logistics.dashboard') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">dashboard</span>
+                                    Operations Hub
+                                </a>
+                                <a href="{{ route('logistics.riders.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">two_wheeler</span>
+                                    Riders Management
+                                </a>
+                                <a href="{{ route('logistics.sorting.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">hub</span>
+                                    Sorting Center
+                                </a>
+                                <a href="{{ route('logistics.account.show') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">settings</span>
+                                    Facility Settings
+                                </a>
                             @else
                                 <a href="{{ auth()->user()->homeRoute() }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
                                     <span class="material-symbols-outlined text-[18px] text-primary">dashboard</span>
@@ -252,46 +346,50 @@
         </div>
     </div>
 
-    {{-- Mobile Search Row (Always accessible on phones) --}}
-    <div class="md:hidden px-4 pb-3 pt-0">
-        <form action="{{ url('/catalog') }}" method="GET" class="w-full flex items-center bg-surface-container rounded-full border border-outline-variant focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all pl-3.5 pr-1.5 py-1">
-            <span class="material-symbols-outlined text-[18px] text-on-surface-variant mr-2">search</span>
-            <input
-                type="text"
-                name="q"
-                value="{{ $currentQuery ?? '' }}"
-                class="flex-1 bg-transparent py-1 outline-none text-on-surface placeholder:text-on-surface-variant font-body-sm text-xs"
-                placeholder="Search products, brands, or categories...">
-            <button type="submit" class="bg-primary text-on-primary p-1.5 rounded-full flex items-center justify-center">
-                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
-        </form>
-    </div>
+    {{-- Mobile Search Row (Only for buyers & guests) --}}
+    @if($isBuyerOrGuest)
+        <div class="md:hidden px-4 pb-3 pt-0">
+            <form action="{{ url('/catalog') }}" method="GET" class="w-full flex items-center bg-surface-container rounded-full border border-outline-variant focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all pl-3.5 pr-1.5 py-1">
+                <span class="material-symbols-outlined text-[18px] text-on-surface-variant mr-2">search</span>
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ $currentQuery ?? '' }}"
+                    class="flex-1 bg-transparent py-1 outline-none text-on-surface placeholder:text-on-surface-variant font-body-sm text-xs"
+                    placeholder="Search products, brands, or categories...">
+                <button type="submit" class="bg-primary text-on-primary p-1.5 rounded-full flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </button>
+            </form>
+        </div>
+    @endif
 
-    {{-- Category Shortcuts Quick-Bar (Desktop) --}}
-    <div class="hidden lg:block border-t border-outline-variant/60 bg-surface-container-lowest">
-        <div class="max-w-none px-4 md:px-8 h-10 flex items-center justify-between gap-6 text-xs font-medium text-on-surface-variant overflow-x-auto">
-            <div class="flex items-center gap-6 whitespace-nowrap">
-                <a href="{{ url('/catalog') }}" class="hover:text-primary transition-colors font-semibold text-on-surface">
-                    All Products
-                </a>
-                <span class="text-outline-variant">|</span>
-                @foreach($navCategories->take(7) as $cat)
-                    <a
-                        href="{{ url('/catalog?category=' . $cat->slug) }}"
-                        class="hover:text-primary transition-colors {{ $currentCategory === $cat->slug ? 'text-primary font-bold' : '' }}">
-                        {{ $cat->name }}
+    {{-- Category Shortcuts Quick-Bar (Desktop — Only for buyers & guests) --}}
+    @if($isBuyerOrGuest)
+        <div class="hidden lg:block border-t border-outline-variant/60 bg-surface-container-lowest">
+            <div class="max-w-none px-4 md:px-8 h-10 flex items-center justify-between gap-6 text-xs font-medium text-on-surface-variant overflow-x-auto">
+                <div class="flex items-center gap-6 whitespace-nowrap">
+                    <a href="{{ url('/catalog') }}" class="hover:text-primary transition-colors font-semibold text-on-surface">
+                        All Products
                     </a>
-                @endforeach
-            </div>
+                    <span class="text-outline-variant">|</span>
+                    @foreach($navCategories->take(7) as $cat)
+                        <a
+                            href="{{ url('/catalog?category=' . $cat->slug) }}"
+                            class="hover:text-primary transition-colors {{ $currentCategory === $cat->slug ? 'text-primary font-bold' : '' }}">
+                            {{ $cat->name }}
+                        </a>
+                    @endforeach
+                </div>
 
-            <div class="flex items-center gap-4 flex-shrink-0">
-                <a href="{{ url('/catalog?category=electronics') }}" class="text-primary font-semibold hover:underline">
-                    Special Offers
-                </a>
+                <div class="flex items-center gap-4 flex-shrink-0">
+                    <a href="{{ url('/catalog?category=electronics') }}" class="text-primary font-semibold hover:underline">
+                        Special Offers
+                    </a>
+                </div>
             </div>
         </div>
-    </div>
+    @endif
 
     {{-- Mobile Slide-Over Drawer --}}
     <div
@@ -336,7 +434,7 @@
                     </button>
                 </div>
 
-                {{-- Buyer Profile / Guest Info --}}
+                {{-- User Profile / Role Info --}}
                 @auth
                     <div class="p-3.5 bg-surface-container rounded-2xl flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-primary text-on-primary font-bold text-base flex items-center justify-center flex-shrink-0">
@@ -345,29 +443,98 @@
                         <div class="flex-1 min-w-0">
                             <p class="font-headline-sm text-xs font-bold text-on-surface truncate">{{ auth()->user()->full_name }}</p>
                             <p class="font-body-sm text-[11px] text-on-surface-variant truncate">{{ auth()->user()->email }}</p>
+                            <span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold text-[10px]">
+                                {{ auth()->user()->roleLabel() }}
+                            </span>
                         </div>
                     </div>
 
+                    {{-- Role-specific Mobile Links --}}
                     <div class="flex flex-col gap-1">
-                        <a href="{{ route('buyer.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
-                            <span class="material-symbols-outlined text-[20px] text-primary">dashboard</span>
-                            Buyer Dashboard
-                        </a>
-                        <a href="{{ route('buyer.orders') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
-                            <span class="material-symbols-outlined text-[20px] text-primary">receipt_long</span>
-                            My Orders
-                        </a>
-                        <a href="{{ url('/cart') }}" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
-                            <div class="flex items-center gap-3">
-                                <span class="material-symbols-outlined text-[20px] text-primary">shopping_cart</span>
-                                Shopping Cart
-                            </div>
-                            <span x-show="cartCount > 0" x-text="cartCount" class="px-2 py-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold"></span>
-                        </a>
-                        <a href="{{ route('buyer.account') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
-                            <span class="material-symbols-outlined text-[20px] text-primary">person</span>
-                            My Account
-                        </a>
+                        @if(auth()->user()->isBuyer())
+                            <a href="{{ route('buyer.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">dashboard</span>
+                                Buyer Dashboard
+                            </a>
+                            <a href="{{ route('buyer.orders') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">receipt_long</span>
+                                My Orders
+                            </a>
+                            <a href="{{ url('/cart') }}" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-[20px] text-primary">shopping_cart</span>
+                                    Shopping Cart
+                                </div>
+                                <span x-show="cartCount > 0" x-text="cartCount" class="px-2 py-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold"></span>
+                            </a>
+                            <a href="{{ route('buyer.account') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">person</span>
+                                My Account
+                            </a>
+                        @elseif(auth()->user()->isSeller())
+                            <a href="{{ route('seller.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">dashboard</span>
+                                Seller Dashboard
+                            </a>
+                            <a href="{{ route('seller.products.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">inventory_2</span>
+                                My Inventory
+                            </a>
+                            <a href="{{ route('seller.orders.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">receipt_long</span>
+                                Store Orders
+                            </a>
+                            <a href="{{ route('seller.reports.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">bar_chart</span>
+                                Sales Reports
+                            </a>
+                            <a href="{{ route('seller.feedback.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">rate_review</span>
+                                Customer Feedback
+                            </a>
+                        @elseif(auth()->user()->isSortingCenter())
+                            <a href="{{ route('logistics.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">dashboard</span>
+                                Logistics Dashboard
+                            </a>
+                            <a href="{{ route('logistics.riders.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">two_wheeler</span>
+                                Rider Management
+                            </a>
+                            <a href="{{ route('logistics.pickups.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">hail</span>
+                                Pickups
+                            </a>
+                            <a href="{{ route('logistics.incoming.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">qr_code_scanner</span>
+                                Incoming Parcels
+                            </a>
+                            <a href="{{ route('logistics.sorting.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">hub</span>
+                                Sorting Hub
+                            </a>
+                            <a href="{{ route('logistics.assignments.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">assignment_ind</span>
+                                Dispatch Assignments
+                            </a>
+                            <a href="{{ route('logistics.deliveries.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">local_shipping</span>
+                                Deliveries
+                            </a>
+                            <a href="{{ route('logistics.reports.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">analytics</span>
+                                Logistics Reports
+                            </a>
+                            <a href="{{ route('logistics.account.show') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">settings</span>
+                                Facility Settings
+                            </a>
+                        @elseif(auth()->user()->isAdmin())
+                            <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">admin_panel_settings</span>
+                                Admin Console
+                            </a>
+                        @endif
                     </div>
                 @else
                     <div class="flex flex-col gap-2 p-3 bg-primary/5 rounded-2xl border border-primary/20">
@@ -384,22 +551,24 @@
                     </div>
                 @endauth
 
-                {{-- Categories List --}}
-                <div class="flex flex-col gap-2">
-                    <p class="font-label-sm text-[10px] uppercase tracking-wider text-outline font-bold">Shop by Category</p>
-                    <div class="flex flex-col gap-1 max-h-60 overflow-y-auto">
-                        <a href="{{ url('/catalog') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
-                            <span class="material-symbols-outlined text-[18px] text-primary">apps</span>
-                            All Products
-                        </a>
-                        @foreach($navCategories as $cat)
-                            <a href="{{ url('/catalog?category=' . $cat->slug) }}" class="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
-                                <span class="material-symbols-outlined text-[18px] text-on-surface-variant">{{ $cat->icon ?? 'sell' }}</span>
-                                {{ $cat->name }}
+                {{-- Categories List (Buyer & Guest only) --}}
+                @if($isBuyerOrGuest)
+                    <div class="flex flex-col gap-2">
+                        <p class="font-label-sm text-[10px] uppercase tracking-wider text-outline font-bold">Shop by Category</p>
+                        <div class="flex flex-col gap-1 max-h-60 overflow-y-auto">
+                            <a href="{{ url('/catalog') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[18px] text-primary">apps</span>
+                                All Products
                             </a>
-                        @endforeach
+                            @foreach($navCategories as $cat)
+                                <a href="{{ url('/catalog?category=' . $cat->slug) }}" class="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant">{{ $cat->icon ?? 'sell' }}</span>
+                                    {{ $cat->name }}
+                                </a>
+                            @endforeach
+                        </div>
                     </div>
-                </div>
+                @endif
 
             </div>
 

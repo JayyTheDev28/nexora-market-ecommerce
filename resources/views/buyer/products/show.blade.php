@@ -191,43 +191,58 @@
                 </div>
 
                 {{-- Quantity Stepper & Add to Cart --}}
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                    {{-- Stepper --}}
-                    <div class="flex items-center justify-between sm:justify-start border border-outline-variant rounded-full bg-surface-container-lowest p-1 shadow-xs">
+                @if(auth()->check() && !auth()->user()->isBuyer())
+                    <div class="mt-2 p-4 rounded-2xl bg-surface-container border border-outline-variant/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary text-[22px] mt-0.5">info</span>
+                            <div>
+                                <p class="text-xs font-bold text-on-surface">Purchasing is exclusive to Buyer accounts</p>
+                                <p class="text-[11px] text-on-surface-variant">You are currently signed in as a {{ auth()->user()->roleLabel() }}.</p>
+                            </div>
+                        </div>
+                        <a href="{{ auth()->user()->homeRoute() }}" class="px-4 py-2 rounded-full bg-primary text-on-primary font-label-md text-xs font-semibold hover:bg-primary/90 transition-colors text-center shrink-0">
+                            Go to Dashboard
+                        </a>
+                    </div>
+                @else
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+                        {{-- Stepper --}}
+                        <div class="flex items-center justify-between sm:justify-start border border-outline-variant rounded-full bg-surface-container-lowest p-1 shadow-xs">
+                            <button
+                                type="button"
+                                @click="qty = Math.max(1, qty - 1)"
+                                class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+                                aria-label="Decrease quantity">
+                                <span class="material-symbols-outlined text-[18px]">remove</span>
+                            </button>
+                            <span class="w-12 text-center text-xs font-bold text-on-surface" x-text="qty"></span>
+                            <button
+                                type="button"
+                                @click="qty = Math.min(stock || 99, qty + 1)"
+                                class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+                                aria-label="Increase quantity">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                            </button>
+                        </div>
+
+                        {{-- Add to Cart Action --}}
                         <button
                             type="button"
-                            @click="qty = Math.max(1, qty - 1)"
-                            class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
-                            aria-label="Decrease quantity">
-                            <span class="material-symbols-outlined text-[18px]">remove</span>
-                        </button>
-                        <span class="w-12 text-center text-xs font-bold text-on-surface" x-text="qty"></span>
-                        <button
-                            type="button"
-                            @click="qty = Math.min(stock || 99, qty + 1)"
-                            class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
-                            aria-label="Increase quantity">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            :disabled="stock === 0 || !canAddToCart || addingToCart"
+                            @click="addToCart()"
+                            class="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-xs md:text-sm font-semibold px-8 py-3.5 rounded-full shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            
+                            <span x-show="addingToCart" x-cloak class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                            <span x-show="!addingToCart && justAdded" x-cloak class="material-symbols-outlined text-[18px]">check</span>
+                            <span x-text="justAdded ? 'Added to Cart' : 'Add to Cart'"></span>
                         </button>
                     </div>
 
-                    {{-- Add to Cart Action --}}
-                    <button
-                        type="button"
-                        :disabled="stock === 0 || !canAddToCart || addingToCart"
-                        @click="addToCart()"
-                        class="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary font-label-md text-xs md:text-sm font-semibold px-8 py-3.5 rounded-full shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                        
-                        <span x-show="addingToCart" x-cloak class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-                        <span x-show="!addingToCart && justAdded" x-cloak class="material-symbols-outlined text-[18px]">check</span>
-                        <span x-text="justAdded ? 'Added to Cart' : 'Add to Cart'"></span>
-                    </button>
-                </div>
-
-                {{-- Variant Selection Validation Notice --}}
-                <p x-show="!canAddToCart" x-cloak class="text-xs text-error font-medium">
-                    Please select <span x-text="!selectedColor && colors.length ? 'a color' : 'a size'"></span> before adding to cart.
-                </p>
+                    {{-- Variant Selection Validation Notice --}}
+                    <p x-show="!canAddToCart" x-cloak class="text-xs text-error font-medium">
+                        Please select <span x-text="!selectedColor && colors.length ? 'a color' : 'a size'"></span> before adding to cart.
+                    </p>
+                @endif
 
                 {{-- Mini Seller Card --}}
                 <div class="mt-4 p-4 rounded-2xl border border-outline-variant/60 bg-surface-container-lowest flex items-center justify-between gap-4">

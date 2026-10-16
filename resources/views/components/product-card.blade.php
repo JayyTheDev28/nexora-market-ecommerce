@@ -93,34 +93,43 @@
                 </span>
             </div>
 
-            {{-- Quick Add to Cart Button --}}
-            <button
-                type="button"
-                @click.stop.prevent="
-                    if (adding) return;
-                    adding = true;
-                    api('/cart/items', { method: 'POST', body: { product_id: {{ (int) ($product->id ?? 0) }}, quantity: 1 } })
-                        .then((data) => {
-                            if (!data) return; // 401 -> redirected to /login
-                            window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
-                            justAdded = true;
-                            setTimeout(() => justAdded = false, 1500);
-                        })
-                        .catch((e) => alert(e.message))
-                        .finally(() => adding = false);
-                "
-                :disabled="adding"
-                class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer shadow-xs disabled:opacity-60 flex-shrink-0"
-                :class="justAdded ? 'bg-emerald-600 text-white scale-105' : 'bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary hover:shadow-md'"
-                :aria-label="justAdded ? 'Added to cart' : 'Add to cart'">
-                
-                {{-- Spinner while adding --}}
-                <span x-show="adding" x-cloak class="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-                {{-- Checkmark on added --}}
-                <span x-show="!adding && justAdded" x-cloak class="material-symbols-outlined text-[18px]">check</span>
-                {{-- Cart icon idle --}}
-                <span x-show="!adding && !justAdded" class="material-symbols-outlined text-[19px]">add_shopping_cart</span>
-            </button>
+            {{-- Quick Add to Cart Button (Only for buyers & guests) --}}
+            @if(!auth()->check() || auth()->user()->isBuyer())
+                <button
+                    type="button"
+                    @click.stop.prevent="
+                        if (adding) return;
+                        adding = true;
+                        api('/cart/items', { method: 'POST', body: { product_id: {{ (int) ($product->id ?? 0) }}, quantity: 1 } })
+                            .then((data) => {
+                                if (!data) return; // 401 -> redirected to /login
+                                window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                                justAdded = true;
+                                setTimeout(() => justAdded = false, 1500);
+                            })
+                            .catch((e) => alert(e.message))
+                            .finally(() => adding = false);
+                    "
+                    :disabled="adding"
+                    class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer shadow-xs disabled:opacity-60 flex-shrink-0"
+                    :class="justAdded ? 'bg-emerald-600 text-white scale-105' : 'bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary hover:shadow-md'"
+                    :aria-label="justAdded ? 'Added to cart' : 'Add to cart'">
+                    
+                    {{-- Spinner while adding --}}
+                    <span x-show="adding" x-cloak class="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                    {{-- Checkmark on added --}}
+                    <span x-show="!adding && justAdded" x-cloak class="material-symbols-outlined text-[18px]">check</span>
+                    {{-- Cart icon idle --}}
+                    <span x-show="!adding && !justAdded" class="material-symbols-outlined text-[19px]">add_shopping_cart</span>
+                </button>
+            @else
+                <a
+                    href="{{ $product->url ?? '#' }}"
+                    class="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors flex-shrink-0"
+                    title="View details">
+                    <span class="material-symbols-outlined text-[18px]">visibility</span>
+                </a>
+            @endif
         </div>
     </div>
 
