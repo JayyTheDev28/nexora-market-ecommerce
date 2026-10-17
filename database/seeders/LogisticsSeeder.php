@@ -15,7 +15,7 @@ class LogisticsSeeder extends Seeder
     public function run(): void
     {
         // 1. Sorting Center User
-        $sortingCenter = User::firstOrCreate(
+        $sortingCenter = User::updateOrCreate(
             ['email' => 'logistics@nexora.test'],
             [
                 'first_name' => 'Nexora',
@@ -24,7 +24,7 @@ class LogisticsSeeder extends Seeder
                 'birthday' => '1995-01-01',
                 'age' => 31,
                 'contact_number' => '09170001122',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('Password123!@#'),
                 'role' => 'sorting_center',
                 'approval_status' => 'approved',
                 'account_status' => 'active',
@@ -43,6 +43,8 @@ class LogisticsSeeder extends Seeder
         Address::firstOrCreate(
             ['user_id' => $sortingCenter->id],
             [
+                'region_code' => '040000000',
+                'region_name' => 'Region IV-A (CALABARZON)',
                 'province_code' => '043400000',
                 'province_name' => 'Laguna',
                 'municipality_code' => '043426000',
@@ -51,12 +53,15 @@ class LogisticsSeeder extends Seeder
                 'barangay_name' => 'Poblacion I',
                 'street' => 'Logistics Highway',
                 'house_number' => 'Hub 1',
+                'recipient_name' => 'Nexora Logistics Hub',
+                'recipient_phone' => '09170001122',
+                'is_default' => true,
             ]
         );
 
         // 2. Rider 01 (Approved & Active, assigned to Area A)
-        $rider1 = User::firstOrCreate(
-            ['email' => 'rider1@nexora.test'],
+        $rider1 = User::updateOrCreate(
+            ['email' => 'rider@nexora.test'],
             [
                 'first_name' => 'Juan',
                 'last_name' => 'Rider 01',
@@ -64,7 +69,7 @@ class LogisticsSeeder extends Seeder
                 'birthday' => '1998-05-12',
                 'age' => 28,
                 'contact_number' => '09181112233',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('Password123!@#'),
                 'role' => 'courier',
                 'approval_status' => 'approved',
                 'account_status' => 'active',
@@ -72,7 +77,7 @@ class LogisticsSeeder extends Seeder
             ]
         );
 
-        CourierProfile::firstOrCreate(
+        CourierProfile::updateOrCreate(
             ['user_id' => $rider1->id],
             [
                 'vehicle_type' => 'Motorcycle',
@@ -82,8 +87,36 @@ class LogisticsSeeder extends Seeder
             ]
         );
 
+        // Also seed rider1@nexora.test for compatibility
+        $rider1Alt = User::updateOrCreate(
+            ['email' => 'rider1@nexora.test'],
+            [
+                'first_name' => 'Juan',
+                'last_name' => 'Rider 01',
+                'sex' => 'male',
+                'birthday' => '1998-05-12',
+                'age' => 28,
+                'contact_number' => '09181112233',
+                'password' => Hash::make('Password123!@#'),
+                'role' => 'courier',
+                'approval_status' => 'approved',
+                'account_status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        CourierProfile::updateOrCreate(
+            ['user_id' => $rider1Alt->id],
+            [
+                'vehicle_type' => 'Motorcycle',
+                'plate_number' => 'MC-1001',
+                'or_cr_path' => null,
+                'license_path' => null,
+            ]
+        );
+
         // 3. Rider 02 (Approved & Active, assigned to Area B)
-        $rider2 = User::firstOrCreate(
+        $rider2 = User::updateOrCreate(
             ['email' => 'rider2@nexora.test'],
             [
                 'first_name' => 'Carlos',
@@ -92,7 +125,7 @@ class LogisticsSeeder extends Seeder
                 'birthday' => '1996-08-20',
                 'age' => 30,
                 'contact_number' => '09182223344',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('Password123!@#'),
                 'role' => 'courier',
                 'approval_status' => 'approved',
                 'account_status' => 'active',
@@ -100,7 +133,7 @@ class LogisticsSeeder extends Seeder
             ]
         );
 
-        CourierProfile::firstOrCreate(
+        CourierProfile::updateOrCreate(
             ['user_id' => $rider2->id],
             [
                 'vehicle_type' => 'Motorcycle',
@@ -111,7 +144,7 @@ class LogisticsSeeder extends Seeder
         );
 
         // 4. Rider 03 (Pending Approval)
-        $rider3 = User::firstOrCreate(
+        $rider3 = User::updateOrCreate(
             ['email' => 'rider3@nexora.test'],
             [
                 'first_name' => 'Mateo',
@@ -120,7 +153,7 @@ class LogisticsSeeder extends Seeder
                 'birthday' => '2000-02-14',
                 'age' => 26,
                 'contact_number' => '09183334455',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('Password123!@#'),
                 'role' => 'courier',
                 'approval_status' => 'pending',
                 'account_status' => 'active',

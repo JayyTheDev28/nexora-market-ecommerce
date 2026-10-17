@@ -259,8 +259,20 @@
                                     Buyer Dashboard
                                 </a>
                                 <a href="{{ route('buyer.orders') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
-                                    <span class="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
+                                    <span class="material-symbols-outlined text-[18px] text-primary">package_2</span>
                                     My Orders
+                                </a>
+                                <a href="{{ route('buyer.wishlist') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">favorite</span>
+                                    Wishlist & Stores
+                                </a>
+                                <a href="{{ route('buyer.vouchers') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">confirmation_number</span>
+                                    Vouchers & Wallet
+                                </a>
+                                <a href="{{ route('buyer.chat.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">chat</span>
+                                    Seller Messages
                                 </a>
                                 <a href="{{ route('buyer.account') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
                                     <span class="material-symbols-outlined text-[18px] text-primary">manage_accounts</span>

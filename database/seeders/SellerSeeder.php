@@ -20,6 +20,7 @@ class SellerSeeder extends Seeder
     public function run(): void
     {
         $sellers = [
+            ['business_name' => 'Nexora Flagship Store', 'category' => 'electronics', 'email' => 'seller@nexora.test'],
             ['business_name' => 'Nexus Home', 'category' => 'home-living', 'email' => 'nexushome@nexora.test'],
             ['business_name' => 'Tech Haven', 'category' => 'electronics', 'email' => 'techhaven@nexora.test'],
             ['business_name' => 'Luxe Goods Co.', 'category' => 'fashion', 'email' => 'luxegoods@nexora.test'],
@@ -28,7 +29,7 @@ class SellerSeeder extends Seeder
         ];
 
         foreach ($sellers as $seller) {
-            $user = User::firstOrCreate(
+            $user = User::updateOrCreate(
                 ['email' => $seller['email']],
                 [
                     'first_name' => $seller['business_name'],
@@ -37,14 +38,15 @@ class SellerSeeder extends Seeder
                     'birthday' => '1995-01-01',
                     'age' => \Carbon\Carbon::parse('1995-01-01')->age,
                     'contact_number' => '09171234567',
-                    'password' => Hash::make('password'),
+                    'password' => Hash::make('Password123!@#'),
                     'role' => 'seller',
                     'approval_status' => 'approved',
+                    'account_status' => 'active',
                     'email_verified_at' => now(),
                 ]
             );
 
-            SellerProfile::firstOrCreate(
+            SellerProfile::updateOrCreate(
                 ['user_id' => $user->id],
                 ['business_name' => $seller['business_name'], 'category' => $seller['category']]
             );
@@ -52,10 +54,19 @@ class SellerSeeder extends Seeder
             Address::firstOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'province_code' => '0434', 'province_name' => 'Laguna',
-                    'municipality_code' => '043412', 'municipality_name' => 'Santa Cruz',
-                    'barangay_code' => '043412001', 'barangay_name' => 'Barangay 1',
-                    'street' => 'Sample Street', 'house_number' => '1',
+                    'region_code' => '040000000',
+                    'region_name' => 'Region IV-A (CALABARZON)',
+                    'province_code' => '0434',
+                    'province_name' => 'Laguna',
+                    'municipality_code' => '043412',
+                    'municipality_name' => 'Santa Cruz',
+                    'barangay_code' => '043412001',
+                    'barangay_name' => 'Barangay 1',
+                    'street' => 'Sample Street',
+                    'house_number' => '1',
+                    'recipient_name' => $seller['business_name'],
+                    'recipient_phone' => '09171234567',
+                    'is_default' => true,
                 ]
             );
         }

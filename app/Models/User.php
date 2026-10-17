@@ -27,6 +27,13 @@ class User extends Authenticatable implements MustVerifyEmail
         'account_status',
         'status_reason',
         'valid_id_path',
+        'avatar_path',
+        'pending_email',
+        'pending_email_otp',
+        'pending_email_otp_expires_at',
+        'pending_phone',
+        'pending_phone_otp',
+        'pending_phone_otp_expires_at',
         'email_verified_at',
         'email_verification_otp',
         'email_verification_otp_expires_at',
@@ -42,9 +49,50 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'email_verification_otp_expires_at' => 'datetime',
+            'pending_email_otp_expires_at' => 'datetime',
+            'pending_phone_otp_expires_at' => 'datetime',
             'birthday' => 'date',
             'password' => 'hashed',
         ];
+    }
+
+    public function getAvatarUrlAttribute(): string
+    {
+        if ($this->avatar_path) {
+            return asset('storage/' . $this->avatar_path);
+        }
+
+        return 'https://ui-avatars.com/api/?name=' . urlencode($this->full_name) . '&background=0058be&color=ffffff&bold=true';
+    }
+
+    /**
+     * Generate a new 6-digit numeric OTP and set 15-minute expiration for pending email change.
+     */
+    public function generatePendingEmailOtp(string $newEmail): string
+    {
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $this->forceFill([
+            'pending_email' => $newEmail,
+            'pending_email_otp' => $otp,
+            'pending_email_otp_expires_at' => now()->addMinutes(15),
+        ])->save();
+
+        return $otp;
+    }
+
+    /**
+     * Generate a new 6-digit numeric OTP and set 15-minute expiration for pending phone change.
+     */
+    public function generatePendingPhoneOtp(string $newPhone): string
+    {
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $this->forceFill([
+            'pending_phone' => $newPhone,
+            'pending_phone_otp' => $otp,
+            'pending_phone_otp_expires_at' => now()->addMinutes(15),
+        ])->save();
+
+        return $otp;
     }
 
     /**
@@ -138,15 +186,49 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isSortingCenter(): bool { return $this->role === 'sorting_center'; }
     public function isAdmin(): bool { return $this->role === 'admin'; }
 
-    // --- Relationships ---
     public function address()
     {
         return $this->hasOne(Address::class);
     }
 
+    public function defaultAddress()
+    {
+        return $this->hasOne(Address::class)->where('is_default', true);
+    }
+
     public function addresses()
     {
         return $this->hasMany(Address::class);
+    }
+
+    public function wishlists()
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
+    public function wishlistProducts()
+    {
+        return $this->belongsToMany(Product::class, 'wishlists');
+    }
+
+    public function followedStores()
+    {
+        return $this->belongsToMany(User::class, 'store_follows', 'user_id', 'seller_id');
+    }
+
+    public function storeFollowers()
+    {
+        return $this->belongsToMany(User::class, 'store_follows', 'seller_id', 'user_id');
+    }
+
+    public function claimedVouchers()
+    {
+        return $this->hasMany(UserVoucher::class);
+    }
+
+    public function vouchers()
+    {
+        return $this->belongsToMany(Voucher::class, 'user_vouchers')->withPivot('claimed_at', 'used_at', 'order_id');
     }
 
     public function sellerProfile()

@@ -83,10 +83,20 @@ Route::get('/email/verify/{id}/{hash}', [VerifyEmailController::class, 'verifyLi
 Route::middleware('role:buyer')->group(function () {
     Route::get('/buyer/dashboard', [DashboardController::class, 'buyer'])->name('buyer.dashboard');
 
+    // B1: Account & Profile
     Route::get('/buyer/account', [Buyer\AccountController::class, 'show'])->name('buyer.account');
     Route::put('/buyer/account/profile', [Buyer\AccountController::class, 'updateProfile'])->name('buyer.account.profile');
-    Route::put('/buyer/account/address', [Buyer\AccountController::class, 'updateAddress'])->name('buyer.account.address');
     Route::put('/buyer/account/password', [Buyer\AccountController::class, 'updatePassword'])->name('buyer.account.password');
+    Route::post('/buyer/account/email/request-otp', [Buyer\AccountController::class, 'requestEmailChange'])->name('buyer.account.email.request');
+    Route::post('/buyer/account/email/verify-otp', [Buyer\AccountController::class, 'verifyEmailChange'])->name('buyer.account.email.verify');
+    Route::post('/buyer/account/phone/request-otp', [Buyer\AccountController::class, 'requestPhoneChange'])->name('buyer.account.phone.request');
+    Route::post('/buyer/account/phone/verify-otp', [Buyer\AccountController::class, 'verifyPhoneChange'])->name('buyer.account.phone.verify');
+
+    // B2: Address Book
+    Route::post('/buyer/addresses', [Buyer\AddressController::class, 'store'])->name('buyer.addresses.store');
+    Route::put('/buyer/addresses/{address}', [Buyer\AddressController::class, 'update'])->name('buyer.addresses.update');
+    Route::post('/buyer/addresses/{address}/default', [Buyer\AddressController::class, 'setDefault'])->name('buyer.addresses.set-default');
+    Route::delete('/buyer/addresses/{address}', [Buyer\AddressController::class, 'destroy'])->name('buyer.addresses.destroy');
 });
 
 Route::middleware('role:seller')->prefix('seller')->name('seller.')->group(function () {
@@ -179,19 +189,41 @@ Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index
 Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
 
 Route::middleware('role:buyer')->group(function () {
+    // B5: Wishlist & Store Follow
+    Route::get('/buyer/wishlist', [Buyer\WishlistController::class, 'index'])->name('buyer.wishlist');
+    Route::post('/buyer/wishlist/{product}/toggle', [Buyer\WishlistController::class, 'toggle'])->name('buyer.wishlist.toggle');
+    Route::post('/buyer/stores/{seller}/follow-toggle', [Buyer\WishlistController::class, 'toggleFollow'])->name('buyer.stores.follow-toggle');
+
+    // B7: Vouchers
+    Route::get('/buyer/vouchers', [Buyer\VoucherController::class, 'index'])->name('buyer.vouchers');
+    Route::post('/buyer/vouchers/{voucher}/claim', [Buyer\VoucherController::class, 'claim'])->name('buyer.vouchers.claim');
+
+    // B6: Cart
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
     Route::post('/cart/items', [CartController::class, 'store'])->name('cart.items.store');
     Route::patch('/cart/items/{cartItem}', [CartController::class, 'update'])->name('cart.items.update');
     Route::delete('/cart/items/{cartItem}', [CartController::class, 'destroy'])->name('cart.items.destroy');
     Route::patch('/cart/select-all', [CartController::class, 'selectAll'])->name('cart.select-all');
+    Route::patch('/cart/select-store/{sellerId}', [CartController::class, 'selectStore'])->name('cart.select-store');
 
+    // B8, B9: Checkout & Payment
     Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
+    // B10, B11, B12, B13: Orders, Tracking, Cancellation, Returns, Reviews
     Route::get('/buyer/orders', [OrdersController::class, 'index'])->name('buyer.orders');
+    Route::post('/buyer/orders/{order}/cancel', [OrdersController::class, 'cancelOrder'])->name('buyer.orders.cancel');
     Route::post('/buyer/orders/{order}/confirm-receipt', [OrdersController::class, 'confirmReceipt'])->name('buyer.orders.confirm-receipt');
-    Route::post('/buyer/orders/{order}/feedback', [OrdersController::class, 'submitFeedback'])->name('buyer.orders.feedback');
-    Route::post('/buyer/orders/{order}/dispute', [OrdersController::class, 'submitDispute'])->name('buyer.orders.dispute');
+    Route::post('/buyer/orders/{order}/return', [OrdersController::class, 'submitReturnRequest'])->name('buyer.orders.return');
+    Route::post('/buyer/orders/{order}/review', [OrdersController::class, 'submitReview'])->name('buyer.orders.review');
+    Route::post('/buyer/orders/{order}/feedback', [OrdersController::class, 'submitReview'])->name('buyer.orders.feedback');
+    Route::post('/buyer/orders/{order}/dispute', [OrdersController::class, 'submitReturnRequest'])->name('buyer.orders.dispute');
+
+    // B14: Buyer-Seller Chat
+    Route::get('/buyer/chat', [Buyer\ChatController::class, 'index'])->name('buyer.chat.index');
+    Route::get('/buyer/chat/{conversation}', [Buyer\ChatController::class, 'show'])->name('buyer.chat.show');
+    Route::post('/buyer/chat/start', [Buyer\ChatController::class, 'startWithSeller'])->name('buyer.chat.start');
+    Route::post('/buyer/chat/{conversation}/message', [Buyer\ChatController::class, 'sendMessage'])->name('buyer.chat.message');
 });
 
 

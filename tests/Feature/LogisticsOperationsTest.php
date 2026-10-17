@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Address;
+use App\Models\Category;
 use App\Models\CourierProfile;
 use App\Models\DeliveryArea;
 use App\Models\DeliveryAttempt;
@@ -173,9 +174,14 @@ class LogisticsOperationsTest extends TestCase
             'placed_at' => now(),
         ]);
 
+        $category = Category::firstOrCreate(
+            ['slug' => 'test-category'],
+            ['name' => 'Test Category', 'icon' => 'inventory_2']
+        );
+
         $product = Product::first() ?? Product::create([
             'seller_id' => $this->seller->id,
-            'category_id' => 1,
+            'category_id' => $category->id,
             'name' => 'Test Product',
             'slug' => 'test-product-' . uniqid(),
             'price' => 1500,
