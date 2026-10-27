@@ -54,6 +54,19 @@ class EnsureUserHasRole
             return redirect()->route('buyer.pending');
         }
 
+        if ($user->isPendingActivation()) {
+            auth()->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Account Pending Activation.'], 403);
+            }
+            return redirect()->route('login')->withErrors([
+                'email' => 'Account Pending Activation. Please check your email for the activation link.',
+            ]);
+        }
+
         // Catches a user whose account was suspended mid-session — without
         // this they'd keep browsing on an already-issued session cookie.
         if (! $user->isActive()) {

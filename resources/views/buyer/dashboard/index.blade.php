@@ -9,6 +9,8 @@
         {{-- Sub-Navigation --}}
         <x-buyer-nav active="dashboard" />
 
+        <x-platform-announcements />
+
         {{-- Welcome Header --}}
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>

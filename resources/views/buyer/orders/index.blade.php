@@ -135,6 +135,25 @@
                             </div>
                         @endif
 
+                        {{-- Delivery OTP Security Banner (Rule R5) --}}
+                        @if($order->status === 'out_for_delivery')
+                            @php
+                                if (empty($order->delivery_otp)) {
+                                    $order->generateDeliveryOtp();
+                                }
+                            @endphp
+                            <div class="bg-primary/10 border-b border-primary/20 px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-primary">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[20px]">pin</span>
+                                    <span><strong>Delivery Verification OTP:</strong> Provide this 6-digit code to your rider upon parcel arrival.</span>
+                                </div>
+                                <div class="flex items-center gap-2 bg-surface-container-lowest px-3 py-1 rounded-xl border border-primary/30 shadow-xs">
+                                    <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Your OTP:</span>
+                                    <span class="font-mono text-base font-extrabold tracking-widest text-primary">{{ $order->delivery_otp }}</span>
+                                </div>
+                            </div>
+                        @endif
+
                         {{-- Order Items List --}}
                         <div class="p-4 md:p-5 flex flex-col gap-3">
                             @foreach($order->items as $item)

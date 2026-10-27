@@ -113,7 +113,7 @@
                         <label class="block font-label-md text-xs font-semibold text-on-surface mb-1">Account Type</label>
                         <p class="text-xs text-on-surface-variant mb-3">Select how you will be using Nexora.</p>
 
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                             <template x-for="option in roleOptions" :key="option.value">
                                 <label
                                     class="flex flex-col items-center justify-center p-3 rounded-2xl border cursor-pointer transition-all select-none text-center"
@@ -643,7 +643,6 @@
                 { value: 'buyer', label: 'Buyer' },
                 { value: 'seller', label: 'Seller' },
                 { value: 'sorting_center', label: 'Logistics' },
-                { value: 'courier', label: 'Rider / Courier' },
             ],
 
             firstName: @json(old('first_name', '')),

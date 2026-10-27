@@ -14,6 +14,12 @@
                 <p class="font-body-md text-sm text-on-surface-variant mt-1">Review courier applications, assign delivery coverage areas, and monitor rider workload.</p>
             </div>
             <div class="flex items-center gap-3">
+                <a
+                    href="{{ route('logistics.riders.create') }}"
+                    class="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-full font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">person_add</span>
+                    <span>Add Rider</span>
+                </a>
                 <button
                     type="button"
                     @click="addAreaModal = true"
@@ -52,15 +58,15 @@
 
         {{-- Stat Cards --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <a href="{{ route('logistics.riders.index', ['tab' => 'pending']) }}" class="bg-surface-container-lowest rounded-2xl border transition-all p-5 hover:border-primary {{ $tab === 'pending' ? 'border-primary ring-2 ring-primary/10' : 'border-outline-variant' }}">
+            <a href="{{ route('logistics.riders.index', ['tab' => 'pending_activation']) }}" class="bg-surface-container-lowest rounded-2xl border transition-all p-5 hover:border-primary {{ $tab === 'pending_activation' ? 'border-primary ring-2 ring-primary/10' : 'border-outline-variant' }}">
                 <div class="flex items-center justify-between">
-                    <span class="font-body-sm text-xs font-medium text-on-surface-variant">Pending Review</span>
-                    <span class="w-8 h-8 rounded-full bg-amber-500/10 text-amber-700 flex items-center justify-center">
-                        <span class="material-symbols-outlined text-[18px]">pending</span>
+                    <span class="font-body-sm text-xs font-medium text-on-surface-variant">Pending Activation</span>
+                    <span class="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-[18px]">mark_email_unread</span>
                     </span>
                 </div>
-                <p class="font-display-lg text-2xl font-bold text-on-surface mt-2">{{ $counts['pending'] }}</p>
-                <span class="text-[11px] text-on-surface-variant">Awaiting hub approval</span>
+                <p class="font-display-lg text-2xl font-bold text-on-surface mt-2">{{ $counts['pending_activation'] }}</p>
+                <span class="text-[11px] text-indigo-700 font-medium">Awaiting rider password setup</span>
             </a>
 
             <a href="{{ route('logistics.riders.index', ['tab' => 'active']) }}" class="bg-surface-container-lowest rounded-2xl border transition-all p-5 hover:border-primary {{ $tab === 'active' ? 'border-primary ring-2 ring-primary/10' : 'border-outline-variant' }}">
@@ -140,13 +146,13 @@
         {{-- Tabs & Search Filter --}}
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-4">
             <div class="flex items-center gap-2 overflow-x-auto pb-1 border-b border-outline-variant/60">
-                <a href="{{ route('logistics.riders.index', ['tab' => 'pending', 'q' => $search]) }}"
-                   class="px-4 py-2 font-label-md text-xs font-semibold rounded-full transition-colors whitespace-nowrap {{ $tab === 'pending' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:bg-surface-container' }}">
-                   Pending Applications ({{ $counts['pending'] }})
-                </a>
                 <a href="{{ route('logistics.riders.index', ['tab' => 'active', 'q' => $search]) }}"
                    class="px-4 py-2 font-label-md text-xs font-semibold rounded-full transition-colors whitespace-nowrap {{ $tab === 'active' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:bg-surface-container' }}">
                    Active Riders ({{ $counts['active'] }})
+                </a>
+                <a href="{{ route('logistics.riders.index', ['tab' => 'pending_activation', 'q' => $search]) }}"
+                   class="px-4 py-2 font-label-md text-xs font-semibold rounded-full transition-colors whitespace-nowrap {{ $tab === 'pending_activation' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:bg-surface-container' }}">
+                   Pending Activation ({{ $counts['pending_activation'] }})
                 </a>
                 <a href="{{ route('logistics.riders.index', ['tab' => 'inactive', 'q' => $search]) }}"
                    class="px-4 py-2 font-label-md text-xs font-semibold rounded-full transition-colors whitespace-nowrap {{ $tab === 'inactive' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:bg-surface-container' }}">
@@ -220,9 +226,16 @@
                                     <td class="px-5 py-4">
                                         @if($rider->courierProfile)
                                             <p class="font-semibold text-on-surface">{{ $rider->courierProfile->vehicle_type }}</p>
-                                            <span class="inline-block mt-0.5 px-2 py-0.5 rounded bg-surface-container font-mono text-[10px] text-on-surface font-semibold border border-outline-variant">
-                                                {{ $rider->courierProfile->plate_number }}
-                                            </span>
+                                            <div class="flex items-center gap-1.5 mt-0.5">
+                                                <span class="inline-block px-2 py-0.5 rounded bg-surface-container font-mono text-[10px] text-on-surface font-semibold border border-outline-variant">
+                                                    {{ $rider->courierProfile->plate_number }}
+                                                </span>
+                                                @if($rider->courierProfile->license_number)
+                                                    <span class="inline-block px-1.5 py-0.5 rounded bg-surface-container font-mono text-[10px] text-on-surface-variant border border-outline-variant" title="Driver's License No.">
+                                                        {{ $rider->courierProfile->license_number }}
+                                                    </span>
+                                                @endif
+                                            </div>
                                         @else
                                             <span class="text-on-surface-variant italic">No vehicle recorded</span>
                                         @endif
@@ -250,7 +263,12 @@
                                         </div>
                                     </td>
                                     <td class="px-5 py-4">
-                                        @if($rider->isPending())
+                                        @if($rider->isPendingActivation())
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-800 text-[11px] font-semibold">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                                Pending Activation
+                                            </span>
+                                        @elseif($rider->isPending())
                                             <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-800 text-[11px] font-semibold">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                                                 Pending Review
@@ -290,7 +308,16 @@
                                     </td>
                                     <td class="px-5 py-4 text-right">
                                         <div class="flex items-center justify-end gap-2">
-                                            @if($rider->isPending())
+                                            @if($rider->isPendingActivation())
+                                                {{-- Resend Activation Email --}}
+                                                <form method="POST" action="{{ route('logistics.riders.resend-activation', $rider) }}">
+                                                    @csrf
+                                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold text-[11px] transition-all cursor-pointer shadow-2xs" title="Resend 24-hour activation link">
+                                                        <span class="material-symbols-outlined text-[14px]">send</span>
+                                                        <span>Resend Link</span>
+                                                    </button>
+                                                </form>
+                                            @elseif($rider->isPending())
                                                 {{-- Approve --}}
                                                 <form method="POST" action="{{ route('logistics.riders.approve', $rider) }}">
                                                     @csrf

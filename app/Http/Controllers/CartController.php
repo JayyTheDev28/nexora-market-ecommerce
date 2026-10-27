@@ -51,7 +51,12 @@ class CartController extends Controller
             'quantity' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $product = Product::findOrFail($validated['product_id']);
+        $product = Product::with('seller.sellerProfile')->findOrFail($validated['product_id']);
+
+        if ($product->seller?->sellerProfile?->is_vacation_mode) {
+            $storeName = $product->seller->sellerProfile->business_name ?? 'The store';
+            return response()->json(['error' => "{$storeName} is currently on vacation mode and not accepting new orders."], 422);
+        }
 
         if ($product->stock <= 0) {
             return response()->json(['error' => 'This product is currently out of stock.'], 422);

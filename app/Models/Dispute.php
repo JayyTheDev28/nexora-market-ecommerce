@@ -12,6 +12,10 @@ class Dispute extends Model
         'reason',
         'details',
         'status',
+        'seller_status',
+        'seller_response',
+        'seller_response_at',
+        'return_instructions',
         'resolution_note',
         'media_paths',
     ];
@@ -20,6 +24,7 @@ class Dispute extends Model
     {
         return [
             'media_paths' => 'array',
+            'seller_response_at' => 'datetime',
         ];
     }
 

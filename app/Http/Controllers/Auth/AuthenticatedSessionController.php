@@ -46,6 +46,16 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
+        if ($user->account_status === 'pending_activation') {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => 'Account Pending Activation. Please check your email for the activation link.',
+            ]);
+        }
+
         // An already-approved account the admin has since suspended or
         // deactivated is blocked here, separately from the application gate.
         if (! $user->isActive()) {

@@ -14,6 +14,8 @@ class Review extends Model
         'comment',
         'photos',
         'edited_count',
+        'seller_reply',
+        'seller_replied_at',
     ];
 
     protected function casts(): array
@@ -22,6 +24,7 @@ class Review extends Model
             'rating' => 'integer',
             'photos' => 'array',
             'edited_count' => 'integer',
+            'seller_replied_at' => 'datetime',
         ];
     }
 

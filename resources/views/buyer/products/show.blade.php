@@ -352,7 +352,7 @@
                             </span>
                         </div>
                     </div>
-                    <a href="{{ route('catalog.index', ['seller_id' => $product['sellerId']]) }}" class="px-3.5 py-1.5 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors flex-shrink-0">
+                    <a href="{{ route('stores.show', $product['sellerId']) }}" class="px-3.5 py-1.5 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors flex-shrink-0">
                         Visit Store
                     </a>
                 </div>
@@ -407,6 +407,19 @@
                                     @foreach($rev->photos as $photo)
                                         <img src="{{ asset('storage/' . $photo) }}" class="w-14 h-14 rounded-xl object-cover border border-outline-variant">
                                     @endforeach
+                                </div>
+                            @endif
+
+                            @if($rev->seller_reply)
+                                <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/60 text-xs">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-bold text-primary flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[13px]">storefront</span>
+                                            Seller Response
+                                        </span>
+                                        <span class="text-[10px] text-on-surface-variant">{{ $rev->seller_replied_at?->format('M j, Y') }}</span>
+                                    </div>
+                                    <p class="text-on-surface leading-relaxed">{{ $rev->seller_reply }}</p>
                                 </div>
                             @endif
 

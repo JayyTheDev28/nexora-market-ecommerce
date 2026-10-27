@@ -65,6 +65,10 @@
                         <a href="{{ route('admin.dashboard') }}" class="hover:text-primary transition-colors">
                             Admin Dashboard
                         </a>
+                    @elseif(auth()->user()->isCourier())
+                        <a href="{{ route('courier.dashboard') }}" class="hover:text-primary transition-colors">
+                            Rider Dashboard
+                        </a>
                     @else
                         <a href="{{ route('buyer.orders') }}" class="hover:text-primary transition-colors">
                             Track My Order
@@ -308,6 +312,10 @@
                                     <span class="material-symbols-outlined text-[18px] text-primary">two_wheeler</span>
                                     Riders Management
                                 </a>
+                                <a href="{{ route('logistics.remittances.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">account_balance</span>
+                                    COD Remittances
+                                </a>
                                 <a href="{{ route('logistics.sorting.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
                                     <span class="material-symbols-outlined text-[18px] text-primary">hub</span>
                                     Sorting Center
@@ -315,6 +323,44 @@
                                 <a href="{{ route('logistics.account.show') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
                                     <span class="material-symbols-outlined text-[18px] text-primary">settings</span>
                                     Facility Settings
+                                </a>
+                            @elseif(auth()->user()->isCourier())
+                                <a href="{{ route('courier.dashboard') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">dashboard</span>
+                                    Rider Dashboard
+                                </a>
+                                <a href="{{ route('courier.earnings') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">payments</span>
+                                    Earnings & Remittance
+                                </a>
+                            @elseif(auth()->user()->isAdmin())
+                                <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">dashboard</span>
+                                    Admin Dashboard
+                                </a>
+                                <a href="{{ route('admin.applications.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">how_to_reg</span>
+                                    Account Applications
+                                </a>
+                                <a href="{{ route('admin.users.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">group</span>
+                                    User Accounts
+                                </a>
+                                <a href="{{ route('admin.disputes.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">report_problem</span>
+                                    Dispute Claims
+                                </a>
+                                <a href="{{ route('admin.commissions.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">payments</span>
+                                    Commissions (10%)
+                                </a>
+                                <a href="{{ route('admin.settings.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">tune</span>
+                                    Platform Settings
+                                </a>
+                                <a href="{{ route('admin.account.show') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">manage_accounts</span>
+                                    Admin Profile
                                 </a>
                             @else
                                 <a href="{{ auth()->user()->homeRoute() }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">

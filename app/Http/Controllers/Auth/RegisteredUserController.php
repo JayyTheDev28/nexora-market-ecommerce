@@ -25,7 +25,7 @@ class RegisteredUserController extends Controller
      * through a separate flow (not built yet), and admins are never
      * self-registered.
      */
-    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'sorting_center', 'courier'];
+    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'sorting_center'];
 
     public function create(): View
     {

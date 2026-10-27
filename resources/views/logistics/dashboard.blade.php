@@ -8,6 +8,8 @@
 
         <x-logistics-nav active="dashboard" />
 
+        <x-platform-announcements />
+
         {{-- Facility Header & Quick Actions --}}
         <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 mb-8 shadow-xs">
             <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">

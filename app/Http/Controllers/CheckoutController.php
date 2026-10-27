@@ -121,8 +121,15 @@ class CheckoutController extends Controller
             ]);
         }
 
-        // Check stock availability & limits
+        // Check stock availability & limits & seller vacation mode
         foreach ($items as $item) {
+            if ($item->product->seller?->sellerProfile?->is_vacation_mode) {
+                $storeName = $item->product->seller->sellerProfile->business_name ?? 'A seller';
+                return redirect()->route('cart.index')->withErrors([
+                    'checkout' => "Store '{$storeName}' is currently on vacation mode and cannot accept orders right now.",
+                ]);
+            }
+
             if ($item->product->trashed() || $item->product->status !== 'active') {
                 return redirect()->route('cart.index')->withErrors([
                     'checkout' => "Product '{$item->product->name}' is no longer available.",

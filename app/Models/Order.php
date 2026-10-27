@@ -35,6 +35,9 @@ class Order extends Model
         'completed_at',
         'cancelled_at',
         'cancellation_reason',
+        'delivery_otp',
+        'delivery_otp_failed_attempts',
+        'delivery_otp_locked_until',
     ];
 
     protected function casts(): array
@@ -51,7 +54,14 @@ class Order extends Model
             'delivered_at' => 'datetime',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'delivery_otp_locked_until' => 'datetime',
+            'delivery_otp_failed_attempts' => 'integer',
         ];
+    }
+
+    public function getTotalAmountAttribute(): float
+    {
+        return (float) ($this->total ?? 0);
     }
 
     public function buyer()
@@ -134,6 +144,87 @@ class Order extends Model
         return $this->hasOne(Review::class);
     }
 
+    public function proofOfDelivery()
+    {
+        return $this->hasOne(ProofOfDelivery::class);
+    }
+
+    public function jobOffers()
+    {
+        return $this->hasMany(JobOffer::class);
+    }
+
+    public function riderEarnings()
+    {
+        return $this->hasMany(RiderEarning::class);
+    }
+
+    public function codLedgerEntries()
+    {
+        return $this->hasMany(CodLedgerEntry::class);
+    }
+
+    /**
+     * Generate a fresh 6-digit numeric OTP for delivery verification.
+     */
+    public function generateDeliveryOtp(): string
+    {
+        $otp = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $this->update([
+            'delivery_otp' => $otp,
+            'delivery_otp_failed_attempts' => 0,
+            'delivery_otp_locked_until' => null,
+        ]);
+
+        return $otp;
+    }
+
+    /**
+     * Check if delivery OTP verification is currently locked due to brute-force attempts.
+     */
+    public function isDeliveryOtpLocked(): bool
+    {
+        return $this->delivery_otp_locked_until !== null && now()->lessThan($this->delivery_otp_locked_until);
+    }
+
+    /**
+     * Record a failed OTP attempt with 5-attempt / 15-minute brute-force lockout.
+     */
+    public function recordFailedOtpAttempt(): int
+    {
+        $attempts = $this->delivery_otp_failed_attempts + 1;
+        $updates = ['delivery_otp_failed_attempts' => $attempts];
+
+        if ($attempts >= 5) {
+            $updates['delivery_otp_locked_until'] = now()->addMinutes(15);
+        }
+
+        $this->update($updates);
+
+        return $attempts;
+    }
+
+    /**
+     * Verify delivery OTP.
+     */
+    public function verifyDeliveryOtp(string $otp): bool
+    {
+        if ($this->isDeliveryOtpLocked()) {
+            return false;
+        }
+
+        if (trim($this->delivery_otp) === trim($otp)) {
+            $this->update([
+                'delivery_otp_failed_attempts' => 0,
+                'delivery_otp_locked_until' => null,
+            ]);
+            return true;
+        }
+
+        $this->recordFailedOtpAttempt();
+        return false;
+    }
+
     public function getPrimarySellerAttribute(): ?User
     {
         if ($this->seller) {
@@ -155,6 +246,15 @@ class Order extends Model
     public function canBeCancelledByBuyer(): bool
     {
         return in_array($this->status, ['placed', 'confirmed'], true);
+    }
+
+    /**
+     * Seller cancellation guard:
+     * Allowed when status is 'placed', 'confirmed', or 'preparing' before parcel handover.
+     */
+    public function canBeCancelledBySeller(): bool
+    {
+        return in_array($this->status, ['placed', 'confirmed', 'preparing'], true);
     }
 
     /**

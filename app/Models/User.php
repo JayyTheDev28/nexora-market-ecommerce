@@ -37,6 +37,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verified_at',
         'email_verification_otp',
         'email_verification_otp_expires_at',
+        'activation_token',
+        'activation_token_expires_at',
     ];
 
     protected $hidden = [
@@ -51,6 +53,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verification_otp_expires_at' => 'datetime',
             'pending_email_otp_expires_at' => 'datetime',
             'pending_phone_otp_expires_at' => 'datetime',
+            'activation_token_expires_at' => 'datetime',
             'birthday' => 'date',
             'password' => 'hashed',
         ];
@@ -170,6 +173,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->account_status === 'deactivated';
     }
 
+    public function isPendingActivation(): bool
+    {
+        return $this->account_status === 'pending_activation';
+    }
+
     /**
      * Whether this account is cleared to actually use the platform:
      * verified, approved, and not suspended/deactivated.
@@ -251,6 +259,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Product::class, 'seller_id');
     }
 
+    public function storeCategories()
+    {
+        return $this->hasMany(StoreCategory::class, 'seller_id');
+    }
+
+    public function payoutRequests()
+    {
+        return $this->hasMany(SellerPayoutRequest::class, 'seller_id');
+    }
+
+    public function sellerDisputes()
+    {
+        return $this->hasManyThrough(Dispute::class, Order::class, 'seller_id', 'order_id');
+    }
+
     public function cartItems()
     {
         return $this->hasMany(CartItem::class);
@@ -281,6 +304,26 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(Order::class, 'delivery_courier_id')
             ->where('status', 'delivered');
+    }
+
+    public function jobOffers()
+    {
+        return $this->hasMany(JobOffer::class, 'courier_id');
+    }
+
+    public function riderEarnings()
+    {
+        return $this->hasMany(RiderEarning::class, 'courier_id');
+    }
+
+    public function codLedgerEntries()
+    {
+        return $this->hasMany(CodLedgerEntry::class, 'courier_id');
+    }
+
+    public function codRemittances()
+    {
+        return $this->hasMany(CodRemittance::class, 'courier_id');
     }
 
     /**

@@ -80,8 +80,11 @@ class LogisticsSeeder extends Seeder
         CourierProfile::updateOrCreate(
             ['user_id' => $rider1->id],
             [
+                'sorting_center_id' => $sortingCenter->id,
                 'vehicle_type' => 'Motorcycle',
                 'plate_number' => 'MC-1001',
+                'license_number' => 'N01-23-456789',
+                'license_expiry_date' => now()->addYears(2)->toDateString(),
                 'or_cr_path' => null,
                 'license_path' => null,
             ]
@@ -108,8 +111,11 @@ class LogisticsSeeder extends Seeder
         CourierProfile::updateOrCreate(
             ['user_id' => $rider1Alt->id],
             [
+                'sorting_center_id' => $sortingCenter->id,
                 'vehicle_type' => 'Motorcycle',
-                'plate_number' => 'MC-1001',
+                'plate_number' => 'MC-1001-B',
+                'license_number' => 'N01-23-456790',
+                'license_expiry_date' => now()->addYears(2)->toDateString(),
                 'or_cr_path' => null,
                 'license_path' => null,
             ]
@@ -136,14 +142,17 @@ class LogisticsSeeder extends Seeder
         CourierProfile::updateOrCreate(
             ['user_id' => $rider2->id],
             [
+                'sorting_center_id' => $sortingCenter->id,
                 'vehicle_type' => 'Motorcycle',
                 'plate_number' => 'MC-1002',
+                'license_number' => 'N01-23-456791',
+                'license_expiry_date' => now()->addYears(2)->toDateString(),
                 'or_cr_path' => null,
                 'license_path' => null,
             ]
         );
 
-        // 4. Rider 03 (Pending Approval)
+        // 4. Rider 03 (Pending Activation / Pending Approval)
         $rider3 = User::updateOrCreate(
             ['email' => 'rider3@nexora.test'],
             [
@@ -155,17 +164,22 @@ class LogisticsSeeder extends Seeder
                 'contact_number' => '09183334455',
                 'password' => Hash::make('Password123!@#'),
                 'role' => 'courier',
-                'approval_status' => 'pending',
-                'account_status' => 'active',
-                'email_verified_at' => now(),
+                'approval_status' => 'approved',
+                'account_status' => 'pending_activation',
+                'email_verified_at' => null,
+                'activation_token' => \Illuminate\Support\Str::random(64),
+                'activation_token_expires_at' => now()->addHours(24),
             ]
         );
 
-        CourierProfile::firstOrCreate(
+        CourierProfile::updateOrCreate(
             ['user_id' => $rider3->id],
             [
+                'sorting_center_id' => $sortingCenter->id,
                 'vehicle_type' => 'Van',
                 'plate_number' => 'VN-2003',
+                'license_number' => 'N01-23-456792',
+                'license_expiry_date' => now()->addYears(2)->toDateString(),
                 'or_cr_path' => null,
                 'license_path' => null,
             ]
