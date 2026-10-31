@@ -41,6 +41,12 @@ class EnsureUserHasRole
         }
 
         if ($user->isDisapproved()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'Your application was rejected. Please review feedback and resubmit.'], 403);
+                }
+                return redirect()->route('logistics.resubmit');
+            }
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Your application was not approved.'], 403);
             }
@@ -48,10 +54,29 @@ class EnsureUserHasRole
         }
 
         if ($user->isPending()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'Your application is still pending approval.'], 403);
+                }
+                return redirect()->route('logistics.pending');
+            }
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Your application is still pending approval.'], 403);
             }
             return redirect()->route('buyer.pending');
+        }
+
+        if ($user->isPendingActivation()) {
+            auth()->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Account Pending Activation.'], 403);
+            }
+            return redirect()->route('login')->withErrors([
+                'email' => 'Account Pending Activation. Please check your email for the activation link.',
+            ]);
         }
 
         // Catches a user whose account was suspended mid-session — without

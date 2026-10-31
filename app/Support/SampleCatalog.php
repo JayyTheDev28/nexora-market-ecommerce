@@ -22,6 +22,11 @@ class SampleCatalog
             ['slug' => 'gaming', 'name' => 'Gaming', 'icon' => 'sports_esports'],
             ['slug' => 'accessories', 'name' => 'Accessories', 'icon' => 'watch'],
             ['slug' => 'kids', 'name' => 'Kids', 'icon' => 'child_care'],
+            ['slug' => 'groceries', 'name' => 'Groceries & Food', 'icon' => 'local_grocery_store'],
+            ['slug' => 'health', 'name' => 'Health & Wellness', 'icon' => 'health_and_safety'],
+            ['slug' => 'automotive', 'name' => 'Automotive & Motor', 'icon' => 'directions_car'],
+            ['slug' => 'pet-supplies', 'name' => 'Pet Supplies', 'icon' => 'pets'],
+            ['slug' => 'books-stationery', 'name' => 'Books, Stationery & Crafts', 'icon' => 'menu_book'],
         ];
     }
 

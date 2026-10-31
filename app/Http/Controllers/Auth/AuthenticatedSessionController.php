@@ -36,6 +36,10 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if ($user->isDisapproved()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                return redirect()->route('logistics.resubmit');
+            }
+
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -43,6 +47,16 @@ class AuthenticatedSessionController extends Controller
             throw ValidationException::withMessages([
                 'email' => 'Your application was not approved.'
                     . ($user->disapproval_reason ? ' Reason: ' . $user->disapproval_reason : ''),
+            ]);
+        }
+
+        if ($user->account_status === 'pending_activation') {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => 'Account Pending Activation. Please check your email for the activation link.',
             ]);
         }
 
@@ -63,10 +77,16 @@ class AuthenticatedSessionController extends Controller
         }
 
         if (! $user->hasVerifiedEmail()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                return redirect()->route('logistics.otp.notice');
+            }
             return redirect()->route('verification.notice');
         }
 
         if ($user->isPending()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                return redirect()->route('logistics.pending');
+            }
             return redirect()->route('buyer.pending');
         }
 
