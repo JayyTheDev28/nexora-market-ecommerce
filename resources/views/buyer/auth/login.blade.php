@@ -108,6 +108,8 @@
                 <p class="text-center text-xs text-on-surface-variant mt-2">
                     Don't have an account?
                     <a href="{{ url('/register') }}" class="text-primary font-semibold hover:underline">Sign up</a>
+                    <span class="mx-1 text-outline-variant">•</span>
+                    <a href="{{ route('logistics.register') }}" class="text-primary font-semibold hover:underline">Logistics Partner</a>
                 </p>
 
             </form>

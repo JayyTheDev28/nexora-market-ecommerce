@@ -51,15 +51,15 @@ Legend: `[x]` built and working · `[~]` schema/backend exists, no UI yet · `[ 
 ## Seller
 
 **Registration → Approval → Login**
-- [x] Registration form (base fields + business name, line of business, business permit upload)
+- [x] Registration form (base fields + business name, line of business, multi-select online shopping categories with icons and counter, business permit upload)
 - [x] Same email verification + admin approval flow as buyer
 - [x] Login, routed to `/seller/dashboard`
 - [x] Logout
 
 **Seller Dashboard & Operations Hub** — complete, fully integrated, database-backed ERP seller subsystem
-- [x] **Store Profile Management & Public Storefront** — `/seller/store`, `/stores/{seller}`: store branding (name, description, logo, banner, contact email/phone), public storefront page with catalog filtering and vouchers, vacation mode toggle with custom notice, and strict cart/checkout blocking during vacation.
+- [x] **Store Profile Management & Public Storefront** — `/seller/store`, `/stores/{seller}`: store branding (name, description, logo, banner, contact email/phone), store selling categories management (`category_seller`) allowing merchants to expand/update enabled categories, public storefront page with catalog filtering and vouchers, vacation mode toggle with custom notice, and strict cart/checkout blocking during vacation.
 - [x] **Store Category Management** — `/seller/categories`: hierarchical seller store categories (parent/subcategories, order index, visibility toggle, duplicate prevention, and safe deletion unlinking).
-- [x] **Product Management & Catalog** — `/seller/products`: full CRUD, draft vs publish, category assignment, SKU, dimensions, weights, multi-image gallery upload, duplicate product action, archive/reactivate, bulk operations, and deletion protection against active orders.
+- [x] **Product Management & Catalog** — `/seller/products`: full CRUD, strict shop-category upload restriction (sellers can only select and upload to categories enabled for their store), draft vs publish, category assignment, SKU, dimensions, weights, multi-image gallery upload, duplicate product action, archive/reactivate, bulk operations, and deletion protection against active orders.
 - [x] **Product Variants Matrix** — variation options (size, color, custom attributes), price/SKU/stock matrix synchronization, catalog minimum pricing, and buyer variant selection.
 - [x] **Inventory Management & Low-Stock Alerts** — `/seller/inventory`: stock tracking, manual adjustments (`set`, `add`, `subtract`) with audit reasons, low-stock threshold customization, automatic out-of-stock badges, and real-time synchronization.
 - [x] **Product Discounts & Flash Sales** — `/seller/promotions`: compare-at strikethrough pricing, scheduled flash sales with server-side price validation, countdown indicators, and manual early termination.

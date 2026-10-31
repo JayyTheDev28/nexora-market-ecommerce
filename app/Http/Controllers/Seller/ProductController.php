@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProductController extends Controller
@@ -71,7 +72,7 @@ class ProductController extends Controller
 
     public function create(Request $request): View
     {
-        $categories = Category::orderBy('name')->get();
+        $categories = $request->user()->getEffectiveSellerCategories();
         $storeCategories = StoreCategory::where('seller_id', $request->user()->id)->orderBy('name')->get();
 
         return view('seller.products.create', compact('categories', 'storeCategories'));
@@ -99,7 +100,7 @@ class ProductController extends Controller
     {
         $this->authorizeOwner($request, $product);
 
-        $categories = Category::orderBy('name')->get();
+        $categories = $request->user()->getEffectiveSellerCategories();
         $storeCategories = StoreCategory::where('seller_id', $request->user()->id)->orderBy('name')->get();
 
         return view('seller.products.edit', compact('product', 'categories', 'storeCategories'));
@@ -207,11 +208,16 @@ class ProductController extends Controller
 
     private function validateProductData(Request $request, ?Product $product, bool $isDraft): array
     {
-        $sellerId = $request->user()->id;
+        $seller = $request->user();
+        $allowedCategoryIds = $seller->getEffectiveSellerCategories()->pluck('id')->toArray();
 
         $rules = [
             'name' => [$isDraft ? 'nullable' : 'required', 'string', 'max:255'],
-            'category_id' => [$isDraft ? 'nullable' : 'required', 'exists:categories,id'],
+            'category_id' => [
+                $isDraft ? 'nullable' : 'required',
+                'exists:categories,id',
+                Rule::in($allowedCategoryIds),
+            ],
             'store_category_id' => ['nullable', 'exists:store_categories,id'],
             'sku' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:5000'],
@@ -229,7 +235,9 @@ class ProductController extends Controller
             'variants_json' => ['nullable', 'string'],
         ];
 
-        return $request->validate($rules);
+        return $request->validate($rules, [
+            'category_id.in' => 'Your store is not configured to sell in this category. You can only select categories enabled for your shop in Store Settings.',
+        ]);
     }
 
     private function prepareProductData(Request $request, array $validated, ?Product $product): array
@@ -263,12 +271,17 @@ class ProductController extends Controller
         }
 
         // Variants JSON matrix handling
-        $variantsData = $product?->variants_data;
-        if (! empty($validated['variants_json'])) {
-            $decoded = json_decode($validated['variants_json'], true);
-            if (is_array($decoded) && count($decoded) > 0) {
-                $variantsData = $decoded;
+        $variantsData = null;
+        if ($request->has('variants_json')) {
+            $raw = $request->input('variants_json');
+            if (! empty($raw)) {
+                $decoded = is_array($raw) ? $raw : json_decode($raw, true);
+                if (is_array($decoded) && count($decoded) > 0) {
+                    $variantsData = array_values(array_filter($decoded, fn ($v) => !empty($v['name']) || !empty($v['sku'])));
+                }
             }
+        } else {
+            $variantsData = $product?->variants_data;
         }
 
         $stock = (int) ($validated['stock'] ?? 0);

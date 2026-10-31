@@ -13,7 +13,7 @@
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Order Tracking & History (B10)</h1>
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Order Tracking & History</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">Track orders, manage cancellations, file return requests, and rate your purchases.</p>
             </div>
             <a href="{{ route('catalog.index') }}" class="self-start sm:self-auto inline-flex items-center justify-center px-4 py-2 rounded-full bg-primary text-on-primary font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all">
@@ -127,7 +127,7 @@
                             <div class="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex items-center justify-between text-xs text-amber-800">
                                 <div class="flex items-center gap-2">
                                     <span class="material-symbols-outlined text-[18px]">timer</span>
-                                    <span><strong>Payment Window (B9):</strong> Please complete your gateway payment. Orders unpaid within 60 minutes are automatically cancelled.</span>
+                                    <span><strong>Payment Window:</strong> Please complete your gateway payment. Orders unpaid within 60 minutes are automatically cancelled.</span>
                                 </div>
                                 <span class="font-mono font-bold text-amber-900">
                                     Expires {{ $order->payment_expires_at->diffForHumans() }}
@@ -192,7 +192,7 @@
                             @if($order->status === 'cancelled')
                                 <div class="mt-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-800 flex items-center justify-between">
                                     <div>
-                                        <strong>Order Cancelled (B11):</strong> {{ $order->cancellation_reason ?? 'Cancelled by buyer' }}
+                                        <strong>Order Cancelled:</strong> {{ $order->cancellation_reason ?? 'Cancelled by buyer' }}
                                         <span class="block text-[11px] text-rose-700 mt-0.5">Item quantities have been restored back to inventory.</span>
                                     </div>
                                     <span class="text-[10px] text-rose-600">{{ $order->cancelled_at ? $order->cancelled_at->format('M d, Y') : '' }}</span>
@@ -257,7 +257,7 @@
 
                             {{-- Action Buttons --}}
                             <div class="flex items-center gap-2">
-                                {{-- Chat Seller Action (B14) --}}
+                                {{-- Chat Seller Action --}}
                                 @if($order->seller_id)
                                     <form method="POST" action="{{ route('buyer.chat.start') }}">
                                         @csrf
@@ -277,7 +277,7 @@
                                         type="button"
                                         @click="openCancelModal({{ $order->id }}, '{{ $order->order_number }}')"
                                         class="px-3.5 py-1.5 rounded-xl border border-rose-300 text-rose-700 text-xs font-semibold hover:bg-rose-50 transition-colors">
-                                        Cancel Order (B11)
+                                        Cancel Order
                                     </button>
                                 @endif
 
@@ -293,24 +293,24 @@
                                     </form>
                                 @endif
 
-                                {{-- B12: 7-Day Return / Refund Window --}}
+                                {{-- 7-Day Return / Refund Window --}}
                                 @if($canReturn)
                                     <button
                                         type="button"
                                         @click="openReturnModal({{ $order->id }}, '{{ $order->order_number }}')"
                                         class="px-3.5 py-1.5 rounded-xl border border-purple-400 text-purple-700 text-xs font-semibold hover:bg-purple-50 transition-colors">
-                                        Return / Refund (B12)
+                                        Return / Refund
                                     </button>
                                 @endif
 
-                                {{-- B13: 30-Day Product Rating & Review --}}
+                                {{-- 30-Day Product Rating & Review --}}
                                 @if($canReview)
                                     @if(!$review)
                                         <button
                                             type="button"
                                             @click="openReviewModal({{ $order->id }}, '{{ $order->order_number }}', null)"
                                             class="px-4 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 transition-colors">
-                                            Rate & Review (B13)
+                                            Rate & Review
                                         </button>
                                     @elseif($review->canBeEdited())
                                         <button
@@ -329,11 +329,11 @@
             </div>
         @endif
 
-        {{-- Cancellation Modal (B11) --}}
+        {{-- Cancellation Modal --}}
         <div x-show="cancelModal.open" x-cloak class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div @click.away="cancelModal.open = false" class="w-full max-w-md bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-xl flex flex-col gap-4">
                 <div>
-                    <h3 class="text-base font-bold text-on-surface">Cancel Order (B11)</h3>
+                    <h3 class="text-base font-bold text-on-surface">Cancel Order</h3>
                     <p class="text-xs text-on-surface-variant mt-0.5">Pre-shipping cancellation is permitted before logistics preparation. Product quantities will be immediately restored.</p>
                 </div>
                 <form :action="`/buyer/orders/${cancelModal.orderId}/cancel`" method="POST" class="flex flex-col gap-4">
@@ -361,11 +361,11 @@
             </div>
         </div>
 
-        {{-- 7-Day Return / Refund Request Modal (B12) --}}
+        {{-- 7-Day Return / Refund Request Modal --}}
         <div x-show="returnModal.open" x-cloak class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div @click.away="returnModal.open = false" class="w-full max-w-lg bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
                 <div>
-                    <h3 class="text-base font-bold text-on-surface">File Return / Refund Request (B12)</h3>
+                    <h3 class="text-base font-bold text-on-surface">File Return / Refund Request</h3>
                     <p class="text-xs text-on-surface-variant mt-0.5">Permitted within 7 days of delivery. Requires 1–5 proof photos or videos.</p>
                 </div>
                 <form :action="`/buyer/orders/${returnModal.orderId}/return`" method="POST" enctype="multipart/form-data" class="flex flex-col gap-4">
@@ -401,11 +401,11 @@
             </div>
         </div>
 
-        {{-- Item Rating & Review Modal (B13) --}}
+        {{-- Item Rating & Review Modal --}}
         <div x-show="reviewModal.open" x-cloak class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div @click.away="reviewModal.open = false" class="w-full max-w-md bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-xl flex flex-col gap-4">
                 <div>
-                    <h3 class="text-base font-bold text-on-surface">Item Rating & Review (B13)</h3>
+                    <h3 class="text-base font-bold text-on-surface">Item Rating & Review</h3>
                     <p class="text-xs text-on-surface-variant mt-0.5">Rate this completed order within 30 days. Maximum 1 edit allowed.</p>
                 </div>
                 <form :action="`/buyer/orders/${reviewModal.orderId}/review`" method="POST" enctype="multipart/form-data" class="flex flex-col gap-4">

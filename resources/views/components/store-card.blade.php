@@ -33,8 +33,13 @@
 
         <div class="w-full border-t border-outline-variant/60 my-4"></div>
 
+        @php
+            $storeUrl = !empty($store->url) && $store->url !== '#'
+                ? $store->url
+                : (!empty($store->id) ? route('stores.show', $store->id) : (!empty($store->seller_id) ? route('stores.show', $store->seller_id) : url('/catalog')));
+        @endphp
         <a
-            href="{{ $store->url && $store->url !== '#' ? $store->url : url('/catalog') }}"
+            href="{{ $storeUrl }}"
             class="w-full text-center py-2.5 px-4 rounded-xl bg-surface-container hover:bg-primary hover:text-on-primary font-label-md text-xs font-semibold text-on-surface transition-all duration-200">
             Visit Store
         </a>

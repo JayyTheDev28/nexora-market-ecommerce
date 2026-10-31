@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\EnsureUserHasRole;
+use App\Http\Middleware\LogisticsMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -25,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
+            'admin' => AdminMiddleware::class,
+            'logistics' => LogisticsMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

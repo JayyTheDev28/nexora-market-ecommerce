@@ -123,6 +123,17 @@
                                 </label>
                             </template>
                         </div>
+
+                        {{-- Dedicated Corporate Logistics Portal Link --}}
+                        <div x-show="role === 'sorting_center'" x-cloak class="mt-3 p-3.5 rounded-2xl bg-primary/10 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div class="flex items-center gap-2 text-primary font-medium">
+                                <span class="material-symbols-outlined text-[20px]">local_shipping</span>
+                                <span>Corporate Carrier / Fleet Partner with SEC, BIR 2303, and multi-region coverage?</span>
+                            </div>
+                            <a href="{{ route('logistics.register') }}" class="px-3.5 py-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold hover:bg-primary/90 transition-colors shrink-0 text-center">
+                                Open Dedicated Portal →
+                            </a>
+                        </div>
                     </div>
 
                     {{-- Legal Name --}}
@@ -453,19 +464,44 @@
                                 <span x-show="fieldErrors.business_name" x-text="fieldErrors.business_name" class="text-[11px] text-rose-600 font-medium"></span>
                             </div>
 
-                            <div class="flex flex-col gap-1.5" x-show="role === 'seller'">
-                                <label for="category" class="font-label-md text-xs font-semibold text-on-surface-variant">Primary Product Category</label>
-                                <select
-                                    id="category" name="category"
-                                    x-model="category"
-                                    class="rounded-xl border px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
-                                    :class="fieldErrors.category ? 'border-rose-500 ring-1 ring-rose-500' : 'border-outline-variant'">
-                                    <option value="" disabled selected>Select category</option>
+                            <div class="col-span-1 md:col-span-2 flex flex-col gap-2 pt-1" x-show="role === 'seller'">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <label class="font-label-md text-xs font-semibold text-on-surface">
+                                            Store Online Shopping Categories <span class="text-rose-500">*</span>
+                                        </label>
+                                        <p class="text-[11px] text-on-surface-variant">Select all the product categories your store plans to sell in. You can add more later in Store Settings.</p>
+                                    </div>
+                                    <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                        <span x-text="selectedCategories.length">0</span> Selected
+                                    </span>
+                                </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-52 overflow-y-auto p-1.5 rounded-2xl border border-outline-variant bg-surface-container-low/30">
                                     @foreach($categories as $cat)
-                                        <option value="{{ $cat['slug'] }}">{{ $cat['name'] }}</option>
+                                        @php
+                                            $catId = is_object($cat) ? $cat->id : ($cat['id'] ?? $cat['slug']);
+                                            $catName = is_object($cat) ? $cat->name : $cat['name'];
+                                            $catIcon = is_object($cat) ? ($cat->icon ?? 'category') : ($cat['icon'] ?? 'category');
+                                        @endphp
+                                        <div
+                                            @click="toggleCategory('{{ $catId }}')"
+                                            class="flex items-center gap-2 p-2 rounded-xl border text-xs font-medium cursor-pointer transition-all select-none"
+                                            :class="isCategorySelected('{{ $catId }}') ? 'border-primary bg-primary/15 text-primary shadow-xs' : 'border-outline-variant bg-surface hover:bg-surface-container'">
+                                            <input
+                                                type="checkbox"
+                                                name="categories[]"
+                                                value="{{ $catId }}"
+                                                :checked="isCategorySelected('{{ $catId }}')"
+                                                class="hidden">
+                                            <span class="material-symbols-outlined text-[18px] shrink-0" :class="isCategorySelected('{{ $catId }}') ? 'text-primary' : 'text-on-surface-variant'">{{ $catIcon }}</span>
+                                            <span class="truncate">{{ $catName }}</span>
+                                        </div>
                                     @endforeach
-                                </select>
-                                <span x-show="fieldErrors.category" x-text="fieldErrors.category" class="text-[11px] text-rose-600 font-medium"></span>
+                                </div>
+
+                                <input type="hidden" name="category" :value="category">
+                                <span x-show="fieldErrors.categories" x-text="fieldErrors.categories" class="text-[11px] text-rose-600 font-medium"></span>
                             </div>
                         </div>
 
@@ -674,8 +710,26 @@
 
             businessName: @json(old('business_name', '')),
             category: @json(old('category', '')),
+            selectedCategories: @json(old('categories', [])),
             vehicleType: @json(old('vehicle_type', '')),
             plateNumber: @json(old('plate_number', '')),
+
+            toggleCategory(catId) {
+                catId = String(catId);
+                const idx = this.selectedCategories.indexOf(catId);
+                if (idx > -1) {
+                    this.selectedCategories.splice(idx, 1);
+                } else {
+                    this.selectedCategories.push(catId);
+                }
+                this.category = this.selectedCategories.join(', ');
+                if (this.selectedCategories.length > 0) {
+                    delete this.fieldErrors.categories;
+                }
+            },
+            isCategorySelected(catId) {
+                return this.selectedCategories.includes(String(catId));
+            },
 
             idFileName: '',
             businessPermitFileName: '',
@@ -907,8 +961,8 @@
                         } else if (bName.length < 2) {
                             this.fieldErrors.business_name = 'Business name must be at least 2 characters.';
                         }
-                        if (this.role === 'seller' && !this.category) {
-                            this.fieldErrors.category = 'Please choose a primary product category.';
+                        if (this.role === 'seller' && this.selectedCategories.length === 0 && !this.category) {
+                            this.fieldErrors.categories = 'Please select at least one online shopping category for your store.';
                         }
                         const permitInput = document.getElementById('business_permit');
                         if (!this.businessPermitFileName && (!permitInput || !permitInput.files || permitInput.files.length === 0)) {

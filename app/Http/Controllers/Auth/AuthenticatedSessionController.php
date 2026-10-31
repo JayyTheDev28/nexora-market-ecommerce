@@ -36,6 +36,10 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if ($user->isDisapproved()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                return redirect()->route('logistics.resubmit');
+            }
+
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -73,10 +77,16 @@ class AuthenticatedSessionController extends Controller
         }
 
         if (! $user->hasVerifiedEmail()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                return redirect()->route('logistics.otp.notice');
+            }
             return redirect()->route('verification.notice');
         }
 
         if ($user->isPending()) {
+            if ($user->isSortingCenter() && $user->logisticsProfile) {
+                return redirect()->route('logistics.pending');
+            }
             return redirect()->route('buyer.pending');
         }
 

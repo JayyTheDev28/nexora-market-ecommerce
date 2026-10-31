@@ -28,9 +28,15 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block font-label-md text-xs font-semibold text-on-surface mb-1.5">
-                    Platform Category <span class="text-error">*</span>
-                </label>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block font-label-md text-xs font-semibold text-on-surface">
+                        Platform Category <span class="text-error">*</span>
+                    </label>
+                    <a href="{{ route('seller.store.edit') }}#store-categories" target="_blank" class="text-[11px] text-primary hover:underline font-semibold flex items-center gap-0.5">
+                        <span class="material-symbols-outlined text-[14px]">tune</span>
+                        Manage Shop Categories
+                    </a>
+                </div>
                 <select name="category_id" required class="w-full rounded-xl border border-outline-variant px-3.5 py-2.5 text-sm text-on-surface bg-surface focus:outline-none focus:border-primary">
                     <option value="" disabled {{ old('category_id', $product->category_id ?? null) ? '' : 'selected' }}>Select Platform Category</option>
                     @foreach($categories as $category)
@@ -39,6 +45,10 @@
                         </option>
                     @endforeach
                 </select>
+                <p class="text-[11px] text-on-surface-variant mt-1.5 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px] text-primary">verified</span>
+                    Showing {{ count($categories) }} active categories configured for your shop.
+                </p>
             </div>
 
             <div>
@@ -203,9 +213,14 @@
                 </h2>
                 <p class="text-xs text-on-surface-variant">Enable for products with options like Size, Color, or Material with separate price/stock.</p>
             </div>
-            <button type="button" onclick="addVariantRow()" class="px-3.5 py-1.5 rounded-full border border-primary text-primary hover:bg-primary/10 text-xs font-bold transition-colors flex items-center gap-1">
-                <span class="material-symbols-outlined text-[16px]">add</span> Add Variant
-            </button>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="generateFromColorsSizes()" class="px-3 py-1.5 rounded-full border border-outline-variant text-on-surface hover:bg-surface-container text-xs font-semibold transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">sync</span> Auto-Fill from Tags
+                </button>
+                <button type="button" onclick="addVariantRow()" class="px-3.5 py-1.5 rounded-full border border-primary text-primary hover:bg-primary/10 text-xs font-bold transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">add</span> Add Variant
+                </button>
+            </div>
         </div>
 
         {{-- Comma-separated quick tags for colors/sizes --}}
@@ -298,8 +313,39 @@ function addVariantRow(name = '', sku = '', price = '', stock = 0) {
 
     tr.querySelectorAll('input').forEach(inp => {
         inp.addEventListener('input', syncVariantsJson);
+        inp.addEventListener('change', syncVariantsJson);
     });
     syncVariantsJson();
+}
+
+function generateFromColorsSizes() {
+    const rawColors = (document.getElementById('inputColors')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+    const rawSizes = (document.getElementById('inputSizes')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+    const mainPrice = document.querySelector('input[name="price"]')?.value || '';
+    const mainStock = parseInt(document.querySelector('input[name="stock"]')?.value) || 0;
+
+    let combinations = [];
+    if (rawColors.length > 0 && rawSizes.length > 0) {
+        rawColors.forEach(c => {
+            rawSizes.forEach(s => {
+                combinations.push(`${c} / ${s}`);
+            });
+        });
+    } else if (rawColors.length > 0) {
+        combinations = rawColors;
+    } else if (rawSizes.length > 0) {
+        combinations = rawSizes;
+    }
+
+    if (combinations.length === 0) {
+        alert('Please enter at least one Color or Size option in the boxes above first.');
+        return;
+    }
+
+    const perStock = Math.max(1, Math.floor(mainStock / combinations.length));
+    combinations.forEach(combo => {
+        addVariantRow(combo, '', mainPrice, perStock);
+    });
 }
 
 function syncVariantsJson() {
@@ -307,17 +353,25 @@ function syncVariantsJson() {
     const list = [];
     let totalStock = 0;
     rows.forEach(r => {
-        const name = r.querySelector('.v-name').value.trim();
-        const sku = r.querySelector('.v-sku').value.trim();
-        const price = parseFloat(r.querySelector('.v-price').value) || 0;
-        const stock = parseInt(r.querySelector('.v-stock').value) || 0;
+        const nameInp = r.querySelector('.v-name');
+        const skuInp = r.querySelector('.v-sku');
+        const priceInp = r.querySelector('.v-price');
+        const stockInp = r.querySelector('.v-stock');
+
+        const name = nameInp ? nameInp.value.trim() : '';
+        const sku = skuInp ? skuInp.value.trim() : '';
+        const price = priceInp ? (parseFloat(priceInp.value) || 0) : 0;
+        const stock = stockInp ? (parseInt(stockInp.value) || 0) : 0;
         if (name || sku) {
             list.push({ name, sku, price, stock });
             totalStock += stock;
         }
     });
 
-    document.getElementById('variantsJson').value = list.length > 0 ? JSON.stringify(list) : '';
+    const hidden = document.getElementById('variantsJson');
+    if (hidden) {
+        hidden.value = list.length > 0 ? JSON.stringify(list) : '';
+    }
     if (list.length > 0 && totalStock > 0) {
         const mainStockInp = document.getElementById('main_stock');
         if (mainStockInp && !mainStockInp.dataset.userEdited) {
@@ -328,9 +382,15 @@ function syncVariantsJson() {
 
 document.querySelectorAll('.variant-row input').forEach(inp => {
     inp.addEventListener('input', syncVariantsJson);
+    inp.addEventListener('change', syncVariantsJson);
 });
 
 document.getElementById('main_stock')?.addEventListener('input', function() {
     this.dataset.userEdited = 'true';
+});
+
+// Always sync right before submitting form
+document.querySelectorAll('form').forEach(f => {
+    f.addEventListener('submit', syncVariantsJson);
 });
 </script>

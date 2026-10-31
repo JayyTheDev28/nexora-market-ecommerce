@@ -68,9 +68,15 @@
     <div class="p-3.5 flex flex-col flex-1 justify-between gap-2.5">
         <div class="flex flex-col gap-1">
             {{-- Seller Line --}}
-            <span class="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider truncate">
-                {{ $product->seller ?? 'Verified Seller' }}
-            </span>
+            @if(!empty($product->sellerId))
+                <a href="{{ route('stores.show', $product->sellerId) }}" class="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider truncate hover:text-primary transition-colors">
+                    {{ $product->seller ?? 'Verified Seller' }}
+                </a>
+            @else
+                <span class="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider truncate">
+                    {{ $product->seller ?? 'Verified Seller' }}
+                </span>
+            @endif
 
             {{-- Product Name --}}
             <a href="{{ $product->url ?? '#' }}" class="group-hover:text-primary transition-colors">

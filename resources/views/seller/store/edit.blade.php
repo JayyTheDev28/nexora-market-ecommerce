@@ -183,6 +183,47 @@
                         </div>
                     </div>
 
+                    {{-- Store Online Shopping Categories --}}
+                    <div id="store-categories" class="pt-6 border-t border-outline-variant space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h3 class="font-headline-sm text-sm font-bold text-on-surface flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-primary text-[20px]">category</span>
+                                    Store Selling Categories
+                                </h3>
+                                <p class="text-xs text-on-surface-variant mt-0.5">
+                                    Configure which online shopping categories your store operates in. When creating or updating products, you will only be able to list items within your selected categories.
+                                </p>
+                            </div>
+                            <span class="text-xs font-bold px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0 w-fit">
+                                {{ count($selectedCategoryIds) }} Active
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
+                            @foreach($allCategories as $cat)
+                                @php
+                                    $isSelected = in_array($cat->id, old('categories', $selectedCategoryIds), true);
+                                @endphp
+                                <label class="flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer select-none {{ $isSelected ? 'border-primary bg-primary/10 text-primary shadow-xs' : 'border-outline-variant bg-surface hover:bg-surface-container' }}">
+                                    <input
+                                        type="checkbox"
+                                        name="categories[]"
+                                        value="{{ $cat->id }}"
+                                        {{ $isSelected ? 'checked' : '' }}
+                                        class="w-4 h-4 rounded text-primary focus:ring-primary border-outline-variant">
+                                    <div class="flex items-center gap-2 truncate">
+                                        <span class="material-symbols-outlined text-[20px] shrink-0 {{ $isSelected ? 'text-primary' : 'text-on-surface-variant' }}">{{ $cat->icon ?? 'category' }}</span>
+                                        <span class="text-xs font-semibold truncate {{ $isSelected ? 'text-primary' : 'text-on-surface' }}">{{ $cat->name }}</span>
+                                    </div>
+                                </label>
+                            @endforeach
+                        </div>
+                        <p class="text-[11px] text-on-surface-variant italic">
+                            * Tip: Need to expand into a new niche (e.g. adding Fashion, Electronics, or Groceries)? Check the boxes above and click Save Store Changes.
+                        </p>
+                    </div>
+
                     <div class="pt-4 border-t border-outline-variant flex justify-end">
                         <button type="submit" class="px-6 py-2.5 rounded-full font-label-md text-sm font-bold bg-primary text-on-primary hover:bg-primary/90 transition-colors shadow-sm">
                             Save Store Changes

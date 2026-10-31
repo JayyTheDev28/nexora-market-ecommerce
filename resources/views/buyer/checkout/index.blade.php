@@ -15,7 +15,7 @@
             <span class="text-outline-variant font-bold">—</span>
             <div class="flex items-center gap-2 text-primary font-bold">
                 <span class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs">2</span>
-                <span>Delivery & Split Orders (B8)</span>
+                <span>Delivery & Split Orders</span>
             </div>
             <span class="text-outline-variant font-bold">—</span>
             <div class="flex items-center gap-2 text-outline">
@@ -68,12 +68,12 @@
                 {{-- Left Side: Address, Split Order Packages, Vouchers & Payment Method --}}
                 <div class="lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
 
-                    {{-- 1. Delivery Address Selection (B2) --}}
+                    {{-- 1. Delivery Address Selection --}}
                     <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant/70 p-5 md:p-6 shadow-xs flex flex-col gap-4">
                         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
                             <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
                                 <span class="material-symbols-outlined text-[16px] text-primary">location_on</span>
-                                <span>1. Delivery Address (B2)</span>
+                                <span>1. Delivery Address</span>
                             </h2>
                             <button
                                 type="button"
@@ -197,7 +197,7 @@
                             <div>
                                 <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
                                     <span class="material-symbols-outlined text-[16px] text-primary">local_shipping</span>
-                                    <span>2. Multi-Seller Split Order Packages (B8)</span>
+                                    <span>2. Multi-Seller Split Order Packages</span>
                                 </h2>
                                 <p class="text-[11px] text-on-surface-variant mt-0.5">
                                     Orders from different sellers are split automatically. Shipping fees calculated per store rounded up to next kg ($\lceil \text{weight} \rceil$).
@@ -256,7 +256,7 @@
                                         @endforeach
                                     </div>
 
-                                    {{-- Weight & Shipping Breakdown (B8) --}}
+                                    {{-- Weight & Shipping Breakdown --}}
                                     <div class="pt-2 border-t border-outline-variant/40 flex flex-wrap items-center justify-between text-xs bg-surface-container-low/40 p-2.5 rounded-xl">
                                         <div class="flex items-center gap-2">
                                             <span class="material-symbols-outlined text-[16px] text-outline">scale</span>
@@ -281,7 +281,7 @@
                             <div>
                                 <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
                                     <span class="material-symbols-outlined text-[16px] text-primary">confirmation_number</span>
-                                    <span>3. Apply Vouchers & Discounts (B7)</span>
+                                    <span>3. Apply Vouchers & Discounts</span>
                                 </h2>
                                 <p class="text-[11px] text-on-surface-variant mt-0.5">
                                     Stacking rule: Maximum 1 Platform Voucher + 1 Shipping Voucher + 1 Store Voucher.
@@ -337,7 +337,7 @@
                             <div>
                                 <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
                                     <span class="material-symbols-outlined text-[16px] text-primary">payments</span>
-                                    <span>4. Payment Method & Guardrails (B9)</span>
+                                    <span>4. Payment Method & Guardrails</span>
                                 </h2>
                                 <p class="text-[11px] text-on-surface-variant mt-0.5">
                                     Gateway orders (Card / e-Wallet) have a 60-minute payment countdown before auto-cancellation.

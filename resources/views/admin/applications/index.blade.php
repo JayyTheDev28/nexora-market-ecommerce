@@ -116,7 +116,13 @@
                                 <tr class="hover:bg-surface-container-low/50 transition-colors">
                                     <td class="px-5 py-4">
                                         <span class="font-bold text-on-surface text-sm block">{{ $applicant->full_name }}</span>
-                                        @if($applicant->sellerProfile)
+                                        @if($applicant->logisticsProfile)
+                                            <div class="text-[11px] text-primary font-semibold mt-0.5">
+                                                <span>Carrier: {{ $applicant->logisticsProfile->company_name }}</span>
+                                                <span class="text-on-surface-variant block font-normal text-[10px]">SEC: {{ $applicant->logisticsProfile->sec_registration_no }} • TIN: {{ $applicant->logisticsProfile->tin }}</span>
+                                                <span class="text-on-surface-variant block font-normal text-[10px]">Coverage: {{ implode(', ', (array) $applicant->logisticsProfile->service_areas) }}</span>
+                                            </div>
+                                        @elseif($applicant->sellerProfile)
                                             <div class="text-[11px] text-primary font-semibold mt-0.5">
                                                 <span>Store: {{ $applicant->sellerProfile->business_name }}</span>
                                                 <span class="text-on-surface-variant block font-normal text-[10px]">LOB: {{ $applicant->sellerProfile->line_of_business }}</span>
@@ -152,29 +158,60 @@
                                     </td>
                                     <td class="px-5 py-4">
                                         <div class="flex flex-col gap-1.5">
-                                            @if($applicant->valid_id_path)
-                                                <a href="{{ Storage::url($applicant->valid_id_path) }}" target="_blank"
-                                                   class="inline-flex items-center gap-1 text-primary hover:underline font-semibold text-[11px]">
-                                                    <span class="material-symbols-outlined text-[15px]">badge</span>
-                                                    <span>Government ID</span>
-                                                </a>
-                                            @endif
-                                            @if($applicant->sellerProfile?->business_permit_path)
-                                                <a href="{{ Storage::url($applicant->sellerProfile->business_permit_path) }}" target="_blank"
-                                                   class="inline-flex items-center gap-1 text-secondary hover:underline font-semibold text-[11px]">
-                                                    <span class="material-symbols-outlined text-[15px]">description</span>
-                                                    <span>Mayor's / DTI Permit</span>
-                                                </a>
-                                            @endif
-                                            @if($applicant->sortingCenterProfile?->business_permit_path)
-                                                <a href="{{ Storage::url($applicant->sortingCenterProfile->business_permit_path) }}" target="_blank"
-                                                   class="inline-flex items-center gap-1 text-secondary hover:underline font-semibold text-[11px]">
-                                                    <span class="material-symbols-outlined text-[15px]">description</span>
-                                                    <span>Hub DTI Permit</span>
-                                                </a>
-                                            @endif
-                                            @if(!$applicant->valid_id_path && !$applicant->sellerProfile?->business_permit_path && !$applicant->sortingCenterProfile?->business_permit_path)
-                                                <span class="text-[11px] text-outline">None uploaded</span>
+                                            @if($applicant->logisticsProfile)
+                                                @if($applicant->logisticsProfile->sec_certificate_path)
+                                                    <a href="{{ Storage::url($applicant->logisticsProfile->sec_certificate_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-primary hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">verified</span>
+                                                        <span>SEC Certificate</span>
+                                                    </a>
+                                                @endif
+                                                @if($applicant->logisticsProfile->bir_2303_path)
+                                                    <a href="{{ Storage::url($applicant->logisticsProfile->bir_2303_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-emerald-600 hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">receipt_long</span>
+                                                        <span>BIR Form 2303</span>
+                                                    </a>
+                                                @endif
+                                                @if($applicant->logisticsProfile->mayors_permit_path)
+                                                    <a href="{{ Storage::url($applicant->logisticsProfile->mayors_permit_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-secondary hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">description</span>
+                                                        <span>Mayor's Permit</span>
+                                                    </a>
+                                                @endif
+                                                @if($applicant->logisticsProfile->valid_id_path || $applicant->valid_id_path)
+                                                    <a href="{{ Storage::url($applicant->logisticsProfile->valid_id_path ?? $applicant->valid_id_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-amber-700 hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">badge</span>
+                                                        <span>Signatory ID</span>
+                                                    </a>
+                                                @endif
+                                            @else
+                                                @if($applicant->valid_id_path)
+                                                    <a href="{{ Storage::url($applicant->valid_id_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-primary hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">badge</span>
+                                                        <span>Government ID</span>
+                                                    </a>
+                                                @endif
+                                                @if($applicant->sellerProfile?->business_permit_path)
+                                                    <a href="{{ Storage::url($applicant->sellerProfile->business_permit_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-secondary hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">description</span>
+                                                        <span>Mayor's / DTI Permit</span>
+                                                    </a>
+                                                @endif
+                                                @if($applicant->sortingCenterProfile?->business_permit_path)
+                                                    <a href="{{ Storage::url($applicant->sortingCenterProfile->business_permit_path) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 text-secondary hover:underline font-semibold text-[11px]">
+                                                        <span class="material-symbols-outlined text-[15px]">description</span>
+                                                        <span>Hub DTI Permit</span>
+                                                    </a>
+                                                @endif
+                                                @if(!$applicant->valid_id_path && !$applicant->sellerProfile?->business_permit_path && !$applicant->sortingCenterProfile?->business_permit_path)
+                                                    <span class="text-[11px] text-outline">None uploaded</span>
+                                                @endif
                                             @endif
                                         </div>
                                     </td>

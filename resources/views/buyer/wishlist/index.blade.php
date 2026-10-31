@@ -10,7 +10,7 @@
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">My Wishlist & Followed Stores (B5)</h1>
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">My Wishlist & Followed Stores</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">Keep track of your favorite products and stay updated with your preferred sellers.</p>
             </div>
 
@@ -156,8 +156,8 @@
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
-                                <a href="{{ route('catalog.index', ['seller_id' => $seller->id]) }}" class="px-3 py-1.5 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface hover:bg-surface-container">
-                                    Visit
+                                <a href="{{ route('stores.show', $seller->id) }}" class="px-3 py-1.5 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface hover:bg-surface-container">
+                                    Visit Store
                                 </a>
                                 <button
                                     type="button"

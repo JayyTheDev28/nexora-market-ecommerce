@@ -17,6 +17,8 @@ use App\Models\StoreCategory;
 use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SellerModuleIntegrationTest extends TestCase
@@ -75,6 +77,7 @@ class SellerModuleIntegrationTest extends TestCase
             'name' => 'Home & Living',
             'slug' => 'home-living',
         ]);
+        $this->seller->allowedCategories()->attach($this->platformCategory->id);
     }
 
     public function test_seller_can_update_store_profile_and_toggle_vacation_mode(): void
@@ -702,6 +705,108 @@ class SellerModuleIntegrationTest extends TestCase
             'amount' => 700,
             'payout_method' => 'gcash',
             'status' => 'pending',
+        ]);
+    }
+
+    public function test_seller_registration_with_multiple_online_shopping_categories(): void
+    {
+        Storage::fake('public');
+
+        $catElectronics = Category::firstOrCreate(['slug' => 'electronics'], ['name' => 'Electronics', 'icon' => 'devices']);
+        $catFashion = Category::firstOrCreate(['slug' => 'fashion'], ['name' => 'Fashion & Apparel', 'icon' => 'checkroom']);
+        $catGroceries = Category::firstOrCreate(['slug' => 'groceries'], ['name' => 'Groceries & Food', 'icon' => 'local_grocery_store']);
+
+        $response = $this->post(route('register.store'), [
+            'role' => 'seller',
+            'first_name' => 'Marco',
+            'last_name' => 'Valdez',
+            'sex' => 'male',
+            'birthday' => '1995-05-15',
+            'email' => 'marco.seller@nexusph.test',
+            'contact_number' => '09171112233',
+            'password' => 'SecurePass123!@#',
+            'password_confirmation' => 'SecurePass123!@#',
+            'province' => '043400000',
+            'province_name' => 'Laguna',
+            'municipality' => '043426000',
+            'municipality_name' => 'Santa Cruz',
+            'barangay' => '043426001',
+            'barangay_name' => 'Poblacion I',
+            'business_name' => 'Nexus Multi-Store Enterprise',
+            'categories' => [$catElectronics->id, $catFashion->id, $catGroceries->id],
+            'valid_id' => UploadedFile::fake()->create('id.jpg', 200, 'image/jpeg'),
+            'business_permit' => UploadedFile::fake()->create('permit.pdf', 300, 'application/pdf'),
+            'terms' => '1',
+        ]);
+
+        $response->assertRedirect(route('verification.notice'));
+
+        $newSeller = User::where('email', 'marco.seller@nexusph.test')->first();
+        $this->assertNotNull($newSeller);
+        $this->assertEquals('seller', $newSeller->role);
+        $this->assertNotNull($newSeller->sellerProfile);
+        $this->assertEquals('Nexus Multi-Store Enterprise', $newSeller->sellerProfile->business_name);
+
+        // Verify category_seller pivot table
+        $this->assertCount(3, $newSeller->allowedCategories);
+        $this->assertTrue($newSeller->allowedCategories->contains('id', $catElectronics->id));
+        $this->assertTrue($newSeller->allowedCategories->contains('id', $catFashion->id));
+        $this->assertTrue($newSeller->allowedCategories->contains('id', $catGroceries->id));
+    }
+
+    public function test_seller_can_update_shop_categories_and_product_upload_is_strictly_filtered(): void
+    {
+        // Setup 6 categories
+        $c1 = Category::firstOrCreate(['slug' => 'cat-1'], ['name' => 'Category 1']);
+        $c2 = Category::firstOrCreate(['slug' => 'cat-2'], ['name' => 'Category 2']);
+        $c3 = Category::firstOrCreate(['slug' => 'cat-3'], ['name' => 'Category 3']);
+        $c4 = Category::firstOrCreate(['slug' => 'cat-4'], ['name' => 'Category 4']);
+        $c5 = Category::firstOrCreate(['slug' => 'cat-5'], ['name' => 'Category 5']);
+        $unauthorizedCat = Category::firstOrCreate(['slug' => 'cat-unauth'], ['name' => 'Unauthorized Category']);
+
+        // Seller updates their store categories to have 5 categories
+        $updateResponse = $this->actingAs($this->seller)->put(route('seller.store.update'), [
+            'business_name' => 'Artisan Craft Workshop',
+            'categories' => [$c1->id, $c2->id, $c3->id, $c4->id, $c5->id],
+        ]);
+        $updateResponse->assertRedirect(route('seller.store.edit'));
+
+        $this->seller->refresh();
+        $this->assertCount(5, $this->seller->allowedCategories);
+
+        // Check Product create page only presents the 5 enabled categories
+        $createView = $this->actingAs($this->seller)->get(route('seller.products.create'));
+        $createView->assertStatus(200);
+        $createView->assertSee('Category 1');
+        $createView->assertSee('Category 5');
+        $createView->assertDontSee('Unauthorized Category');
+
+        // Seller creates a product under an allowed category -> SUCCESS
+        $validProductResponse = $this->actingAs($this->seller)->post(route('seller.products.store'), [
+            'name' => 'Permitted Artisan Item',
+            'category_id' => $c2->id,
+            'price' => 350,
+            'stock' => 10,
+            'action' => 'publish',
+        ]);
+        $validProductResponse->assertRedirect(route('seller.products.index'));
+        $this->assertDatabaseHas('products', [
+            'name' => 'Permitted Artisan Item',
+            'category_id' => $c2->id,
+            'seller_id' => $this->seller->id,
+        ]);
+
+        // Seller tries to create a product in an unauthorized category -> BLOCKED
+        $blockedResponse = $this->actingAs($this->seller)->post(route('seller.products.store'), [
+            'name' => 'Prohibited Category Item',
+            'category_id' => $unauthorizedCat->id,
+            'price' => 500,
+            'stock' => 5,
+            'action' => 'publish',
+        ]);
+        $blockedResponse->assertSessionHasErrors('category_id');
+        $this->assertDatabaseMissing('products', [
+            'name' => 'Prohibited Category Item',
         ]);
     }
 }

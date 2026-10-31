@@ -33,7 +33,7 @@
             <span class="text-on-surface font-semibold truncate max-w-xs md:max-w-md">{{ $product['name'] }}</span>
         </nav>
 
-        {{-- Flash Sale Countdown Ribbon (B4) --}}
+        {{-- Flash Sale Countdown Ribbon --}}
         <div
             x-show="isFlashSale && flashSaleSeconds > 0"
             x-cloak
@@ -75,7 +75,7 @@
                             class="w-full h-full object-cover transition-all duration-300">
                     </template>
 
-                    {{-- Wishlist Button (B5) --}}
+                    {{-- Wishlist Button --}}
                     @if(auth()->check() && auth()->user()->isBuyer())
                         <button
                             type="button"
@@ -111,7 +111,7 @@
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0"></span>
-                            <span>7-Day Return Window (B12)</span>
+                            <span>7-Day Return Window</span>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0"></span>
@@ -128,7 +128,7 @@
                 {{-- Seller Header & Title --}}
                 <div class="flex flex-col gap-1.5">
                     <div class="flex items-center justify-between">
-                        <a href="{{ route('catalog.index', ['seller_id' => $product['sellerId']]) }}" class="text-xs font-bold text-primary uppercase tracking-wider hover:underline">
+                        <a href="{{ route('stores.show', $product['sellerId']) }}" class="text-xs font-bold text-primary uppercase tracking-wider hover:underline">
                             {{ $product['seller'] }}
                         </a>
 
@@ -195,7 +195,7 @@
                     <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 flex items-center gap-2">
                         <span class="material-symbols-outlined text-[18px]">gavel</span>
                         <span>
-                            <strong>Purchase Limit (B4):</strong> Maximum <strong>{{ $product['maxPurchaseLimit'] }}</strong> units per buyer.
+                            <strong>Purchase Limit:</strong> Maximum <strong>{{ $product['maxPurchaseLimit'] }}</strong> units per buyer.
                             @if($product['buyerRemainingLimit'] !== null)
                                 (You can purchase at most <strong>{{ $product['buyerRemainingLimit'] }}</strong> more).
                             @endif
@@ -210,14 +210,42 @@
 
                 <div class="border-t border-outline-variant/60"></div>
 
-                {{-- Variant 1: Color Selector (B4) --}}
-                <div x-show="colors.length > 0" class="flex flex-col gap-2.5">
+                {{-- Product Variations Selector (from seller variants table) --}}
+                <div x-show="variantsData && variantsData.length > 0" class="flex flex-col gap-2.5">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="font-bold text-on-surface uppercase tracking-wider">Variation 1 (Color)</span>
+                        <span class="font-bold text-on-surface uppercase tracking-wider">Variation</span>
+                        <span class="text-primary font-semibold" x-text="selectedVariant || 'Choose an option'"></span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="v in (variantsData || [])" :key="v.name || v.sku">
+                            <button
+                                type="button"
+                                @click="selectVariant(v)"
+                                class="px-4 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center gap-2"
+                                :class="selectedVariant === (v.name || v.sku) ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20 font-bold' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
+                                :disabled="v.stock === 0">
+                                <span x-text="v.name || v.sku"></span>
+                                <template x-if="v.price && parseFloat(v.price) > 0">
+                                    <span class="text-[11px] opacity-75 font-normal">
+                                        ₱<span x-text="parseFloat(v.price).toFixed(2)"></span>
+                                    </span>
+                                </template>
+                                <template x-if="v.stock === 0">
+                                    <span class="text-[10px] text-rose-500 font-normal italic">(Out of stock)</span>
+                                </template>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- Variant 1: Color Selector --}}
+                <div x-show="colors && colors.length > 0 && (!variantsData || variantsData.length === 0)" class="flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-on-surface uppercase tracking-wider">Color</span>
                         <span class="text-primary font-semibold" x-text="selectedColor || 'Choose a color'"></span>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <template x-for="color in colors" :key="color">
+                        <template x-for="color in (colors || [])" :key="color">
                             <button
                                 type="button"
                                 @click="selectColor(color)"
@@ -229,14 +257,14 @@
                     </div>
                 </div>
 
-                {{-- Variant 2: Size Selector (B4) --}}
-                <div x-show="sizes.length > 0" class="flex flex-col gap-2.5">
+                {{-- Variant 2: Size Selector --}}
+                <div x-show="sizes && sizes.length > 0 && (!variantsData || variantsData.length === 0)" class="flex flex-col gap-2.5">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="font-bold text-on-surface uppercase tracking-wider">Variation 2 (Size)</span>
+                        <span class="font-bold text-on-surface uppercase tracking-wider">Size</span>
                         <span class="text-primary font-semibold" x-text="selectedSize || 'Choose a size'"></span>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <template x-for="size in sizes" :key="size">
+                        <template x-for="size in (sizes || [])" :key="size">
                             <button
                                 type="button"
                                 @click="selectSize(size)"
@@ -248,7 +276,7 @@
                     </div>
                 </div>
 
-                {{-- Stock Status Indicator & Out-of-Stock Disabling (B4) --}}
+                {{-- Stock Status Indicator --}}
                 <div class="flex items-center gap-2 text-xs font-semibold">
                     <template x-if="currentStock > 10">
                         <span class="flex items-center gap-1.5 text-primary">
@@ -265,12 +293,12 @@
                     <template x-if="currentStock === 0">
                         <span class="flex items-center gap-1.5 text-rose-600 font-bold">
                             <span class="w-2 h-2 rounded-full bg-rose-600"></span>
-                            Out of Stock (B4 Disabling)
+                            Out of Stock
                         </span>
                     </template>
                 </div>
 
-                {{-- Quantity Stepper & Add to Cart (B4) --}}
+                {{-- Quantity Stepper & Add to Cart --}}
                 @if(auth()->check() && !auth()->user()->isBuyer())
                     <div class="mt-2 p-4 rounded-2xl bg-surface-container border border-outline-variant/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div class="flex items-start gap-3">
@@ -286,7 +314,7 @@
                     </div>
                 @else
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                        {{-- Stepper --}}
+                        {{-- Stepper with typeable input --}}
                         <div class="flex items-center justify-between sm:justify-start border border-outline-variant rounded-full bg-surface-container-lowest p-1 shadow-xs">
                             <button
                                 type="button"
@@ -295,7 +323,15 @@
                                 class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-40">
                                 <span class="material-symbols-outlined text-[18px]">remove</span>
                             </button>
-                            <span class="w-12 text-center text-xs font-bold text-on-surface" x-text="qty"></span>
+                            <input
+                                type="number"
+                                min="1"
+                                :max="maxAllowedQty"
+                                :disabled="currentStock === 0"
+                                x-model.number="qty"
+                                @input="if (qty < 1 || isNaN(qty)) qty = 1; if (qty > maxAllowedQty) qty = maxAllowedQty;"
+                                @blur="if (!qty || qty < 1) qty = 1; if (qty > maxAllowedQty) qty = maxAllowedQty;"
+                                class="w-14 text-center text-xs font-bold text-on-surface bg-transparent border-0 focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                             <button
                                 type="button"
                                 @click="qty = Math.min(maxAllowedQty, qty + 1)"
@@ -305,7 +341,7 @@
                             </button>
                         </div>
 
-                        {{-- Add to Cart Action (Disabled when Out of Stock) (B4) --}}
+                        {{-- Add to Cart Action (Disabled when Out of Stock) --}}
                         <button
                             type="button"
                             :disabled="stock === 0 || !canAddToCart || addingToCart"
@@ -314,10 +350,10 @@
                             
                             <span x-show="addingToCart" x-cloak class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
                             <span x-show="!addingToCart && justAdded" x-cloak class="material-symbols-outlined text-[18px]">check</span>
-                            <span x-text="stock === 0 ? 'Out of Stock' : (justAdded ? 'Added to Cart' : 'Add to Cart')"></span>
+                            <span x-text="buttonLabel">Add to Cart</span>
                         </button>
 
-                        {{-- Chat with Seller Action (B14) --}}
+                        {{-- Chat with Seller Action --}}
                         @if(auth()->check() && auth()->user()->isBuyer())
                             <form method="POST" action="{{ route('buyer.chat.start') }}" class="sm:flex-shrink-0">
                                 @csrf
@@ -327,15 +363,15 @@
                                     type="submit"
                                     class="w-full sm:w-auto px-5 py-3.5 rounded-full border border-primary text-primary text-xs font-bold hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5">
                                     <span class="material-symbols-outlined text-[18px]">chat</span>
-                                    <span>Chat Seller (B14)</span>
+                                    <span>Chat Seller</span>
                                 </button>
                             </form>
                         @endif
                     </div>
 
                     {{-- Variant Selection Validation Notice --}}
-                    <p x-show="!canAddToCart" x-cloak class="text-xs text-rose-600 font-medium">
-                        Please select <span x-text="!selectedColor && colors.length ? 'a color' : 'a size'"></span> before adding to cart.
+                    <p x-show="!canAddToCart && currentStock > 0" x-cloak class="text-xs text-rose-600 font-medium">
+                        Please select <span x-text="variantsData && variantsData.length > 0 && !selectedVariant ? 'a variation' : (!selectedColor && colors && colors.length ? 'a color' : 'a size')"></span> before adding to cart.
                     </p>
                 @endif
 
@@ -361,11 +397,11 @@
 
         </div>
 
-        {{-- Customer Ratings & Reviews Section (B13) --}}
+        {{-- Customer Ratings & Reviews Section --}}
         <div class="mt-12 pt-8 border-t border-outline-variant/60">
             <div class="flex items-center justify-between mb-6">
                 <div>
-                    <h2 class="text-lg font-bold text-on-surface">Customer Reviews & Ratings (B13)</h2>
+                    <h2 class="text-lg font-bold text-on-surface">Customer Reviews & Ratings</h2>
                     <p class="text-xs text-on-surface-variant">Verified buyer feedback on delivered orders.</p>
                 </div>
                 <div class="flex items-center gap-2 text-sm font-bold text-on-surface">
@@ -447,6 +483,7 @@
             gallery: cfg.gallery,
             colors: cfg.colors || [],
             sizes: cfg.sizes || [],
+            variantsData: Array.isArray(cfg.variantsData) ? cfg.variantsData : [],
             stock: cfg.stock,
             currentStock: cfg.stock,
             currentPrice: cfg.price,
@@ -459,6 +496,7 @@
             isFollowingStore: cfg.isFollowingStore,
 
             activeImage: 0,
+            selectedVariant: '',
             selectedColor: '',
             selectedSize: '',
             qty: 1,
@@ -471,9 +509,25 @@
             seconds: 0,
 
             init() {
+                if (Array.isArray(this.variantsData) && this.variantsData.length === 1) {
+                    this.selectVariant(this.variantsData[0]);
+                }
                 if (this.colors.length === 1) this.selectedColor = this.colors[0];
                 if (this.sizes.length === 1) this.selectedSize = this.sizes[0];
                 this.startTimer();
+            },
+
+            get buttonLabel() {
+                if (this.currentStock === 0 || this.stock === 0) {
+                    return 'Out of Stock';
+                }
+                if (this.justAdded) {
+                    return 'Added to Cart';
+                }
+                if (Array.isArray(this.variantsData) && this.variantsData.length > 0 && !this.selectedVariant && !this.selectedColor && !this.selectedSize) {
+                    return 'Select a Variation';
+                }
+                return 'Add to Cart';
             },
 
             get maxAllowedQty() {
@@ -485,12 +539,33 @@
             },
 
             get canAddToCart() {
-                if (this.colors.length && !this.selectedColor) return false;
-                if (this.sizes.length && !this.selectedSize) return false;
+                if (Array.isArray(this.variantsData) && this.variantsData.length > 0 && !this.selectedVariant && !this.selectedColor && !this.selectedSize) return false;
+                if (Array.isArray(this.colors) && this.colors.length && !this.selectedColor) return false;
+                if (Array.isArray(this.sizes) && this.sizes.length && !this.selectedSize) return false;
+                if (this.currentStock === 0) return false;
                 return true;
             },
 
-            // B4: Dynamic Variant selection driving real-time price, stock, and gallery images
+            selectVariant(v) {
+                this.selectedVariant = v.name || v.sku;
+                if (v.price && parseFloat(v.price) > 0) {
+                    this.currentPrice = parseFloat(v.price);
+                }
+                if (v.stock !== undefined && v.stock !== null) {
+                    this.currentStock = parseInt(v.stock);
+                }
+                if (this.qty > this.maxAllowedQty) {
+                    this.qty = this.maxAllowedQty;
+                }
+                if (v.image) {
+                    const imgIdx = this.gallery.indexOf(v.image);
+                    if (imgIdx !== -1) {
+                        this.activeImage = imgIdx;
+                    }
+                }
+            },
+
+            // Dynamic Variant selection driving real-time price, stock, and gallery images
             selectColor(color) {
                 this.selectedColor = color;
                 this.updateVariantMatrix();
@@ -593,6 +668,7 @@
                 this.addingToCart = true;
 
                 const variant = {};
+                if (this.selectedVariant) variant.variation = this.selectedVariant;
                 if (this.selectedColor) variant.color = this.selectedColor;
                 if (this.selectedSize) variant.size = this.selectedSize;
 

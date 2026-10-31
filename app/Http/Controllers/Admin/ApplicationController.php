@@ -20,7 +20,7 @@ class ApplicationController extends Controller
 
         $query = User::query()
             ->whereIn('role', ['buyer', 'seller', 'sorting_center'])
-            ->with(['sellerProfile', 'sortingCenterProfile']);
+            ->with(['sellerProfile', 'sortingCenterProfile', 'logisticsProfile']);
 
         if ($status !== 'all') {
             $query->where('approval_status', $status);
@@ -37,7 +37,10 @@ class ApplicationController extends Controller
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('contact_number', 'like', "%{$search}%")
                     ->orWhereHas('sellerProfile', fn ($sq) => $sq->where('business_name', 'like', "%{$search}%"))
-                    ->orWhereHas('sortingCenterProfile', fn ($sq) => $sq->where('business_name', 'like', "%{$search}%"));
+                    ->orWhereHas('sortingCenterProfile', fn ($sq) => $sq->where('business_name', 'like', "%{$search}%"))
+                    ->orWhereHas('logisticsProfile', fn ($lq) => $lq->where('company_name', 'like', "%{$search}%")
+                        ->orWhere('sec_registration_no', 'like', "%{$search}%")
+                        ->orWhere('tin', 'like', "%{$search}%"));
             });
         }
 
@@ -64,6 +67,13 @@ class ApplicationController extends Controller
             'disapproval_reason' => null,
         ]);
 
+        if ($user->logisticsProfile) {
+            $user->logisticsProfile->update([
+                'status' => 'approved',
+                'rejection_reason' => null,
+            ]);
+        }
+
         AuditLog::log(
             action: 'application_approved',
             auditable: $user,
@@ -72,7 +82,14 @@ class ApplicationController extends Controller
             reason: 'Account application approved by administrator'
         );
 
-        $user->notify(new ApplicationDecision(approved: true));
+        if ($user->logisticsProfile) {
+            $user->notify(new \App\Notifications\LogisticsApplicationDecisionNotification(
+                approved: true,
+                companyName: $user->logisticsProfile->company_name
+            ));
+        } else {
+            $user->notify(new ApplicationDecision(approved: true));
+        }
 
         return back()->with('status', "Approved {$user->full_name}. They've been notified by email.");
     }
@@ -95,6 +112,13 @@ class ApplicationController extends Controller
             'disapproval_reason' => $reason,
         ]);
 
+        if ($user->logisticsProfile) {
+            $user->logisticsProfile->update([
+                'status' => 'rejected',
+                'rejection_reason' => $reason,
+            ]);
+        }
+
         AuditLog::log(
             action: 'application_declined',
             auditable: $user,
@@ -103,7 +127,15 @@ class ApplicationController extends Controller
             reason: $reason
         );
 
-        $user->notify(new ApplicationDecision(approved: false, reason: $reason));
+        if ($user->logisticsProfile) {
+            $user->notify(new \App\Notifications\LogisticsApplicationDecisionNotification(
+                approved: false,
+                reason: $reason,
+                companyName: $user->logisticsProfile->company_name
+            ));
+        } else {
+            $user->notify(new ApplicationDecision(approved: false, reason: $reason));
+        }
 
         return back()->with('status', "Declined {$user->full_name}. They've been notified by email.");
     }

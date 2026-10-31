@@ -27,11 +27,32 @@ class HomeController extends Controller
             'https://placehold.co/80x80/d9dff5/121c28?text=C',
         ];
 
-        $featuredSellers = [
-            ['name' => 'Nexus Home', 'rating' => 4.9, 'productCount' => 250, 'logo' => 'https://placehold.co/200x200/eef4ff/0058be?text=NH', 'url' => '#'],
-            ['name' => 'Tech Haven', 'rating' => 4.8, 'productCount' => 120, 'logo' => 'https://placehold.co/200x200/eef4ff/0058be?text=TH', 'url' => '#'],
-            ['name' => 'Luxe Goods Co.', 'rating' => 5.0, 'productCount' => 85, 'logo' => 'https://placehold.co/200x200/eef4ff/0058be?text=LG', 'url' => '#'],
-        ];
+        $realSellers = \App\Models\User::where('role', 'seller')
+            ->where('approval_status', 'approved')
+            ->where('account_status', 'active')
+            ->with(['sellerProfile', 'products' => fn ($q) => $q->where('status', 'active')])
+            ->has('sellerProfile')
+            ->limit(3)
+            ->get();
+
+        if ($realSellers->isNotEmpty()) {
+            $featuredSellers = $realSellers->map(function ($s) {
+                return [
+                    'id' => $s->id,
+                    'name' => $s->sellerProfile->business_name ?? $s->full_name,
+                    'rating' => 4.9,
+                    'productCount' => $s->products->count(),
+                    'logo' => $s->sellerProfile->logo_path ? asset('storage/' . $s->sellerProfile->logo_path) : 'https://ui-avatars.com/api/?name=' . urlencode($s->sellerProfile->business_name ?? $s->full_name) . '&background=0058be&color=ffffff&bold=true',
+                    'url' => route('stores.show', $s->id),
+                ];
+            })->all();
+        } else {
+            $featuredSellers = [
+                ['name' => 'Nexus Home', 'rating' => 4.9, 'productCount' => 250, 'logo' => 'https://placehold.co/200x200/eef4ff/0058be?text=NH', 'url' => url('/catalog')],
+                ['name' => 'Tech Haven', 'rating' => 4.8, 'productCount' => 120, 'logo' => 'https://placehold.co/200x200/eef4ff/0058be?text=TH', 'url' => url('/catalog')],
+                ['name' => 'Luxe Goods Co.', 'rating' => 5.0, 'productCount' => 85, 'logo' => 'https://placehold.co/200x200/eef4ff/0058be?text=LG', 'url' => url('/catalog')],
+            ];
+        }
 
         $categories = [
             ['name' => 'Electronics', 'icon' => 'devices', 'iconBg' => 'bg-primary-fixed-dim/30', 'iconColor' => 'text-primary', 'url' => url('/catalog?category=electronics')],
@@ -102,6 +123,7 @@ class HomeController extends Controller
         return [
             'id' => $p->id,
             'seller' => $p->seller->sellerProfile->business_name ?? $p->seller->full_name,
+            'sellerId' => $p->seller_id,
             'name' => $p->name,
             'price' => (float) $p->price,
             'comparePrice' => $p->compare_price ? (float) $p->compare_price : null,

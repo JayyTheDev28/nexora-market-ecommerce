@@ -10,7 +10,7 @@
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Vouchers & Discounts (B7)</h1>
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Vouchers & Discounts</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">
                     Claim vouchers to save on your orders. Stacking rule: Max 1 Store + 1 Platform + 1 Shipping Voucher per checkout.
                 </p>

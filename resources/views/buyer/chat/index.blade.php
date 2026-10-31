@@ -10,7 +10,7 @@
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Messages & Seller Chat (B14)</h1>
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Messages & Seller Chat</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">Direct inquiries with merchant sellers and delivery coordination.</p>
             </div>
         </div>

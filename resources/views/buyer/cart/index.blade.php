@@ -27,7 +27,7 @@
         {{-- Header Bar --}}
         <div class="flex items-center justify-between pb-4 border-b border-outline-variant/60 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">Shopping Cart (B6)</h1>
+                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">Shopping Cart</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-0.5" x-show="items.length > 0">
                     Persistent database cart • Grouped by Merchant Store
                 </p>
@@ -94,7 +94,7 @@
                                 <span class="font-bold text-on-surface" x-text="getStoreName(sellerId)"></span>
                             </label>
 
-                            <a :href="`/catalog?seller_id=${sellerId}`" class="text-[11px] font-semibold text-primary hover:underline">
+                            <a :href="`/stores/${sellerId}`" class="text-[11px] font-semibold text-primary hover:underline">
                                 Visit Store →
                             </a>
                         </div>
@@ -159,7 +159,12 @@
                                                 class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors cursor-pointer">
                                                 <span class="material-symbols-outlined text-[15px]">remove</span>
                                             </button>
-                                            <span class="w-8 text-center text-xs font-bold text-on-surface" x-text="item.qty"></span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                :value="item.qty"
+                                                @change="updateQuantity(item, parseInt($event.target.value) || 1)"
+                                                class="w-10 text-center text-xs font-bold text-on-surface bg-transparent border-0 focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                                             <button
                                                 type="button"
                                                 @click="updateQuantity(item, item.qty + 1)"
@@ -229,7 +234,7 @@
                     </a>
 
                     <p class="text-[11px] text-center text-on-surface-variant">
-                        Multi-seller orders will be automatically split by store at checkout (B8).
+                        Multi-seller orders will be automatically split by store at checkout.
                     </p>
                 </div>
             </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Address;
+use App\Models\Category;
 use App\Models\CourierProfile;
 use App\Models\SellerProfile;
 use App\Models\SortingCenterProfile;
@@ -31,7 +32,7 @@ class RegisteredUserController extends Controller
     {
         return view('buyer.auth.register', [
             'hideFooter' => true,
-            'categories' => SampleCatalog::categories(),
+            'categories' => Category::orderBy('name')->get(),
         ]);
     }
 
@@ -47,11 +48,20 @@ class RegisteredUserController extends Controller
             $rawContact = '0' . $rawContact;
         }
 
+        $rawCategories = $request->input('categories');
+        if (empty($rawCategories) && $request->filled('category')) {
+            $rawCategories = is_array($request->input('category')) ? $request->input('category') : [$request->input('category')];
+        }
+        if (! is_array($rawCategories) && ! empty($rawCategories)) {
+            $rawCategories = [$rawCategories];
+        }
+
         $inputData = array_merge($request->all(), [
             'contact_number' => $rawContact,
             'province_code' => $request->input('province'),
             'municipality_code' => $request->input('municipality'),
             'barangay_code' => $request->input('barangay'),
+            'categories' => $rawCategories,
         ]);
 
         $validator = Validator::make($inputData, [
@@ -170,7 +180,9 @@ class RegisteredUserController extends Controller
                     }
                 },
             ],
-            'category' => ['required_if:role,seller', 'nullable', 'string'],
+            'categories' => ['required_if:role,seller', 'nullable', 'array', 'min:1'],
+            'categories.*' => ['string'],
+            'category' => ['nullable', 'string'],
             'business_permit' => ['required_if:role,seller,sorting_center', 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
             // Required for couriers / riders per ERP specification
@@ -180,6 +192,8 @@ class RegisteredUserController extends Controller
 
             'terms' => ['accepted'],
         ], [
+            'categories.required_if' => 'Please select at least one online shopping category for your store.',
+            'categories.min' => 'Please select at least one online shopping category for your store.',
             'first_name.regex' => 'First name must contain letters and spaces only, with no special characters.',
             'first_name.min' => 'First name must be at least 2 characters.',
             'first_name.max' => 'First name may not be greater than 50 characters.',
@@ -229,10 +243,23 @@ class RegisteredUserController extends Controller
 
         if ($validated['role'] === 'seller') {
             $permitPath = $request->file('business_permit')->store('permits', 'public');
+
+            $selectedCatInputs = (array) ($validated['categories'] ?? [$validated['category'] ?? 'General']);
+            $selectedCats = Category::whereIn('id', $selectedCatInputs)
+                ->orWhereIn('slug', $selectedCatInputs)
+                ->get();
+
+            if ($selectedCats->isNotEmpty()) {
+                $user->allowedCategories()->sync($selectedCats->pluck('id'));
+                $displayCategory = $selectedCats->pluck('name')->implode(', ');
+            } else {
+                $displayCategory = implode(', ', $selectedCatInputs);
+            }
+
             SellerProfile::create([
                 'user_id' => $user->id,
                 'business_name' => $validated['business_name'],
-                'category' => $validated['category'],
+                'category' => $displayCategory ?: 'Retail & General Merchandise',
                 'business_permit_path' => $permitPath,
             ]);
         } elseif ($validated['role'] === 'sorting_center') {
@@ -254,10 +281,8 @@ class RegisteredUserController extends Controller
         }
 
         event(new Registered($user));
-        // Registered's default listener only fires if wired up in the app's
-        // event discovery; sending explicitly here guarantees it happens
-        // regardless of that configuration.
-        $user->sendEmailVerificationNotification();
+        // Note: Registered event triggers Laravel's SendEmailVerificationNotification listener,
+        // which calls $user->sendEmailVerificationNotification().
 
         Auth::login($user);
 

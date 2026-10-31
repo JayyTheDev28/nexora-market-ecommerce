@@ -35,7 +35,7 @@ class EmailVerificationNotificationController extends Controller
             return redirect($user->homeRoute());
         }
 
-        $user->sendEmailVerificationOtp();
+        $user->sendEmailVerificationOtp(force: true);
 
         return back()->with('status', 'otp-sent');
     }

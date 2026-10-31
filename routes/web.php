@@ -176,7 +176,28 @@ Route::middleware('role:seller')->prefix('seller')->name('seller.')->group(funct
     Route::post('/payouts/request', [Seller\ReportController::class, 'requestPayout'])->name('payouts.request');
 });
 
-Route::middleware('role:sorting_center')->prefix('logistics')->name('logistics.')->group(function () {
+// Logistics Partner Public Registration & Verification
+Route::prefix('logistics')->name('logistics.')->group(function () {
+    Route::get('/register', [\App\Http\Controllers\Logistics\RegistrationController::class, 'showRegistrationForm'])->name('register');
+    Route::post('/register', [\App\Http\Controllers\Logistics\RegistrationController::class, 'register'])
+        ->middleware('throttle:6,1')
+        ->name('register.store');
+
+    Route::get('/verify-otp', [\App\Http\Controllers\Logistics\RegistrationController::class, 'showOtpForm'])->name('otp.notice');
+    Route::post('/verify-otp', [\App\Http\Controllers\Logistics\RegistrationController::class, 'verifyOtp'])->name('otp.verify');
+    Route::post('/resend-otp', [\App\Http\Controllers\Logistics\RegistrationController::class, 'resendOtp'])
+        ->middleware('throttle:3,1')
+        ->name('otp.resend');
+
+    Route::get('/pending', [\App\Http\Controllers\Logistics\RegistrationController::class, 'pending'])->name('pending');
+
+    Route::middleware('auth')->group(function () {
+        Route::get('/resubmit', [\App\Http\Controllers\Logistics\RegistrationController::class, 'showResubmitForm'])->name('resubmit');
+        Route::post('/resubmit', [\App\Http\Controllers\Logistics\RegistrationController::class, 'resubmit'])->name('resubmit.store');
+    });
+});
+
+Route::middleware(['role:sorting_center', 'logistics'])->prefix('logistics')->name('logistics.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'logistics'])->name('dashboard');
 
     // Rider Management
@@ -237,7 +258,7 @@ Route::middleware('role:sorting_center')->prefix('logistics')->name('logistics.'
     Route::post('/account/password', [Logistics\AccountController::class, 'updatePassword'])->name('account.password');
 });
 
-Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
     // Applications & Approvals

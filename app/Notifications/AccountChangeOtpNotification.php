@@ -30,13 +30,7 @@ class AccountChangeOtpNotification extends Notification
             ->subject("Your Nexora Market Security Code: {$this->otp}")
             ->greeting("Hello {$name},")
             ->line("You requested to update your account's {$item}. Please use the 6-digit confirmation code below to verify this change:")
-            ->line(new HtmlString("
-                <div style='text-align: center; margin: 28px 0;'>
-                    <div style='display: inline-block; padding: 14px 32px; background-color: #f0f4ff; border: 2px dashed #0058be; border-radius: 14px;'>
-                        <span style='font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0058be;'>{$this->otp}</span>
-                    </div>
-                </div>
-            "))
+            ->line(new HtmlString('<table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 24px auto; text-align: center;"><tr><td align="center" style="background-color: #f0f4ff; border: 2px dashed #0058be; border-radius: 12px; padding: 14px 32px;"><span style="font-family: \'Courier New\', Courier, monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0058be; display: inline-block;">' . e($this->otp) . '</span></td></tr></table>'))
             ->line('This code will expire in 15 minutes. If you did not request this update, please change your password immediately.')
             ->salutation("Best regards,\nThe Nexora Market Team");
     }

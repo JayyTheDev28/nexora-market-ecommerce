@@ -24,7 +24,7 @@
                 </div>
             </div>
             @if($otherParticipant?->isSeller())
-                <a href="{{ route('catalog.index', ['seller_id' => $otherParticipant->id]) }}" class="px-3 py-1.5 rounded-xl border border-outline-variant text-xs font-semibold hover:bg-surface-container">
+                <a href="{{ route('stores.show', $otherParticipant->id) }}" class="px-3 py-1.5 rounded-xl border border-outline-variant text-xs font-semibold hover:bg-surface-container">
                     Visit Store
                 </a>
             @endif

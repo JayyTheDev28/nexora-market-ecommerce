@@ -194,9 +194,8 @@ class AdminManagementTest extends TestCase
 
     public function test_admin_can_issue_compliance_warning_and_archive_product(): void
     {
-        $category = Category::create([
+        $category = Category::firstOrCreate(['slug' => 'electronics'], [
             'name' => 'Electronics',
-            'slug' => 'electronics',
         ]);
 
         $product = Product::create([

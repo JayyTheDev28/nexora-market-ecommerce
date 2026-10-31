@@ -115,8 +115,16 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * Send 6-pin OTP email to user.
      */
-    public function sendEmailVerificationOtp(): string
+    public function sendEmailVerificationOtp(bool $force = false): string
     {
+        // Prevent duplicate generation if an active OTP was generated less than 60 seconds ago (unless forced)
+        if (! $force && $this->email_verification_otp && $this->email_verification_otp_expires_at && $this->email_verification_otp_expires_at->isFuture()) {
+            $generatedAt = $this->email_verification_otp_expires_at->copy()->subMinutes(15);
+            if ($generatedAt->diffInSeconds(now()) < 60) {
+                return $this->email_verification_otp;
+            }
+        }
+
         $otp = $this->generateEmailVerificationOtp();
 
         try {
@@ -254,6 +262,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(SortingCenterProfile::class);
     }
 
+    public function logisticsProfile()
+    {
+        return $this->hasOne(LogisticsProfile::class);
+    }
+
     public function products()
     {
         return $this->hasMany(Product::class, 'seller_id');
@@ -272,6 +285,30 @@ class User extends Authenticatable implements MustVerifyEmail
     public function sellerDisputes()
     {
         return $this->hasManyThrough(Dispute::class, Order::class, 'seller_id', 'order_id');
+    }
+
+    public function allowedCategories()
+    {
+        return $this->belongsToMany(Category::class, 'category_seller', 'seller_id', 'category_id')->withTimestamps();
+    }
+
+    public function getEffectiveSellerCategories()
+    {
+        $cats = $this->allowedCategories;
+        if ($cats->isNotEmpty()) {
+            return $cats;
+        }
+
+        if ($this->sellerProfile && $this->sellerProfile->category) {
+            $matched = Category::where('slug', $this->sellerProfile->category)
+                ->orWhere('name', $this->sellerProfile->category)
+                ->get();
+            if ($matched->isNotEmpty()) {
+                return $matched;
+            }
+        }
+
+        return Category::orderBy('name')->get();
     }
 
     public function cartItems()

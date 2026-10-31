@@ -54,14 +54,14 @@
             </div>
         @endif
 
-        {{-- Tab 1: Profile & Security (B1) --}}
+        {{-- Tab 1: Profile & Security --}}
         <div x-show="activeTab === 'profile'" class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start max-w-5xl">
 
             {{-- Profile Information Card --}}
             <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 md:p-6 shadow-xs flex flex-col gap-5">
                 <div class="border-b border-outline-variant/60 pb-3 flex items-center justify-between">
                     <div>
-                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Profile Information (B1)</h2>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Profile Information</h2>
                         <p class="text-xs text-on-surface-variant mt-0.5">Update your identity and avatar photo.</p>
                     </div>
                     <img src="{{ $user->avatar_url }}" alt="{{ $user->full_name }}" class="w-12 h-12 rounded-full object-cover border border-outline-variant">
@@ -154,13 +154,13 @@
                 </form>
             </div>
 
-            {{-- Security: Password & OTP Contact Updates (B1) --}}
+            {{-- Security: Password & OTP Contact Updates --}}
             <div class="flex flex-col gap-6">
 
                 {{-- Password Change Card --}}
                 <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 md:p-6 shadow-xs flex flex-col gap-5">
                     <div class="border-b border-outline-variant/60 pb-3">
-                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Change Password (B1)</h2>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Change Password</h2>
                         <p class="text-xs text-on-surface-variant mt-0.5">Requires current password & strict complex validation.</p>
                     </div>
 
@@ -206,10 +206,10 @@
                     </form>
                 </div>
 
-                {{-- Contact Changes via OTP Card (B1) --}}
+                {{-- Contact Changes via OTP Card --}}
                 <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 md:p-6 shadow-xs flex flex-col gap-5">
                     <div class="border-b border-outline-variant/60 pb-3">
-                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Email & Phone Updates via OTP (B1)</h2>
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">Email & Phone Updates via OTP</h2>
                         <p class="text-xs text-on-surface-variant mt-0.5">Secure verification required for changes.</p>
                     </div>
 
@@ -312,12 +312,12 @@
 
         </div>
 
-        {{-- Tab 2: Address Book (B2) --}}
+        {{-- Tab 2: Address Book --}}
         <div x-show="activeTab === 'addresses'" class="max-w-5xl flex flex-col gap-6">
 
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-xs">
                 <div>
-                    <h2 class="text-base font-bold text-on-surface">Saved Delivery Addresses (B2)</h2>
+                    <h2 class="text-base font-bold text-on-surface">Saved Delivery Addresses</h2>
                     <p class="text-xs text-on-surface-variant mt-0.5">Maximum 10 addresses per buyer. Default address is automatically applied at checkout.</p>
                 </div>
                 <button
@@ -399,7 +399,7 @@
                     
                     <div class="flex items-center justify-between pb-3 border-b border-outline-variant/60">
                         <div>
-                            <h3 class="text-base font-bold text-on-surface">Add New Address (B2)</h3>
+                            <h3 class="text-base font-bold text-on-surface">Add New Address</h3>
                             <p class="text-xs text-on-surface-variant">Cascading location selector: Region → Province → City → Barangay</p>
                         </div>
                         <button type="button" @click="showAddressModal = false" class="text-on-surface-variant hover:text-on-surface">
