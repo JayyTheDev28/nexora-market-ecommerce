@@ -20,7 +20,7 @@
         inWishlist: {{ $product['inWishlist'] ? 'true' : 'false' }},
         isFollowingStore: {{ $product['isFollowingStore'] ? 'true' : 'false' }}
     })"
-    class="w-full bg-surface py-6 md:py-10">
+    class="w-full bg-surface py-6 md:py-10 pb-24 sm:pb-10">
 
     <div class="max-w-none px-4 md:px-8">
 
@@ -472,6 +472,46 @@
         </div>
 
     </div>
+
+    {{-- Sticky Mobile Purchase Bar (Shopee / Lazada Usability) --}}
+    @if((auth()->check() && auth()->user()->isBuyer()) || !auth()->check())
+        <div class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant/60 p-3 flex items-center gap-2.5 shadow-2xl">
+            <a href="{{ route('stores.show', $product['sellerId']) }}" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary px-2">
+                <span class="material-symbols-outlined text-[20px]">storefront</span>
+                <span class="text-[9px] font-medium">Store</span>
+            </a>
+
+            @if(auth()->check() && auth()->user()->isBuyer())
+                <form method="POST" action="{{ route('buyer.chat.start') }}" class="flex-shrink-0 m-0">
+                    @csrf
+                    <input type="hidden" name="seller_id" value="{{ $product['sellerId'] }}">
+                    <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                    <button type="submit" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary px-2" aria-label="Chat seller">
+                        <span class="material-symbols-outlined text-[20px]">chat</span>
+                        <span class="text-[9px] font-medium">Chat</span>
+                    </button>
+                </form>
+            @endif
+
+            <div class="flex-1 flex items-center gap-2">
+                <button
+                    type="button"
+                    :disabled="stock === 0 || !canAddToCart || addingToCart"
+                    @click="addToCart()"
+                    class="flex-1 py-2.5 px-3 rounded-full border border-primary text-primary font-label-md text-xs font-bold hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-center truncate">
+                    <span x-text="buttonLabel">Add to Cart</span>
+                </button>
+
+                <button
+                    type="button"
+                    :disabled="stock === 0 || !canAddToCart || addingToCart"
+                    @click="addToCart(); window.location.href = '{{ route('cart.index') }}'"
+                    class="flex-1 py-2.5 px-3 rounded-full bg-primary text-on-primary font-label-md text-xs font-bold hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-center truncate">
+                    Buy Now
+                </button>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection
 

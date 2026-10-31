@@ -24,6 +24,8 @@
         <x-footer />
     @endunless
 
+    <x-toast />
+
     @stack('scripts')
 
 </body>
