@@ -144,7 +144,7 @@ class CartController extends Controller
         return response()->json([
             'success' => true,
             'item' => $this->formatItem($item),
-            'cartCount' => $request->user()->cartItems()->sum('quantity'),
+            'cartCount' => $request->user()->cartItems()->count(),
         ]);
     }
 
@@ -178,7 +178,7 @@ class CartController extends Controller
 
         return response()->json([
             'item' => $this->formatItem($cartItem->fresh(['product.seller.sellerProfile'])),
-            'cartCount' => $request->user()->cartItems()->sum('quantity'),
+            'cartCount' => $request->user()->cartItems()->count(),
         ]);
     }
 
@@ -193,7 +193,7 @@ class CartController extends Controller
         $cartItem->delete();
 
         return response()->json([
-            'cartCount' => $request->user()->cartItems()->sum('quantity'),
+            'cartCount' => $request->user()->cartItems()->count(),
         ]);
     }
 

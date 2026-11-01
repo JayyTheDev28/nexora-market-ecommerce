@@ -3,7 +3,7 @@
     $currentCategory = request('category');
     $currentQuery = request('q');
     $isBuyerOrGuest = !auth()->check() || auth()->user()->isBuyer();
-    $cartCount = (auth()->check() && auth()->user()->isBuyer()) ? (int) auth()->user()->cartItems()->sum('quantity') : 0;
+    $cartCount = (auth()->check() && auth()->user()->isBuyer()) ? (int) auth()->user()->cartItems()->count() : 0;
 @endphp
 
 <header

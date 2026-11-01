@@ -52,8 +52,10 @@ class RegisteredUserController extends Controller
         if (empty($rawCategories) && $request->filled('category')) {
             $rawCategories = is_array($request->input('category')) ? $request->input('category') : [$request->input('category')];
         }
-        if (! is_array($rawCategories) && ! empty($rawCategories)) {
-            $rawCategories = [$rawCategories];
+        if (is_array($rawCategories)) {
+            $rawCategories = array_map('strval', $rawCategories);
+        } elseif (! empty($rawCategories)) {
+            $rawCategories = [(string) $rawCategories];
         }
 
         $inputData = array_merge($request->all(), [

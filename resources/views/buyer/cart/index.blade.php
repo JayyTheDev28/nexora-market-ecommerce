@@ -204,7 +204,7 @@
 
                     <div class="flex flex-col gap-2.5 text-xs">
                         <div class="flex items-center justify-between text-on-surface-variant">
-                            <span>Selected Items (<span x-text="selectedItemsCount"></span> units)</span>
+                            <span>Selected Products (<span x-text="selectedProductsCount"></span>)</span>
                             <span class="font-semibold text-on-surface">₱<span x-text="subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></span></span>
                         </div>
                         <div class="flex items-center justify-between text-on-surface-variant">
@@ -259,8 +259,12 @@
                 return this.items.filter(i => i.selected);
             },
 
+            get selectedProductsCount() {
+                return this.selectedItems.length;
+            },
+
             get selectedItemsCount() {
-                return this.selectedItems.reduce((acc, i) => acc + i.qty, 0);
+                return this.selectedItems.length;
             },
 
             get selectedStoresCount() {
@@ -359,6 +363,8 @@
                     if (data.error) {
                         alert(data.error);
                         item.qty = oldQty;
+                    } else if (data.cartCount !== undefined) {
+                        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
                     }
                 } catch (e) {
                     console.error('Failed to update quantity', e);
@@ -378,7 +384,11 @@
                         },
                     });
                     if (res.ok) {
+                        const data = await res.json();
                         this.items = this.items.filter(i => i.key !== item.key);
+                        if (data.cartCount !== undefined) {
+                            window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                        }
                     }
                 } catch (e) {
                     console.error('Failed to delete item', e);

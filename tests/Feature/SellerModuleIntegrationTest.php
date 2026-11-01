@@ -73,10 +73,10 @@ class SellerModuleIntegrationTest extends TestCase
             'is_default' => true,
         ]);
 
-        $this->platformCategory = Category::create([
-            'name' => 'Home & Living',
-            'slug' => 'home-living',
-        ]);
+        $this->platformCategory = Category::firstOrCreate(
+            ['slug' => 'home-living'],
+            ['name' => 'Home & Living']
+        );
         $this->seller->allowedCategories()->attach($this->platformCategory->id);
     }
 

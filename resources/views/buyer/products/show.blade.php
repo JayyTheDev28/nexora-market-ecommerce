@@ -694,6 +694,9 @@
                         setTimeout(() => this.justAdded = false, 2500);
 
                         // Update global cart badge
+                        if (data.cartCount !== undefined) {
+                            window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                        }
                         const badge = document.getElementById('navbar-cart-badge');
                         if (badge) {
                             badge.innerText = data.cartCount;
