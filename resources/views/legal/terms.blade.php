@@ -3,8 +3,8 @@
 @section('title', 'Terms of Service — Nexora Market')
 
 @section('content')
-<div class="w-full bg-surface py-8 md:py-12 min-h-[80vh]">
-    <div class="max-w-4xl mx-auto px-4 md:px-8">
+<div class="w-full bg-surface py-6 md:py-8 min-h-[80vh]">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Breadcrumb --}}
         <nav class="flex items-center gap-2 text-xs text-on-surface-variant mb-6">

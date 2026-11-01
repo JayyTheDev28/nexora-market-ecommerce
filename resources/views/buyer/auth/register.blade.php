@@ -19,26 +19,28 @@
 <div
     x-data="registerForm({{ $initialStep }})"
     x-init="initForm()"
-    class="w-full flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] bg-surface-container-lowest">
+    class="w-full min-h-[calc(100vh-4rem)] bg-surface-container-low py-8 md:py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
 
-    <x-brand-panel caption="Join thousands of shoppers, merchants, and logistics partners across the Philippines." />
+    <div class="max-w-2xl w-full mx-auto">
 
-    {{-- Form Column --}}
-    <div class="flex-1 overflow-y-auto">
-        <div class="max-w-2xl mx-auto px-6 md:px-10 py-8 md:py-10">
+        {{-- Centered Header & Branding --}}
+        <div class="text-center mb-6">
+            <a href="{{ url('/') }}" class="inline-flex items-center gap-2 mb-3 group focus:outline-none">
+                <img src="{{ asset('images/nexora-logo.png') }}" alt="Nexora Logo" class="w-10 h-10 rounded-xl object-cover shadow-xs group-hover:scale-105 transition-transform">
+                <span class="font-headline-md text-xl font-extrabold tracking-tight text-on-surface">Nexora <span class="text-xs px-1.5 py-0.5 rounded bg-primary text-on-primary font-bold uppercase tracking-wider">Market</span></span>
+            </a>
+            <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">
+                Create your account
+            </h1>
+            <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1" x-text="stepSubtitles[step]"></p>
+        </div>
 
-            {{-- Header --}}
-            <div class="mb-6">
-                <div class="flex items-center justify-between gap-4 mb-1">
-                    <span class="text-xs font-semibold text-primary" x-text="'Step ' + step + ' of 4 — ' + stepTitles[step]"></span>
-                    <span class="text-xs text-on-surface-variant font-medium" x-text="Math.round((step / 4) * 100) + '% completed'"></span>
-                </div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Create an account</h1>
-                <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1" x-text="stepSubtitles[step]"></p>
+        {{-- Stepper Progress Bar --}}
+        <div class="mb-6 bg-surface-container-lowest rounded-2xl p-3 border border-outline-variant/60 shadow-xs">
+            <div class="flex items-center justify-between gap-4 mb-2.5 px-1">
+                <span class="text-xs font-semibold text-primary" x-text="'Step ' + step + ' of 4 — ' + stepTitles[step]"></span>
+                <span class="text-xs text-on-surface-variant font-medium" x-text="Math.round((step / 4) * 100) + '% completed'"></span>
             </div>
-
-            {{-- Stepper Progress Bar --}}
-            <div class="mb-6 bg-surface-container-low rounded-2xl p-2.5 border border-outline-variant/60">
                 <div class="grid grid-cols-4 gap-2 text-center select-none">
                     <template x-for="(sTitle, idx) in ['Profile', 'Security', 'Address', 'Verify']" :key="idx + 1">
                         <button
@@ -636,20 +638,26 @@
 
             </form>
 
-            {{-- Compact Footer --}}
-            <div class="mt-8 pt-6 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-on-surface-variant">
-                <span>&copy; {{ now()->year }} Nexora Market. All rights reserved.</span>
-                <div class="flex items-center gap-4">
-                    <a href="{{ route('privacy') }}" target="_blank" class="hover:text-primary transition-colors">Privacy Policy</a>
-                    <a href="{{ route('terms') }}" target="_blank" class="hover:text-primary transition-colors">Terms of Service</a>
-                    <a href="#" class="hover:text-primary transition-colors">Help Center</a>
+            {{-- Centered Footer Links --}}
+            <div class="mt-6 text-center text-xs text-on-surface-variant space-y-2">
+                <p>
+                    Already have an account?
+                    <a href="{{ route('login') }}" class="text-primary font-semibold hover:underline">Sign in</a>
+                    <span class="mx-1 text-outline-variant">•</span>
+                    <a href="{{ route('logistics.register') }}" class="text-primary font-semibold hover:underline">Logistics Partner</a>
+                </p>
+                <div class="flex items-center justify-center gap-3 text-[11px] text-outline pt-1">
+                    <span>&copy; {{ now()->year }} Nexora Market</span>
+                    <span>•</span>
+                    <a href="{{ route('privacy') }}" target="_blank" class="hover:text-on-surface-variant transition-colors">Privacy Policy</a>
+                    <span>•</span>
+                    <a href="{{ route('terms') }}" target="_blank" class="hover:text-on-surface-variant transition-colors">Terms of Service</a>
                 </div>
             </div>
 
         </div>
-    </div>
 
-</div>
+    </div>
 
 @push('scripts')
 <script>

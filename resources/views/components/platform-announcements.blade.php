@@ -16,10 +16,10 @@
 @endphp
 
 @if($announcements->isNotEmpty())
-    <div class="space-y-3 mb-6">
+    <div class="space-y-2.5 mb-4">
         @foreach($announcements as $announcement)
-            <div class="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
-                <span class="material-symbols-outlined text-primary text-[22px] flex-shrink-0 mt-0.5">campaign</span>
+            <div class="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-start gap-2.5 shadow-xs">
+                <span class="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">campaign</span>
                 <div class="flex-1">
                     <div class="flex items-center justify-between gap-2">
                         <h4 class="font-bold text-xs text-on-surface">{{ $announcement->title }}</h4>
@@ -27,7 +27,7 @@
                             {{ $announcement->published_at?->diffForHumans() ?? $announcement->created_at->diffForHumans() }}
                         </span>
                     </div>
-                    <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">{{ $announcement->body }}</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{{ $announcement->body }}</p>
                 </div>
             </div>
         @endforeach

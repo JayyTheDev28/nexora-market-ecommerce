@@ -224,7 +224,7 @@
                 @foreach($order->items as $item)
                     <tr>
                         <td><strong>{{ $item->product_name }}</strong></td>
-                        <td>{{ is_array($item->variant) ? implode(', ', $item->variant) : ($item->variant ?: '—') }}</td>
+                        <td>{{ is_array($item->variant) ? collect($item->variant)->reject(fn($v, $k) => in_array(strtolower($k), ['image', 'image_url', 'img', 'row_id', 'has_file']) || str_starts_with((string)$v, '/storage/') || str_starts_with((string)$v, 'http://') || str_starts_with((string)$v, 'https://'))->map(fn($v, $k) => is_string($k) ? "$k: $v" : $v)->implode(', ') : ($item->variant ?: '—') }}</td>
                         <td style="text-align: center;">{{ $item->quantity }}</td>
                     </tr>
                 @endforeach

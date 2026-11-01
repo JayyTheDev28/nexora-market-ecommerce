@@ -4,10 +4,10 @@
 
 @php $store = (object) $store; @endphp
 
-<div class="group relative bg-surface-container-lowest rounded-3xl border border-outline-variant/60 hover:border-primary/50 overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="group relative bg-surface-container-lowest rounded-2xl border border-outline-variant/60 hover:border-primary/50 overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col">
     {{-- Header Banner Background --}}
-    <div class="h-20 bg-gradient-to-r from-primary/10 via-surface-container to-tertiary/10 relative">
-        <div class="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-[10px] font-bold text-primary border border-primary/20 shadow-xs">
+    <div class="h-16 bg-surface-container relative">
+        <div class="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-[10px] font-bold text-primary border border-primary/20 shadow-2xs">
             Verified Store
         </div>
     </div>

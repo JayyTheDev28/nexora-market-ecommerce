@@ -3,10 +3,13 @@
 @section('title', 'System Audit Trail — Admin Portal')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]" x-data="{ expandedId: null }">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface" x-data="{ expandedId: null }">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-admin-nav active="audit-logs" />
+            <x-admin-nav active="audit-logs" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         {{-- Page Header --}}
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -164,6 +167,9 @@
             @endif
         </div>
 
+                </div>
+        </div>
     </div>
 </div>
+
 @endsection

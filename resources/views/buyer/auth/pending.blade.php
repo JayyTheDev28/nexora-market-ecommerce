@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="w-full bg-surface-container-low py-14 md:py-20 min-h-[75vh] flex items-center justify-center">
-    <div class="max-w-none px-4 md:px-8 w-full">
+    <div class="max-w-xl mx-auto px-4 sm:px-6 w-full">
         <div class="max-w-md mx-auto bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-xs p-8 md:p-10 text-center flex flex-col items-center gap-5">
 
             <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">

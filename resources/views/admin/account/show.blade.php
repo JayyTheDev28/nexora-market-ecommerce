@@ -3,10 +3,13 @@
 @section('title', 'Admin Account Settings — Nexora Market')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-admin-nav active="account" />
+            <x-admin-nav active="account" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         {{-- Flash messages --}}
         @if (session('status'))
@@ -123,6 +126,9 @@
 
         </div>
 
+                </div>
+        </div>
     </div>
 </div>
+
 @endsection

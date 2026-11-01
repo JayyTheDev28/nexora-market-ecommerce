@@ -3,8 +3,8 @@
 @section('title', 'Rider Earnings & COD Remittance — Nexora Logistics')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[85vh]" x-data="{ remitModalOpen: false, submitting: false }">
-    <div class="max-w-6xl mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="w-full bg-surface py-6 min-h-[85vh]" x-data="{ remitModalOpen: false, submitting: false }">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Breadcrumb & Back --}}
         <div class="flex items-center justify-between mb-6">

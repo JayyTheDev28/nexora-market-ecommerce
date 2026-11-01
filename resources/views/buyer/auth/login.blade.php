@@ -5,40 +5,41 @@
 @section('content')
 <div
     x-data="loginForm()"
-    class="w-full flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] bg-surface-container-lowest">
+    class="w-full min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 flex items-center justify-center bg-surface-container-low">
 
-    <x-brand-panel caption="Sign in to access your orders, store operations, or logistics hub." />
+    <div class="max-w-md w-full my-auto flex flex-col gap-6">
 
-    {{-- Form Column --}}
-    <div class="flex-1 overflow-y-auto flex items-center justify-center py-10 px-6 sm:px-10 md:px-14">
-        <div class="max-w-md w-full my-auto">
+        {{-- Centered Header & Branding --}}
+        <div class="text-center">
+            <a href="{{ url('/') }}" class="inline-flex items-center gap-2 mb-4 group focus:outline-none">
+                <img src="{{ asset('images/nexora-logo.png') }}" alt="Nexora Logo" class="w-10 h-10 rounded-xl object-cover shadow-xs group-hover:scale-105 transition-transform">
+                <span class="font-headline-md text-xl font-extrabold tracking-tight text-on-surface">Nexora <span class="text-xs px-1.5 py-0.5 rounded bg-primary text-on-primary font-bold uppercase tracking-wider">Market</span></span>
+            </a>
+            <h1 class="font-headline-lg text-2xl font-bold tracking-tight text-on-surface">
+                Sign in to your account
+            </h1>
+            <p class="font-body-md text-xs text-on-surface-variant mt-1.5">
+                Welcome back! Please enter your details below.
+            </p>
+        </div>
 
-            {{-- Header --}}
-            <div class="mb-6">
-                <h1 class="font-headline-lg text-2xl sm:text-3xl font-extrabold tracking-tight text-on-surface">
-                    Sign in to your account
-                </h1>
-                <p class="font-body-md text-xs sm:text-sm text-on-surface-variant mt-1.5">
-                    Welcome back! Please enter your details below.
-                </p>
+        {{-- Status Alerts --}}
+        @if ($errors->any())
+            <div class="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4">
+                <p class="font-body-sm text-xs font-semibold text-rose-700 leading-snug">{{ $errors->first() }}</p>
             </div>
+        @endif
 
-            {{-- Status Alerts --}}
-            @if ($errors->any())
-                <div class="mb-5 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4">
-                    <p class="font-body-sm text-xs font-semibold text-rose-700 leading-snug">{{ $errors->first() }}</p>
-                </div>
-            @endif
+        @if (session('verified'))
+            <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+                <p class="font-body-sm text-xs font-semibold text-emerald-700 leading-snug">Email verified successfully! Please sign in to continue.</p>
+            </div>
+        @endif
 
-            @if (session('verified'))
-                <div class="mb-5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
-                    <p class="font-body-sm text-xs font-semibold text-emerald-700 leading-snug">Email verified successfully! Please sign in to continue.</p>
-                </div>
-            @endif
-
-            {{-- Login Form --}}
+        {{-- Login Card & Form --}}
+        <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 sm:p-8 shadow-xs">
             <form
-                class="flex flex-col gap-4 bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 sm:p-8 shadow-xs"
+                class="flex flex-col gap-4"
                 action="{{ route('login.store') }}"
                 method="POST"
                 @submit="isSubmitting = true">
@@ -104,17 +105,26 @@
                     class="w-full flex items-center justify-center py-2.5 px-4 rounded-full bg-primary text-on-primary font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all mt-1 cursor-pointer disabled:opacity-50">
                     <span x-text="isSubmitting ? 'Signing in…' : 'Sign In'"></span>
                 </button>
-
-                <p class="text-center text-xs text-on-surface-variant mt-2">
-                    Don't have an account?
-                    <a href="{{ url('/register') }}" class="text-primary font-semibold hover:underline">Sign up</a>
-                    <span class="mx-1 text-outline-variant">•</span>
-                    <a href="{{ route('logistics.register') }}" class="text-primary font-semibold hover:underline">Logistics Partner</a>
-                </p>
-
             </form>
-
         </div>
+
+        {{-- Footer Links --}}
+        <div class="text-center text-xs text-on-surface-variant space-y-2">
+            <p>
+                Don't have an account?
+                <a href="{{ url('/register') }}" class="text-primary font-semibold hover:underline">Sign up</a>
+                <span class="mx-1 text-outline-variant">•</span>
+                <a href="{{ route('logistics.register') }}" class="text-primary font-semibold hover:underline">Logistics Partner</a>
+            </p>
+            <div class="flex items-center justify-center gap-3 text-[11px] text-outline pt-1">
+                <span>&copy; {{ now()->year }} Nexora Market</span>
+                <span>•</span>
+                <a href="{{ route('privacy') }}" class="hover:text-on-surface-variant transition-colors">Privacy</a>
+                <span>•</span>
+                <a href="{{ route('terms') }}" class="hover:text-on-surface-variant transition-colors">Terms</a>
+            </div>
+        </div>
+
     </div>
 
 </div>

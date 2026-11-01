@@ -10,15 +10,15 @@
         products: {{ collect($products)->map(fn($p) => ['id' => $p['id'], 'name' => $p['name'], 'category' => $p['category'], 'price' => (float) $p['price']])->values()->toJson() }},
         categories: {{ json_encode($categories) }}
     })"
-    class="w-full bg-surface py-6 md:py-8 min-h-[75vh]">
+    class="w-full bg-surface py-5 md:py-6 min-h-[75vh]">
 
-    <div class="max-w-none px-4 md:px-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Top Catalog Header & Controls Bar --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-outline-variant/60 mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-outline-variant/60 mb-5">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">Shop Catalog</h1>
-                <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-0.5">
+                <h1 class="font-headline-lg text-xl md:text-2xl font-bold text-on-surface">Shop Catalog</h1>
+                <p class="font-body-md text-xs text-on-surface-variant mt-0.5">
                     Showing <span class="font-bold text-on-surface" x-text="filteredIds.length"></span> product<span x-show="filteredIds.length !== 1">s</span>
                 </p>
             </div>

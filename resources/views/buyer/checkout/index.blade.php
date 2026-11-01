@@ -3,11 +3,11 @@
 @section('title', 'Checkout — Nexora Market')
 
 @section('content')
-<div class="w-full bg-surface py-6 md:py-10 min-h-[75vh]">
-    <div class="max-w-none px-4 md:px-8">
+<div class="w-full bg-surface py-5 md:py-8 min-h-[75vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Progress Header --}}
-        <div class="flex items-center justify-center gap-2 md:gap-6 mb-8 text-xs font-semibold">
+        <div class="flex items-center justify-center gap-2 md:gap-6 mb-6 text-xs font-semibold">
             <a href="{{ route('cart.index') }}" class="flex items-center gap-2 text-primary hover:underline">
                 <span class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">1</span>
                 <span>Cart</span>
@@ -234,12 +234,12 @@
                                         @foreach($storeItems as $item)
                                             <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
                                                 <div class="flex items-center gap-3 min-w-0">
-                                                    <img src="{{ $item->product->gallery[0] ?? '' }}" class="w-12 h-12 rounded-xl object-cover border border-outline-variant bg-surface-container flex-shrink-0">
+                                                    <img src="{{ $item->product->getVariantImageUrl($item->variant) }}" class="w-12 h-12 rounded-xl object-cover border border-outline-variant bg-surface-container flex-shrink-0">
                                                     <div class="min-w-0">
                                                         <h4 class="font-bold text-on-surface truncate">{{ $item->product->name }}</h4>
                                                         @if($item->variant)
                                                             <span class="text-[10px] text-on-surface-variant">
-                                                                {{ collect($item->variant)->map(fn($v, $k) => "$k: $v")->implode(', ') }}
+                                                                {{ collect($item->variant)->reject(fn($v, $k) => in_array(strtolower($k), ['image', 'image_url', 'img', 'row_id', 'has_file']) || str_starts_with((string)$v, '/storage/') || str_starts_with((string)$v, 'http://') || str_starts_with((string)$v, 'https://'))->map(fn($v, $k) => is_string($k) ? "$k: $v" : $v)->implode(', ') }}
                                                             </span>
                                                         @endif
                                                         <div class="text-[10px] text-outline">

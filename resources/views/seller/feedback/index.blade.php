@@ -3,10 +3,13 @@
 @section('title', 'Customer Reviews & Feedback — Seller Hub')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[70vh]">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-seller-nav active="feedback" />
+            <x-seller-nav active="feedback" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         @if (session('status'))
             <div class="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-label-md">
@@ -167,8 +170,11 @@
             </div>
         @endif
 
+                </div>
+        </div>
     </div>
 </div>
+
 
 <script>
 function toggleReplyForm(id) {

@@ -58,12 +58,24 @@ class CartController extends Controller
             return response()->json(['error' => "{$storeName} is currently on vacation mode and not accepting new orders."], 422);
         }
 
-        if ($product->stock <= 0) {
-            return response()->json(['error' => 'This product is currently out of stock.'], 422);
-        }
-
         $variant = $validated['variant'] ?? null;
         $quantity = $validated['quantity'] ?? 1;
+
+        $availableStock = (int) $product->stock;
+        if (!empty($variant['variation']) && is_array($product->variants_data)) {
+            foreach ($product->variants_data as $v) {
+                if (($v['name'] ?? null) === $variant['variation'] || ($v['sku'] ?? null) === $variant['variation']) {
+                    if (isset($v['stock'])) {
+                        $availableStock = (int) $v['stock'];
+                    }
+                    break;
+                }
+            }
+        }
+
+        if ($availableStock <= 0) {
+            return response()->json(['error' => 'This product or variation is currently out of stock.'], 422);
+        }
 
         // B4: Check per-buyer purchase limits
         if ($product->max_purchase_limit !== null && $product->max_purchase_limit > 0) {
@@ -124,14 +136,14 @@ class CartController extends Controller
 
         if ($existing) {
             $newQty = $existing->quantity + $quantity;
-            if ($newQty > $product->stock) {
-                return response()->json(['error' => "Cannot add more. Available stock: {$product->stock}."], 422);
+            if ($newQty > $availableStock) {
+                return response()->json(['error' => "Cannot add more. Available stock: {$availableStock}."], 422);
             }
             $existing->update(['quantity' => $newQty]);
             $item = $existing->fresh(['product.seller.sellerProfile']);
         } else {
-            if ($quantity > $product->stock) {
-                return response()->json(['error' => "Available stock is only {$product->stock}."], 422);
+            if ($quantity > $availableStock) {
+                return response()->json(['error' => "Available stock is only {$availableStock}."], 422);
             }
             $item = $request->user()->cartItems()->create([
                 'product_id' => $product->id,
@@ -229,7 +241,7 @@ class CartController extends Controller
             'key' => (string) $item->id,
             'id' => $item->product_id,
             'name' => $item->product->name,
-            'image' => $item->product->gallery[0] ?? 'https://placehold.co/200x200/e5eeff/0058be?text=' . urlencode($item->product->name),
+            'image' => $item->product->getVariantImageUrl($item->variant),
             'price' => $item->unit_price, // Dynamic price reflection
             'regularPrice' => (float) $item->product->price,
             'isFlashSale' => $item->product->isFlashSaleActive(),

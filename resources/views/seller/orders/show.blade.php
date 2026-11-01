@@ -3,10 +3,13 @@
 @section('title', $order->order_number . ' — Order Details')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[70vh]">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-seller-nav active="orders" />
+            <x-seller-nav active="orders" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         @if (session('status'))
             <div class="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-label-md">
@@ -88,7 +91,7 @@
                                         <h3 class="font-label-md text-xs font-bold text-on-surface">{{ $item->product_name }}</h3>
                                         @if($item->variant)
                                             <p class="text-[11px] text-on-surface-variant">
-                                                Variant: {{ is_array($item->variant) ? implode(', ', $item->variant) : $item->variant }}
+                                                Variant: {{ is_array($item->variant) ? collect($item->variant)->reject(fn($v, $k) => in_array(strtolower($k), ['image', 'image_url', 'img', 'row_id', 'has_file']) || str_starts_with((string)$v, '/storage/') || str_starts_with((string)$v, 'http://') || str_starts_with((string)$v, 'https://'))->map(fn($v, $k) => is_string($k) ? "$k: $v" : $v)->implode(', ') : $item->variant }}
                                             </p>
                                         @endif
                                         <p class="text-[11px] text-on-surface-variant font-medium">₱{{ number_format($item->price, 2) }} × {{ $item->quantity }} units</p>
@@ -229,8 +232,11 @@
 
         </div>
 
+                </div>
+        </div>
     </div>
 </div>
+
 
 {{-- Seller Cancellation Modal --}}
 @if($order->canBeCancelledBySeller())

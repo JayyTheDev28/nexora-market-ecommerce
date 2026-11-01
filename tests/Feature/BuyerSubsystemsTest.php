@@ -385,6 +385,40 @@ class BuyerSubsystemsTest extends TestCase
         $resIdorDelete->assertStatus(403);
     }
 
+    public function test_can_add_variant_to_cart_when_product_has_both_colors_and_variants_data(): void
+    {
+        $this->actingAs($this->buyer);
+
+        $product = Product::create([
+            'seller_id' => $this->seller1->id,
+            'category_id' => $this->category->id,
+            'name' => 'Mechanical Keyboard',
+            'slug' => 'mechanical-keyboard',
+            'price' => 999,
+            'stock' => 0,
+            'colors' => ['Blue', 'Lavender', 'Black'],
+            'variants_data' => [
+                ['name' => 'Lavender', 'sku' => 'KB-LAV', 'price' => 999, 'stock' => 10],
+                ['name' => 'Blue', 'sku' => 'KB-BLU', 'price' => 999, 'stock' => 5],
+            ],
+            'status' => 'active',
+        ]);
+
+        $res = $this->postJson('/cart/items', [
+            'product_id' => $product->id,
+            'variant' => ['variation' => 'Lavender'],
+            'quantity' => 2,
+        ]);
+
+        $res->assertOk();
+        $res->assertJson(['success' => true]);
+
+        $item = CartItem::where('user_id', $this->buyer->id)->where('product_id', $product->id)->first();
+        $this->assertNotNull($item);
+        $this->assertEquals(2, $item->quantity);
+        $this->assertEquals('Lavender', $item->variant['variation']);
+    }
+
     /**
      * B7: Voucher claiming & stacking: Max 1 Store + 1 Platform + 1 Shipping Voucher
      */

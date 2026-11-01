@@ -3,10 +3,13 @@
 @section('title', "Delivery Inspection {$order->order_number} — Nexora Logistics")
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]" x-data="{ resolveModal: false }">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface" x-data="{ resolveModal: false }">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-logistics-nav active="deliveries" />
+            <x-logistics-nav active="deliveries" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         {{-- Breadcrumb --}}
         <div class="mb-4">
@@ -214,9 +217,11 @@
                     <p class="text-xs text-on-surface-variant italic">No status history recorded yet.</p>
                 @endforelse
             </div>
+                    </div>
         </div>
-
     </div>
+</div>
+
 
     {{-- Resolve Exception Modal --}}
     <div

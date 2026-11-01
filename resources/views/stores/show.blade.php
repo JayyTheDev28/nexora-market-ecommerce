@@ -18,7 +18,7 @@
         @endif
     </div>
 
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop -mt-16 relative z-10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10">
 
         {{-- Store Header Dossier --}}
         <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 md:p-8 shadow-sm mb-8">

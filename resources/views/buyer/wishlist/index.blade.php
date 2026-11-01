@@ -3,14 +3,14 @@
 @section('title', 'My Wishlist & Followed Stores — Nexora Market')
 
 @section('content')
-<div x-data="wishlistApp()" class="w-full bg-surface py-6 md:py-8 min-h-[75vh]">
-    <div class="max-w-none px-4 md:px-8">
+<div x-data="wishlistApp()" class="w-full bg-surface py-5 md:py-6 min-h-[75vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         <x-buyer-nav active="wishlist" />
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">My Wishlist & Followed Stores</h1>
+                <h1 class="font-headline-lg text-xl md:text-2xl font-bold tracking-tight text-on-surface">My Wishlist & Followed Stores</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">Keep track of your favorite products and stay updated with your preferred sellers.</p>
             </div>
 

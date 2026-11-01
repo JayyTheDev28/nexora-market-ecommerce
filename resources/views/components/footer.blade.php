@@ -1,11 +1,11 @@
-<footer class="w-full bg-surface-container-lowest border-t border-outline-variant pt-12 pb-8 mt-12">
-    <div class="max-w-none px-4 md:px-8 flex flex-col gap-10">
+<footer class="w-full bg-surface-container-lowest border-t border-outline-variant pt-8 pb-6 mt-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-8">
 
         {{-- E-Commerce Value & Trust Badges Strip (Shopee / Lazada pattern) --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-surface-container-low/70 rounded-3xl border border-outline-variant/60">
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-outlined text-[24px]">local_shipping</span>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 p-4 sm:p-5 bg-surface-container-low/70 rounded-2xl border border-outline-variant/60">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-[20px]">local_shipping</span>
                 </div>
                 <div>
                     <h5 class="font-headline-sm text-xs font-bold text-on-surface">Free Delivery</h5>
@@ -13,9 +13,9 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-outlined text-[24px]">verified</span>
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-[20px]">verified</span>
                 </div>
                 <div>
                     <h5 class="font-headline-sm text-xs font-bold text-on-surface">100% Authentic</h5>
@@ -23,9 +23,9 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-outlined text-[24px]">assignment_return</span>
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-[20px]">assignment_return</span>
                 </div>
                 <div>
                     <h5 class="font-headline-sm text-xs font-bold text-on-surface">7-Day Returns</h5>
@@ -33,9 +33,9 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-outlined text-[24px]">payments</span>
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-[20px]">payments</span>
                 </div>
                 <div>
                     <h5 class="font-headline-sm text-xs font-bold text-on-surface">Cash on Delivery</h5>
@@ -45,7 +45,7 @@
         </div>
 
         {{-- Main Footer Columns --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 lg:gap-10">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 lg:gap-8">
 
             {{-- Brand info --}}
             <div class="col-span-2 lg:col-span-2 flex flex-col gap-4">

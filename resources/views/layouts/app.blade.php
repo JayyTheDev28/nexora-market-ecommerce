@@ -14,13 +14,19 @@
 </head>
 <body class="bg-background font-body-md text-on-background min-h-screen flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
 
-    <x-navbar />
+    @php
+        $isWorkspace = request()->is('seller*', 'logistics*', 'admin*') || request()->routeIs('seller.*', 'logistics.*', 'admin.*');
+    @endphp
+
+    @unless(($hideNavbar ?? false) || $isWorkspace)
+        <x-navbar />
+    @endunless
 
     <main class="w-full flex-1 bg-background">
         @yield('content')
     </main>
 
-    @unless($hideFooter ?? false)
+    @unless(($hideFooter ?? false) || $isWorkspace)
         <x-footer />
     @endunless
 

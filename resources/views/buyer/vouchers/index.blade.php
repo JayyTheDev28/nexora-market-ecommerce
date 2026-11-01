@@ -3,14 +3,14 @@
 @section('title', 'Vouchers & Discounts — Nexora Market')
 
 @section('content')
-<div x-data="voucherWallet()" class="w-full bg-surface py-6 md:py-8 min-h-[75vh]">
-    <div class="max-w-none px-4 md:px-8">
+<div x-data="voucherWallet()" class="w-full bg-surface py-5 md:py-6 min-h-[75vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         <x-buyer-nav active="vouchers" />
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Vouchers & Discounts</h1>
+                <h1 class="font-headline-lg text-xl md:text-2xl font-bold tracking-tight text-on-surface">Vouchers & Discounts</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">
                     Claim vouchers to save on your orders. Stacking rule: Max 1 Store + 1 Platform + 1 Shipping Voucher per checkout.
                 </p>

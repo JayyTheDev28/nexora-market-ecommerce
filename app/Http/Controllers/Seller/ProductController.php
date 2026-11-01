@@ -233,6 +233,8 @@ class ProductController extends Controller
             'colors' => ['nullable', 'string', 'max:500'],
             'sizes' => ['nullable', 'string', 'max:500'],
             'variants_json' => ['nullable', 'string'],
+            'variant_images' => ['nullable', 'array'],
+            'variant_images.*' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
         ];
 
         return $request->validate($rules, [
@@ -284,6 +286,28 @@ class ProductController extends Controller
             $variantsData = $product?->variants_data;
         }
 
+        // Process variant images (uploads or preserved URLs)
+        if ($variantsData && is_array($variantsData)) {
+            foreach ($variantsData as &$v) {
+                $rowId = $v['row_id'] ?? null;
+                if ($rowId && $request->hasFile("variant_images.{$rowId}")) {
+                    $file = $request->file("variant_images.{$rowId}");
+                    $path = $file->store('products/variants', 'public');
+                    $v['image'] = Storage::url($path);
+                } elseif (!empty($v['image_url'])) {
+                    $v['image'] = $v['image_url'];
+                }
+
+                // If this variant has an image and it's not in the main gallery, add it so buyer gallery has it
+                if (!empty($v['image']) && !in_array($v['image'], $gallery, true)) {
+                    $gallery[] = $v['image'];
+                }
+
+                unset($v['row_id'], $v['has_file'], $v['image_url']);
+            }
+            unset($v);
+        }
+
         $stock = (int) ($validated['stock'] ?? 0);
         $price = (float) ($validated['price'] ?? 0);
 
@@ -307,6 +331,11 @@ class ProductController extends Controller
             }
         }
 
+        $colorsList = $toList($validated['colors'] ?? null);
+        if (empty($colorsList) && !empty($variantsData)) {
+            $colorsList = array_values(array_unique(array_filter(array_column($variantsData, 'name'))));
+        }
+
         return [
             'name' => $validated['name'] ?? 'Untitled Draft Product',
             'category_id' => $validated['category_id'] ?? 1,
@@ -321,7 +350,7 @@ class ProductController extends Controller
             'dimensions' => $validated['dimensions'] ?? null,
             'max_purchase_limit' => $validated['max_purchase_limit'] ?? null,
             'gallery' => array_values($gallery),
-            'colors' => $toList($validated['colors'] ?? null),
+            'colors' => $colorsList,
             'sizes' => $toList($validated['sizes'] ?? null),
             'variants_data' => $variantsData,
         ];

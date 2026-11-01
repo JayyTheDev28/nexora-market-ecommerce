@@ -91,6 +91,23 @@ class ProductController extends Controller
         // Reviews list
         $reviews = $product->reviews()->with('buyer')->latest()->take(10)->get();
 
+        $gallery = $product->gallery ?: [];
+        if (!empty($product->variants_data) && is_array($product->variants_data)) {
+            foreach ($product->variants_data as $v) {
+                if (!empty($v['image']) && !in_array($v['image'], $gallery, true)) {
+                    $gallery[] = $v['image'];
+                }
+            }
+        }
+        if (empty($gallery)) {
+            $gallery[] = 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($product->name);
+        }
+
+        $stock = (int) $product->stock;
+        if ($stock === 0 && !empty($product->variants_data) && is_array($product->variants_data)) {
+            $stock = (int) array_sum(array_column($product->variants_data, 'stock'));
+        }
+
         $productArray = [
             'id' => $product->id,
             'name' => $product->name,
@@ -105,12 +122,12 @@ class ProductController extends Controller
             'flashSaleSeconds' => $flashSaleRemainingSeconds,
             'rating' => $product->averageRating(),
             'reviewCount' => $product->reviews()->count(),
-            'stock' => (int) $product->stock,
+            'stock' => $stock,
             'weight' => (float) ($product->weight ?? 1.0),
             'maxPurchaseLimit' => $product->max_purchase_limit,
             'buyerRemainingLimit' => $buyerRemainingLimit,
-            'image' => $product->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($product->name),
-            'gallery' => $product->gallery ?: [$product->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($product->name)],
+            'image' => $gallery[0],
+            'gallery' => $gallery,
             'colors' => $product->colors ?? [],
             'sizes' => $product->sizes ?? [],
             'variantsData' => $product->variants_data ?? [],

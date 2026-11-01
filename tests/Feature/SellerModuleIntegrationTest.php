@@ -273,6 +273,70 @@ class SellerModuleIntegrationTest extends TestCase
         $this->assertEquals('active', $product->status);
     }
 
+    public function test_seller_can_create_product_with_variation_image_and_shows_on_buyer_side(): void
+    {
+        Storage::fake('public');
+
+        $variantFile = UploadedFile::fake()->create('crimson-variant.jpg', 300, 'image/jpeg');
+
+        $response = $this->actingAs($this->seller)->post(route('seller.products.store'), [
+            'name' => 'Premium Silk Scarf',
+            'category_id' => $this->platformCategory->id,
+            'sku' => 'SILK-SCARF-01',
+            'price' => 750,
+            'stock' => 30,
+            'weight' => 0.25,
+            'action' => 'publish',
+            'variants_json' => json_encode([
+                [
+                    'row_id' => 'row_101',
+                    'name' => 'Crimson Red',
+                    'sku' => 'SILK-RED',
+                    'price' => 750,
+                    'stock' => 15,
+                ],
+                [
+                    'row_id' => 'row_102',
+                    'name' => 'Navy Blue',
+                    'sku' => 'SILK-BLU',
+                    'price' => 790,
+                    'stock' => 15,
+                ],
+            ]),
+            'variant_images' => [
+                'row_101' => $variantFile,
+            ],
+        ]);
+
+        $response->assertRedirect(route('seller.products.index'));
+
+        $product = Product::where('seller_id', $this->seller->id)->where('name', 'Premium Silk Scarf')->first();
+        $this->assertNotNull($product);
+        $this->assertCount(2, $product->variants);
+
+        // Assert Crimson Red has stored image
+        $crimson = $product->variants[0];
+        $this->assertEquals('Crimson Red', $crimson['name']);
+        $this->assertNotEmpty($crimson['image']);
+        $this->assertStringContainsString('products/variants/', $crimson['image']);
+
+        // Assert variation image is in gallery
+        $this->assertContains($crimson['image'], $product->gallery);
+
+        // Assert Navy Blue has no image
+        $navy = $product->variants[1];
+        $this->assertEmpty($navy['image'] ?? null);
+
+        // Buyer side test: product detail page displays variation data with image
+        $buyerResponse = $this->actingAs($this->buyer)->get(route('products.show', $product->id));
+        $buyerResponse->assertOk();
+        $buyerResponse->assertSee('Crimson Red');
+        $this->assertStringContainsString(basename($crimson['image']), $buyerResponse->getContent());
+
+        // Test helper method getVariantImageUrl
+        $this->assertEquals($crimson['image'], $product->getVariantImageUrl(['variation' => 'Crimson Red']));
+    }
+
     public function test_seller_cannot_delete_product_with_active_orders(): void
     {
         $product = Product::create([

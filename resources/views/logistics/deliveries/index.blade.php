@@ -3,10 +3,13 @@
 @section('title', 'Delivery Monitoring — Nexora Logistics')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]" x-data="{ resolveModal: false, activeOrder: null, actionUrl: '', orderNumber: '' }">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface" x-data="{ resolveModal: false, activeOrder: null, actionUrl: '', orderNumber: '' }">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-logistics-nav active="deliveries" />
+            <x-logistics-nav active="deliveries" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
@@ -300,9 +303,11 @@
                     {{ $deliveries->links() }}
                 </div>
             @endif
+                    </div>
         </div>
-
     </div>
+</div>
+
 
     {{-- Resolve Delivery Exception Modal --}}
     <div

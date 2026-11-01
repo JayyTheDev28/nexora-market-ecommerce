@@ -5,15 +5,15 @@
 @section('content')
 <div
     x-data="ordersPage()"
-    class="w-full bg-surface py-6 md:py-8 min-h-[75vh]">
-    <div class="max-w-none px-4 md:px-8">
+    class="w-full bg-surface py-5 md:py-6 min-h-[75vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Sub-Navigation --}}
         <x-buyer-nav active="orders" />
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Order Tracking & History</h1>
+                <h1 class="font-headline-lg text-xl md:text-2xl font-bold tracking-tight text-on-surface">Order Tracking & History</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">Track orders, manage cancellations, file return requests, and rate your purchases.</p>
             </div>
             <a href="{{ route('catalog.index') }}" class="self-start sm:self-auto inline-flex items-center justify-center px-4 py-2 rounded-full bg-primary text-on-primary font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all">
@@ -159,12 +159,12 @@
                             @foreach($order->items as $item)
                                 <div class="flex items-center justify-between gap-4 py-2 border-b border-outline-variant/30 last:border-b-0 text-xs">
                                     <div class="flex items-center gap-3 min-w-0">
-                                        <img src="{{ $item->product?->gallery[0] ?? '' }}" class="w-12 h-12 rounded-xl object-cover border border-outline-variant bg-surface-container flex-shrink-0">
+                                        <img src="{{ $item->product ? $item->product->getVariantImageUrl($item->variant) : '' }}" class="w-12 h-12 rounded-xl object-cover border border-outline-variant bg-surface-container flex-shrink-0">
                                         <div class="min-w-0">
                                             <h4 class="font-bold text-on-surface truncate">{{ $item->product_name }}</h4>
                                             @if($item->variant)
                                                 <span class="text-[10px] text-on-surface-variant block">
-                                                    {{ collect($item->variant)->map(fn($v, $k) => "$k: $v")->implode(', ') }}
+                                                    {{ collect($item->variant)->reject(fn($v, $k) => in_array(strtolower($k), ['image', 'image_url', 'img', 'row_id', 'has_file']) || str_starts_with((string)$v, '/storage/') || str_starts_with((string)$v, 'http://') || str_starts_with((string)$v, 'https://'))->map(fn($v, $k) => is_string($k) ? "$k: $v" : $v)->implode(', ') }}
                                                 </span>
                                             @endif
                                             <span class="text-[10px] text-outline">Qty: {{ $item->quantity }} × ₱{{ number_format($item->price, 2) }}</span>

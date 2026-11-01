@@ -3,8 +3,8 @@
 @section('title', 'Buyer Dashboard — Nexora Market')
 
 @section('content')
-<div class="w-full bg-surface py-6 md:py-8 min-h-[75vh]">
-    <div class="max-w-none px-4 md:px-8">
+<div class="w-full bg-surface py-5 md:py-6 min-h-[75vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Sub-Navigation --}}
         <x-buyer-nav active="dashboard" />
@@ -12,9 +12,9 @@
         <x-platform-announcements />
 
         {{-- Welcome Header --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Welcome back, {{ auth()->user()->first_name }}</h1>
+                <h1 class="font-headline-lg text-xl md:text-2xl font-bold tracking-tight text-on-surface">Welcome back, {{ auth()->user()->first_name }}</h1>
                 <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">Manage your active orders, delivery preferences, and shopping cart.</p>
             </div>
             <div class="flex items-center gap-3">
@@ -31,7 +31,7 @@
         </div>
 
         {{-- Metric Stat Cards --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-5">
             {{-- Cart Items --}}
             <a href="{{ url('/cart') }}" class="group bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 hover:border-primary/50 hover:shadow-md transition-all duration-200">
                 <div class="flex items-center justify-between">
@@ -39,7 +39,7 @@
                     <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">View Cart &rarr;</span>
                 </div>
                 <div class="mt-3 flex items-baseline gap-2">
-                    <p class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">{{ $stats['cartItems'] }}</p>
+                    <p class="font-headline-lg text-xl md:text-2xl font-bold text-on-surface">{{ $stats['cartItems'] }}</p>
                     <span class="text-xs text-on-surface-variant">item{{ $stats['cartItems'] === 1 ? '' : 's' }}</span>
                 </div>
             </a>
@@ -51,7 +51,7 @@
                     <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $stats['activeOrders'] > 0 ? 'bg-primary/10 text-primary' : 'bg-surface-container text-on-surface-variant' }} group-hover:bg-primary/10 group-hover:text-primary transition-colors">Track &rarr;</span>
                 </div>
                 <div class="mt-3 flex items-baseline gap-2">
-                    <p class="font-headline-lg text-2xl md:text-3xl font-bold {{ $stats['activeOrders'] > 0 ? 'text-primary' : 'text-on-surface' }}">{{ $stats['activeOrders'] }}</p>
+                    <p class="font-headline-lg text-xl md:text-2xl font-bold {{ $stats['activeOrders'] > 0 ? 'text-primary' : 'text-on-surface' }}">{{ $stats['activeOrders'] }}</p>
                     <span class="text-xs text-on-surface-variant">in progress</span>
                 </div>
             </a>
@@ -63,7 +63,7 @@
                     <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary transition-colors">History &rarr;</span>
                 </div>
                 <div class="mt-3 flex items-baseline gap-2">
-                    <p class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">{{ $stats['completedOrders'] }}</p>
+                    <p class="font-headline-lg text-xl md:text-2xl font-bold text-on-surface">{{ $stats['completedOrders'] }}</p>
                     <span class="text-xs text-on-surface-variant">delivered</span>
                 </div>
             </a>

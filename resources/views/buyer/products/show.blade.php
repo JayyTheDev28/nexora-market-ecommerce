@@ -20,12 +20,12 @@
         inWishlist: {{ $product['inWishlist'] ? 'true' : 'false' }},
         isFollowingStore: {{ $product['isFollowingStore'] ? 'true' : 'false' }}
     })"
-    class="w-full bg-surface py-6 md:py-10">
+    class="w-full bg-surface py-5 md:py-8">
 
-    <div class="max-w-none px-4 md:px-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Minimal Breadcrumb Navigation --}}
-        <nav class="flex items-center gap-2 text-xs font-medium text-on-surface-variant mb-6 md:mb-8 overflow-x-auto whitespace-nowrap">
+        <nav class="flex items-center gap-2 text-xs font-medium text-on-surface-variant mb-4 md:mb-5 overflow-x-auto whitespace-nowrap">
             <a href="{{ auth()->check() ? url(auth()->user()->homeRoute()) : url('/') }}" class="hover:text-primary transition-colors">Home</a>
             <span class="text-outline-variant">/</span>
             <a href="{{ url('/catalog') }}" class="hover:text-primary transition-colors">Catalog</a>
@@ -37,14 +37,14 @@
         <div
             x-show="isFlashSale && flashSaleSeconds > 0"
             x-cloak
-            class="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-orange-500/20">
+            class="mb-5 p-3.5 rounded-xl bg-amber-600 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs border border-amber-700/30">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center">
-                    <span class="material-symbols-outlined text-[24px]">bolt</span>
+                <div class="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-[20px]">bolt</span>
                 </div>
                 <div>
-                    <h3 class="text-sm font-black uppercase tracking-wider">Flash Sale Active</h3>
-                    <p class="text-xs text-white/90">Exclusive limited-time discount. Prices revert when countdown reaches zero.</p>
+                    <h3 class="text-xs font-bold uppercase tracking-wider">Flash Sale Active</h3>
+                    <p class="text-[11px] text-white/90">Exclusive limited-time discount. Prices revert when countdown reaches zero.</p>
                 </div>
             </div>
 
@@ -210,57 +210,61 @@
 
                 <div class="border-t border-outline-variant/60"></div>
 
-                {{-- Product Variations Selector (from seller variants table) --}}
-                <div x-show="variantsData && variantsData.length > 0" class="flex flex-col gap-2.5">
+                {{-- Product Variations Selector (Unified Variation / Color) --}}
+                <div x-show="(variantsData && variantsData.length > 0) || (colors && colors.length > 0)" class="flex flex-col gap-2.5">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="font-bold text-on-surface uppercase tracking-wider">Variation</span>
+                        <span class="font-bold text-on-surface uppercase tracking-wider">Variation:</span>
                         <span class="text-primary font-semibold" x-text="selectedVariant || 'Choose an option'"></span>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <template x-for="v in (variantsData || [])" :key="v.name || v.sku">
-                            <button
-                                type="button"
-                                @click="selectVariant(v)"
-                                class="px-4 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center gap-2"
-                                :class="selectedVariant === (v.name || v.sku) ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20 font-bold' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
-                                :disabled="v.stock === 0">
-                                <span x-text="v.name || v.sku"></span>
-                                <template x-if="v.price && parseFloat(v.price) > 0">
-                                    <span class="text-[11px] opacity-75 font-normal">
-                                        ₱<span x-text="parseFloat(v.price).toFixed(2)"></span>
-                                    </span>
-                                </template>
-                                <template x-if="v.stock === 0">
-                                    <span class="text-[10px] text-rose-500 font-normal italic">(Out of stock)</span>
-                                </template>
-                            </button>
-                        </template>
-                    </div>
+
+                    {{-- Variations from variantsData table --}}
+                    <template x-if="variantsData && variantsData.length > 0">
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="v in variantsData" :key="v.name || v.sku">
+                                <button
+                                    type="button"
+                                    @click="selectVariant(v)"
+                                    class="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center gap-2"
+                                    :class="selectedVariant === (v.name || v.sku) ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20 font-bold shadow-xs' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
+                                    :disabled="v.stock === 0">
+                                    {{-- Variation Thumbnail Preview --}}
+                                    <template x-if="v.image">
+                                        <img :src="v.image" :alt="v.name || v.sku" class="w-6 h-6 rounded-md object-cover border border-outline-variant/60 shrink-0">
+                                    </template>
+                                    <span x-text="v.name || v.sku"></span>
+                                    <template x-if="v.price && parseFloat(v.price) > 0">
+                                        <span class="text-[11px] opacity-75 font-normal">
+                                            ₱<span x-text="parseFloat(v.price).toFixed(2)"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="v.stock === 0">
+                                        <span class="text-[10px] text-rose-500 font-normal italic">(Out of stock)</span>
+                                    </template>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+
+                    {{-- Variations from color / tag list when no variantsData table --}}
+                    <template x-if="(!variantsData || variantsData.length === 0) && (colors && colors.length > 0)">
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="c in colors" :key="c">
+                                <button
+                                    type="button"
+                                    @click="selectVariant({ name: c })"
+                                    class="px-4 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer"
+                                    :class="selectedVariant === c ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20 font-bold shadow-xs' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
+                                    x-text="c">
+                                </button>
+                            </template>
+                        </div>
+                    </template>
                 </div>
 
-                {{-- Variant 1: Color Selector --}}
-                <div x-show="colors && colors.length > 0 && (!variantsData || variantsData.length === 0)" class="flex flex-col gap-2.5">
+                {{-- Sizes Selector --}}
+                <div x-show="sizes && sizes.length > 0" class="flex flex-col gap-2.5">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="font-bold text-on-surface uppercase tracking-wider">Color</span>
-                        <span class="text-primary font-semibold" x-text="selectedColor || 'Choose a color'"></span>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <template x-for="color in (colors || [])" :key="color">
-                            <button
-                                type="button"
-                                @click="selectColor(color)"
-                                class="px-4 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer"
-                                :class="selectedColor === color ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
-                                x-text="color">
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                {{-- Variant 2: Size Selector --}}
-                <div x-show="sizes && sizes.length > 0 && (!variantsData || variantsData.length === 0)" class="flex flex-col gap-2.5">
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="font-bold text-on-surface uppercase tracking-wider">Size</span>
+                        <span class="font-bold text-on-surface uppercase tracking-wider">Sizes:</span>
                         <span class="text-primary font-semibold" x-text="selectedSize || 'Choose a size'"></span>
                     </div>
                     <div class="flex flex-wrap gap-2">
@@ -269,7 +273,7 @@
                                 type="button"
                                 @click="selectSize(size)"
                                 class="min-w-[48px] px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center"
-                                :class="selectedSize === size ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
+                                :class="selectedSize === size ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20 font-bold shadow-xs' : 'border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline'"
                                 x-text="size">
                             </button>
                         </template>
@@ -371,7 +375,7 @@
 
                     {{-- Variant Selection Validation Notice --}}
                     <p x-show="!canAddToCart && currentStock > 0" x-cloak class="text-xs text-rose-600 font-medium">
-                        Please select <span x-text="variantsData && variantsData.length > 0 && !selectedVariant ? 'a variation' : (!selectedColor && colors && colors.length ? 'a color' : 'a size')"></span> before adding to cart.
+                        Please select <span x-text="hasVariations && !selectedVariant ? 'a variation' : 'a size'"></span> before adding to cart.
                     </p>
                 @endif
 
@@ -509,23 +513,44 @@
             seconds: 0,
 
             init() {
+                if (this.stock === 0 && Array.isArray(this.variantsData) && this.variantsData.length > 0) {
+                    const totalVStock = this.variantsData.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
+                    if (totalVStock > 0) {
+                        this.stock = totalVStock;
+                        this.currentStock = totalVStock;
+                    }
+                }
                 if (Array.isArray(this.variantsData) && this.variantsData.length === 1) {
                     this.selectVariant(this.variantsData[0]);
+                } else if ((!this.variantsData || this.variantsData.length === 0) && Array.isArray(this.colors) && this.colors.length === 1) {
+                    this.selectVariant({ name: this.colors[0] });
                 }
-                if (this.colors.length === 1) this.selectedColor = this.colors[0];
-                if (this.sizes.length === 1) this.selectedSize = this.sizes[0];
+                if (Array.isArray(this.sizes) && this.sizes.length === 1) {
+                    this.selectSize(this.sizes[0]);
+                }
                 this.startTimer();
             },
 
+            get hasVariations() {
+                return (Array.isArray(this.variantsData) && this.variantsData.length > 0) || (Array.isArray(this.colors) && this.colors.length > 0);
+            },
+
+            get hasSizes() {
+                return Array.isArray(this.sizes) && this.sizes.length > 0;
+            },
+
             get buttonLabel() {
-                if (this.currentStock === 0 || this.stock === 0) {
+                if (this.currentStock === 0) {
                     return 'Out of Stock';
                 }
                 if (this.justAdded) {
                     return 'Added to Cart';
                 }
-                if (Array.isArray(this.variantsData) && this.variantsData.length > 0 && !this.selectedVariant && !this.selectedColor && !this.selectedSize) {
+                if (this.hasVariations && !this.selectedVariant) {
                     return 'Select a Variation';
+                }
+                if (this.hasSizes && !this.selectedSize) {
+                    return 'Select a Size';
                 }
                 return 'Add to Cart';
             },
@@ -539,20 +564,21 @@
             },
 
             get canAddToCart() {
-                if (Array.isArray(this.variantsData) && this.variantsData.length > 0 && !this.selectedVariant && !this.selectedColor && !this.selectedSize) return false;
-                if (Array.isArray(this.colors) && this.colors.length && !this.selectedColor) return false;
-                if (Array.isArray(this.sizes) && this.sizes.length && !this.selectedSize) return false;
                 if (this.currentStock === 0) return false;
+                if (this.hasVariations && !this.selectedVariant) return false;
+                if (this.hasSizes && !this.selectedSize) return false;
                 return true;
             },
 
             selectVariant(v) {
                 this.selectedVariant = v.name || v.sku;
+                this.selectedColor = this.selectedVariant;
                 if (v.price && parseFloat(v.price) > 0) {
                     this.currentPrice = parseFloat(v.price);
                 }
                 if (v.stock !== undefined && v.stock !== null) {
                     this.currentStock = parseInt(v.stock);
+                    this.stock = this.currentStock;
                 }
                 if (this.qty > this.maxAllowedQty) {
                     this.qty = this.maxAllowedQty;
@@ -561,44 +587,15 @@
                     const imgIdx = this.gallery.indexOf(v.image);
                     if (imgIdx !== -1) {
                         this.activeImage = imgIdx;
+                    } else {
+                        this.gallery.unshift(v.image);
+                        this.activeImage = 0;
                     }
                 }
-            },
-
-            // Dynamic Variant selection driving real-time price, stock, and gallery images
-            selectColor(color) {
-                this.selectedColor = color;
-                this.updateVariantMatrix();
             },
 
             selectSize(size) {
                 this.selectedSize = size;
-                this.updateVariantMatrix();
-            },
-
-            updateVariantMatrix() {
-                // If product has variantsData matrix:
-                if (Array.isArray(this.variantsData) && this.variantsData.length > 0) {
-                    const match = this.variantsData.find(v => {
-                        const colorMatch = !this.selectedColor || v.color === this.selectedColor;
-                        const sizeMatch = !this.selectedSize || v.size === this.selectedSize;
-                        return colorMatch && sizeMatch;
-                    });
-
-                    if (match) {
-                        if (match.price) this.currentPrice = parseFloat(match.price);
-                        if (match.stock !== undefined) this.currentStock = parseInt(match.stock);
-                        if (match.image) {
-                            const imgIdx = this.gallery.indexOf(match.image);
-                            if (imgIdx !== -1) {
-                                this.activeImage = imgIdx;
-                            } else {
-                                this.gallery.unshift(match.image);
-                                this.activeImage = 0;
-                            }
-                        }
-                    }
-                }
             },
 
             startTimer() {
@@ -669,8 +666,14 @@
 
                 const variant = {};
                 if (this.selectedVariant) variant.variation = this.selectedVariant;
-                if (this.selectedColor) variant.color = this.selectedColor;
                 if (this.selectedSize) variant.size = this.selectedSize;
+
+                if (this.selectedVariant && Array.isArray(this.variantsData)) {
+                    const matched = this.variantsData.find(v => (v.name || v.sku) === this.selectedVariant);
+                    if (matched && matched.image) {
+                        variant.image = matched.image;
+                    }
+                }
 
                 try {
                     const res = await fetch('/cart/items', {

@@ -27,7 +27,7 @@
 
     {{-- Top Mini Utility Bar (Desktop & Tablet) --}}
     <div class="hidden sm:block border-b border-outline-variant/60 bg-surface-container-low/60 text-on-surface-variant text-[11px] font-medium">
-        <div class="max-w-none px-4 md:px-8 h-8 flex items-center justify-between">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-between">
             <div class="flex items-center gap-4">
                 @if($isBuyerOrGuest)
                     <span class="text-primary font-semibold">100% Authentic Products</span>
@@ -35,7 +35,7 @@
                     <span>Free Delivery over ₱2,000</span>
                 @else
                     <span class="text-primary font-semibold flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                         {{ auth()->user()->roleLabel() }} Workspace
                     </span>
                     <span class="text-outline-variant">•</span>
@@ -88,7 +88,7 @@
     </div>
 
     {{-- Main Navbar Row --}}
-    <div class="max-w-none px-4 md:px-8 h-16 md:h-18 flex items-center justify-between gap-3 md:gap-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-6">
 
         {{-- Logo --}}
         <a href="{{ auth()->check() ? url(auth()->user()->homeRoute()) : url('/') }}" class="flex items-center gap-2.5 flex-shrink-0 group">
@@ -175,8 +175,8 @@
                 </form>
             @else
                 <div class="w-full flex items-center justify-between bg-surface-container-low px-4 py-2 rounded-2xl border border-outline-variant/60">
-                    <div class="flex items-center gap-3">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                         <div class="flex flex-col">
                             <span class="font-headline-sm text-xs font-bold text-on-surface">
                                 {{ auth()->user()->roleLabel() }} Management Workspace
@@ -406,7 +406,7 @@
 
     {{-- Mobile Search Row (Only for buyers & guests) --}}
     @if($isBuyerOrGuest)
-        <div class="md:hidden px-4 pb-3 pt-0">
+        <div class="md:hidden max-w-7xl mx-auto px-4 pb-3 pt-0">
             <form action="{{ url('/catalog') }}" method="GET" class="w-full flex items-center bg-surface-container rounded-full border border-outline-variant focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all pl-3.5 pr-1.5 py-1">
                 <span class="material-symbols-outlined text-[18px] text-on-surface-variant mr-2">search</span>
                 <input
@@ -425,7 +425,7 @@
     {{-- Category Shortcuts Quick-Bar (Desktop — Only for buyers & guests) --}}
     @if($isBuyerOrGuest)
         <div class="hidden lg:block border-t border-outline-variant/60 bg-surface-container-lowest">
-            <div class="max-w-none px-4 md:px-8 h-10 flex items-center justify-between gap-6 text-xs font-medium text-on-surface-variant overflow-x-auto">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-6 text-xs font-medium text-on-surface-variant overflow-x-auto">
                 <div class="flex items-center gap-6 whitespace-nowrap">
                     <a href="{{ url('/catalog') }}" class="hover:text-primary transition-colors font-semibold text-on-surface">
                         All Products

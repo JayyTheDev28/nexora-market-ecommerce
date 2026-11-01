@@ -14,7 +14,7 @@
 @endphp
 
 <div
-    class="group relative flex flex-col bg-surface-container-lowest rounded-2xl border border-outline-variant/60 hover:border-primary/50 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden"
+    class="group relative flex flex-col bg-surface-container-lowest rounded-2xl border border-outline-variant/60 hover:border-primary/50 shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden"
     x-data="{ justAdded: false, adding: false, wishlisted: {{ ($product->wishlisted ?? false) ? 'true' : 'false' }} }">
 
     {{-- Product Image Container --}}
@@ -24,22 +24,22 @@
                 src="{{ $product->image }}"
                 alt="{{ $product->alt ?? $product->name }}"
                 loading="lazy"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out">
+                class="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300 ease-out">
         </a>
 
         {{-- Wishlist Button --}}
         <button
             type="button"
             @click.stop.prevent="wishlisted = !wishlisted"
-            class="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center shadow-xs transition-transform active:scale-90 hover:bg-surface-container-lowest cursor-pointer z-10"
+            class="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center shadow-xs transition-transform active:scale-90 hover:bg-surface-container-lowest cursor-pointer z-10"
             :class="wishlisted ? 'text-error' : 'text-on-surface-variant hover:text-error'"
             aria-label="Add to wishlist">
-            <span class="material-symbols-outlined text-[18px]" :style="wishlisted ? `font-variation-settings: 'FILL' 1` : ''">favorite</span>
+            <span class="material-symbols-outlined text-[16px]" :style="wishlisted ? `font-variation-settings: 'FILL' 1` : ''">favorite</span>
         </button>
 
         {{-- Discount & Status Badges --}}
         @if($discountPercent)
-            <div class="absolute top-2.5 left-2.5 bg-gradient-to-r from-error to-rose-600 text-on-error font-extrabold text-[11px] px-2 py-0.5 rounded-md shadow-xs tracking-tight flex items-center gap-0.5">
+            <div class="absolute top-2.5 left-2.5 bg-error text-on-error font-extrabold text-[10px] px-1.5 py-0.5 rounded shadow-xs tracking-tight flex items-center gap-0.5">
                 <span>-{{ $discountPercent }}%</span>
             </div>
         @elseif($badge === 'sale')

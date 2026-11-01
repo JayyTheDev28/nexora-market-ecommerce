@@ -8,7 +8,7 @@
         'key' => (string) $item->id,
         'id' => $item->product_id,
         'name' => $item->product->name,
-        'image' => $item->product->gallery[0] ?? 'https://placehold.co/200x200/e5eeff/0058be?text=' . urlencode($item->product->name),
+        'image' => $item->product->getVariantImageUrl($item->variant),
         'price' => (float) $item->unit_price,
         'regularPrice' => (float) $item->product->price,
         'isFlashSale' => $item->product->isFlashSaleActive(),
@@ -20,15 +20,15 @@
         'stock' => (int) $item->product->stock,
         'weight' => (float) ($item->product->weight ?? 1.0),
     ])->values()->toJson() }})"
-    class="w-full bg-surface py-6 md:py-10 min-h-[75vh] pb-24 md:pb-12">
+    class="w-full bg-surface py-5 md:py-6 min-h-[75vh] pb-20 md:pb-10">
     
-    <div class="max-w-none px-4 md:px-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Header Bar --}}
-        <div class="flex items-center justify-between pb-4 border-b border-outline-variant/60 mb-6">
+        <div class="flex items-center justify-between pb-3 border-b border-outline-variant/60 mb-5">
             <div>
-                <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">Shopping Cart</h1>
-                <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-0.5" x-show="items.length > 0">
+                <h1 class="font-headline-lg text-xl md:text-2xl font-bold text-on-surface">Shopping Cart</h1>
+                <p class="font-body-md text-xs text-on-surface-variant mt-0.5" x-show="items.length > 0">
                     Persistent database cart • Grouped by Merchant Store
                 </p>
             </div>
@@ -126,9 +126,11 @@
                                             <template x-if="item.variant">
                                                 <div class="flex flex-wrap gap-1 mt-0.5">
                                                     <template x-for="(val, key) in item.variant" :key="key">
-                                                        <span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant text-[10px] font-medium border border-outline-variant/50">
-                                                            <span x-text="key"></span>: <strong x-text="val"></strong>
-                                                        </span>
+                                                        <template x-if="!['image', 'image_url', 'img', 'row_id', 'has_file'].includes(key.toLowerCase()) && !(item.variant.variation && key.toLowerCase() === 'color') && !String(val).startsWith('/storage/') && !String(val).startsWith('http://') && !String(val).startsWith('https://')">
+                                                            <span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant text-[10px] font-medium border border-outline-variant/50">
+                                                                <span class="capitalize" x-text="key"></span>: <strong x-text="val"></strong>
+                                                            </span>
+                                                        </template>
                                                     </template>
                                                 </div>
                                             </template>

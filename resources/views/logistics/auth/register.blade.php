@@ -3,14 +3,20 @@
 @section('title', 'Logistics Partner Registration — Nexora Market')
 
 @section('content')
-<div class="w-full min-h-[calc(100vh-4rem)] bg-surface-container-lowest py-8 md:py-12">
+<div class="w-full min-h-[calc(100vh-4rem)] bg-surface-container-low py-8 md:py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6">
 
         {{-- Header --}}
         <div class="text-center mb-8">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
-                <span class="material-symbols-outlined text-[18px]">local_shipping</span>
-                <span>Nexora Logistics Network Partner</span>
+            <a href="{{ url('/') }}" class="inline-flex items-center gap-2 mb-3 group focus:outline-none">
+                <img src="{{ asset('images/nexora-logo.png') }}" alt="Nexora Logo" class="w-10 h-10 rounded-xl object-cover shadow-xs group-hover:scale-105 transition-transform">
+                <span class="font-headline-md text-xl font-extrabold tracking-tight text-on-surface">Nexora <span class="text-xs px-1.5 py-0.5 rounded bg-primary text-on-primary font-bold uppercase tracking-wider">Market</span></span>
+            </a>
+            <div class="flex items-center justify-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                    <span class="material-symbols-outlined text-[16px]">local_shipping</span>
+                    <span>Corporate Fleet & Logistics Portal</span>
+                </span>
             </div>
             <h1 class="font-headline-lg text-2xl sm:text-3xl font-extrabold text-on-surface tracking-tight">
                 Logistics Partner Application

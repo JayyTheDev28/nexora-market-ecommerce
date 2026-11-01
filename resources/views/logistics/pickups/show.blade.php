@@ -3,10 +3,13 @@
 @section('title', "Pickup Request {$order->order_number} — Nexora Logistics")
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]" x-data="{ scheduleModal: false, rejectModal: false }">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface" x-data="{ scheduleModal: false, rejectModal: false }">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-logistics-nav active="pickups" />
+            <x-logistics-nav active="pickups" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         {{-- Breadcrumb / Back --}}
         <div class="mb-4">
@@ -218,7 +221,7 @@
                             </td>
                             <td class="px-5 py-3.5 text-on-surface-variant">
                                 @if (!empty($item->variant))
-                                    {{ implode(', ', array_filter($item->variant)) }}
+                                    {{ is_array($item->variant) ? collect($item->variant)->reject(fn($v, $k) => in_array(strtolower($k), ['image', 'image_url', 'img', 'row_id', 'has_file']) || str_starts_with((string)$v, '/storage/') || str_starts_with((string)$v, 'http://') || str_starts_with((string)$v, 'https://'))->map(fn($v, $k) => is_string($k) ? "$k: $v" : $v)->implode(', ') : $item->variant }}
                                 @else
                                     —
                                 @endif
@@ -276,9 +279,11 @@
                     <p class="text-xs text-on-surface-variant italic">No status history recorded yet.</p>
                 @endforelse
             </div>
+                    </div>
         </div>
-
     </div>
+</div>
+
 
     {{-- Schedule Modal --}}
     <div

@@ -3,7 +3,7 @@
 @section('title', 'User Accounts — Admin Portal — Nexora Market')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]" x-data="{
+<div class="w-full min-h-screen bg-surface" x-data="{
     statusModalOpen: false,
     selectedUserId: null,
     selectedUserName: '',
@@ -19,9 +19,12 @@
         this.statusModalOpen = true;
     }
 }">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-admin-nav active="users" />
+            <x-admin-nav active="users" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         {{-- Flash messages --}}
         @if (session('status'))
@@ -250,9 +253,11 @@
                     </div>
                 @endif
             @endif
+                    </div>
         </div>
-
     </div>
+</div>
+
 
     {{-- Account Status Toggle Modal --}}
     <div x-show="statusModalOpen" x-cloak

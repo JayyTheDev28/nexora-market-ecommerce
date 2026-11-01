@@ -7,8 +7,8 @@
 
 @php $user = auth()->user(); @endphp
 
-<div class="w-full bg-surface py-8 min-h-[70vh]">
-    <div class="max-w-none px-margin-mobile md:px-margin-desktop">
+<div class="w-full bg-surface py-6 min-h-[70vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {{-- Temporary placeholder banner — this whole component exists so you
              can confirm role-based routing works. Each role's real interface

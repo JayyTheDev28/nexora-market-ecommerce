@@ -3,8 +3,13 @@
 @section('title', 'COD Remittance Reconciliation — Logistics Operations')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[85vh]" x-data="{ reviewModalOpen: false, activeRemitId: null, activeRemitNumber: '', activeCourier: '', activeAmount: 0, activeExpected: 0, decision: 'approve' }">
-    <div class="max-w-6xl mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface" x-data="{ reviewModalOpen: false, activeRemitId: null, activeRemitNumber: '', activeCourier: '', activeAmount: 0, activeExpected: 0, decision: 'approve' }">
+    <div class="flex flex-col lg:flex-row w-full">
+
+            <x-logistics-nav active="remittances" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         {{-- Breadcrumb --}}
         <div class="flex items-center justify-between mb-6">
@@ -151,8 +156,11 @@
                     {{ $remittances->links() }}
                 </div>
             </div>
+                    </div>
         </div>
     </div>
+</div>
+
 
     {{-- Review Modal --}}
     <div x-show="reviewModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">

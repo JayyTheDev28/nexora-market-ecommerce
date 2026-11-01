@@ -3,10 +3,13 @@
 @section('title', 'Facility Account & Settings — Nexora Logistics')
 
 @section('content')
-<div class="w-full bg-surface py-8 min-h-[75vh]">
-    <div class="max-w-4xl mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="w-full min-h-screen bg-surface">
+    <div class="flex flex-col lg:flex-row w-full">
 
-        <x-logistics-nav active="account" />
+            <x-logistics-nav active="account" />
+
+            <div class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-surface">
+            <div class="w-full max-w-7xl mx-auto space-y-6">
 
         <div class="mb-6">
             <h1 class="font-headline-lg text-2xl font-bold text-on-surface">Sorting Facility Account</h1>
@@ -221,6 +224,9 @@
             </form>
         </div>
 
+                </div>
+        </div>
     </div>
 </div>
+
 @endsection

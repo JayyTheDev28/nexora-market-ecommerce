@@ -133,4 +133,41 @@ class Product extends Model
     {
         return is_array($this->variants_data) ? $this->variants_data : [];
     }
+
+    public function getVariantImageUrl(?array $variant = null): string
+    {
+        $defaultImage = $this->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($this->name);
+
+        if (empty($variant)) {
+            return $defaultImage;
+        }
+
+        if (!empty($variant['image'])) {
+            return $variant['image'];
+        }
+
+        if (!is_array($this->variants_data) || empty($this->variants_data)) {
+            return $defaultImage;
+        }
+
+        $variationName = $variant['variation'] ?? $variant['name'] ?? null;
+        $color = $variant['color'] ?? null;
+
+        foreach ($this->variants_data as $v) {
+            $vName = $v['name'] ?? null;
+            $vSku = $v['sku'] ?? null;
+
+            if ($variationName && ($vName === $variationName || $vSku === $variationName) && !empty($v['image'])) {
+                return $v['image'];
+            }
+            if ($color && isset($v['color']) && strcasecmp(trim($v['color']), trim($color)) === 0 && !empty($v['image'])) {
+                return $v['image'];
+            }
+            if ($color && $vName && str_contains(strtolower($vName), strtolower($color)) && !empty($v['image'])) {
+                return $v['image'];
+            }
+        }
+
+        return $defaultImage;
+    }
 }

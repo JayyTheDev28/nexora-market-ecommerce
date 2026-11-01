@@ -5,6 +5,7 @@
 @config "../../tailwind.config.js";
 
 @layer base {
+
   html,
   body {
     margin: 0;
@@ -20,29 +21,10 @@
   display: none !important;
 }
 
-@keyframes nxFloat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-16px); }
-}
-.nx-float { animation: nxFloat 5s ease-in-out infinite; }
-
-@keyframes nxRotateSlow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.nx-rotate-slow { animation: nxRotateSlow 50s linear infinite; }
-.nx-rotate-slow-reverse { animation: nxRotateSlow 70s linear infinite reverse; }
-
-@keyframes nxPulseSlow {
-  0%, 100% { opacity: 0.35; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.5); }
-}
-.nx-pulse-slow { animation: nxPulseSlow 3s ease-in-out infinite; }
-
 .material-symbols-outlined {
   font-variation-settings:
     'FILL' 0,
     'wght' 400,
     'GRAD' 0,
-    'opsz' 24;
+    'opsz' 20;
 }
