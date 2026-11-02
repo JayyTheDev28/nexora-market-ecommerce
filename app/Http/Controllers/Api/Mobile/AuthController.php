@@ -123,13 +123,15 @@ class AuthController extends Controller
         $validated = $request->validated();
         $age = Carbon::parse($validated['birthday'])->age;
 
-        $validIdPath = $request->file('valid_id')->store('ids', 'public');
+        $validIdPath = $request->hasFile('valid_id')
+            ? $request->file('valid_id')->store('ids', 'public')
+            : null;
 
         $user = User::create([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'middle_initial' => $validated['middle_initial'] ?? null,
-            'sex' => $validated['sex'],
+            'sex' => $validated['sex'] ?? 'other',
             'birthday' => $validated['birthday'],
             'age' => $age,
             'email' => $validated['email'],
@@ -140,20 +142,22 @@ class AuthController extends Controller
             'valid_id_path' => $validIdPath,
         ]);
 
-        Address::create([
-            'user_id' => $user->id,
-            'province_code' => $validated['province_code'],
-            'province_name' => $validated['province_name'],
-            'municipality_code' => $validated['municipality_code'],
-            'municipality_name' => $validated['municipality_name'],
-            'barangay_code' => $validated['barangay_code'],
-            'barangay_name' => $validated['barangay_name'],
-            'street' => $validated['street'] ?? null,
-            'house_number' => $validated['house_number'] ?? null,
-            'recipient_name' => $user->full_name,
-            'recipient_phone' => $user->contact_number,
-            'is_default' => true,
-        ]);
+        if (! empty($validated['province_code']) && ! empty($validated['municipality_code']) && ! empty($validated['barangay_code'])) {
+            Address::create([
+                'user_id' => $user->id,
+                'province_code' => $validated['province_code'],
+                'province_name' => $validated['province_name'] ?? $validated['province_code'],
+                'municipality_code' => $validated['municipality_code'],
+                'municipality_name' => $validated['municipality_name'] ?? $validated['municipality_code'],
+                'barangay_code' => $validated['barangay_code'],
+                'barangay_name' => $validated['barangay_name'] ?? $validated['barangay_code'],
+                'street' => $validated['street'] ?? null,
+                'house_number' => $validated['house_number'] ?? null,
+                'recipient_name' => $user->full_name,
+                'recipient_phone' => $user->contact_number,
+                'is_default' => true,
+            ]);
+        }
 
         event(new Registered($user));
         $user->sendEmailVerificationOtp(force: true);

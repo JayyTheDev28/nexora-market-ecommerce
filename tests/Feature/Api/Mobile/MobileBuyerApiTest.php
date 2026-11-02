@@ -1,0 +1,322 @@
+<?php
+
+namespace Tests\Feature\Api\Mobile;
+
+use App\Models\Address;
+use App\Models\CartItem;
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\SellerProfile;
+use App\Models\User;
+use App\Models\Voucher;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class MobileBuyerApiTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $buyer;
+    protected string $buyerToken;
+    protected User $seller1;
+    protected User $seller2;
+    protected Category $category;
+    protected Product $product1;
+    protected Product $product2;
+    protected Address $address;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('public');
+
+        // 1. Create approved & active buyer
+        $this->buyer = User::factory()->create([
+            'role' => 'buyer',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        $this->buyerToken = $this->buyer->createToken('buyer-test')->plainTextToken;
+
+        // 2. Create buyer address
+        $this->address = Address::create([
+            'user_id' => $this->buyer->id,
+            'recipient_name' => 'Juan Dela Cruz',
+            'recipient_phone' => '09171234567',
+            'province_code' => '043400000',
+            'province_name' => 'Laguna',
+            'municipality_code' => '043426000',
+            'municipality_name' => 'Santa Cruz',
+            'barangay_code' => '043426001',
+            'barangay_name' => 'Poblacion I',
+            'street' => '123 Market St',
+            'is_default' => true,
+        ]);
+
+        // 3. Create Sellers
+        $this->seller1 = User::factory()->create([
+            'role' => 'seller',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        SellerProfile::create([
+            'user_id' => $this->seller1->id,
+            'business_name' => 'Apex Footwear Store',
+            'category' => 'Shoes & Footwear',
+            'is_vacation_mode' => false,
+        ]);
+
+        $this->seller2 = User::factory()->create([
+            'role' => 'seller',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        SellerProfile::create([
+            'user_id' => $this->seller2->id,
+            'business_name' => 'Laguna Organic Crafts',
+            'category' => 'Crafts & Accessories',
+            'is_vacation_mode' => false,
+        ]);
+
+        // 4. Create Category
+        $this->category = Category::create([
+            'name' => 'Shoes & Footwear',
+            'slug' => 'shoes-footwear',
+        ]);
+
+        // 5. Create Products
+        $this->product1 = Product::create([
+            'seller_id' => $this->seller1->id,
+            'category_id' => $this->category->id,
+            'name' => 'Running Sneakers Pro',
+            'slug' => 'running-sneakers-pro',
+            'description' => 'Lightweight athletic running shoes.',
+            'price' => 1500.00,
+            'stock' => 20,
+            'weight' => 1.2, // Will bill as ceil(1.2) = 2kg
+            'status' => 'active',
+            'gallery' => ['products/sneakers1.jpg'],
+        ]);
+
+        $this->product2 = Product::create([
+            'seller_id' => $this->seller2->id,
+            'category_id' => $this->category->id,
+            'name' => 'Handmade Leather Belt',
+            'slug' => 'handmade-leather-belt',
+            'description' => 'Genuine artisan leather belt.',
+            'price' => 500.00,
+            'stock' => 15,
+            'weight' => 0.5, // Will bill as ceil(0.5) = 1kg
+            'status' => 'active',
+            'gallery' => ['products/belt1.jpg'],
+        ]);
+    }
+
+    public function test_buyer_can_browse_catalog_and_search(): void
+    {
+        $response = $this->getJson('/api/mobile/v1/buyer/catalog?q=Sneakers');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.name', 'Running Sneakers Pro')
+            ->assertJsonStructure(['data', 'pagination', 'message']);
+    }
+
+    public function test_buyer_can_view_product_details_with_seller_info(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson("/api/mobile/v1/buyer/products/{$this->product1->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.product.id', $this->product1->id)
+            ->assertJsonPath('data.product.seller.business_name', 'Apex Footwear Store');
+    }
+
+    public function test_buyer_can_manage_wishlist_and_followed_stores(): void
+    {
+        // Toggle wishlist
+        $wishResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson("/api/mobile/v1/buyer/wishlist/{$this->product1->id}/toggle");
+
+        $wishResponse->assertStatus(200)
+            ->assertJsonPath('data.in_wishlist', true);
+
+        // Get wishlist
+        $listResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson('/api/mobile/v1/buyer/wishlist');
+
+        $listResponse->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+
+        // Toggle store follow
+        $followResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson("/api/mobile/v1/buyer/stores/{$this->seller1->id}/follow-toggle");
+
+        $followResponse->assertStatus(200)
+            ->assertJsonPath('data.is_following', true);
+    }
+
+    public function test_buyer_can_add_to_cart_with_line_merging(): void
+    {
+        // Add 2 units
+        $add1 = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/cart/items', [
+                'product_id' => $this->product1->id,
+                'quantity' => 2,
+            ]);
+
+        $add1->assertStatus(201)
+            ->assertJsonPath('data.item.quantity', 2);
+
+        // Add 3 more units of the same product -> should merge into 5 units
+        $add2 = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/cart/items', [
+                'product_id' => $this->product1->id,
+                'quantity' => 3,
+            ]);
+
+        $add2->assertStatus(201)
+            ->assertJsonPath('data.item.quantity', 5);
+
+        $this->assertCount(1, $this->buyer->cartItems);
+        $this->assertEquals(5, $this->buyer->cartItems->first()->quantity);
+    }
+
+    public function test_checkout_multi_seller_splitting_and_weight_based_shipping(): void
+    {
+        // Put 1 item from Seller 1 and 2 items from Seller 2 into cart
+        $this->buyer->cartItems()->create([
+            'product_id' => $this->product1->id,
+            'quantity' => 2, // 2 * 1500 = 3000 subtotal, weight 2.4kg -> billed 3kg -> 50 + 20*(3-1) = 90 shipping
+            'selected' => true,
+        ]);
+
+        $this->buyer->cartItems()->create([
+            'product_id' => $this->product2->id,
+            'quantity' => 1, // 1 * 500 = 500 subtotal, weight 0.5kg -> billed 1kg -> 50 + 20*(1-1) = 50 shipping
+            'selected' => true,
+        ]);
+
+        // Check summary
+        $summaryResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson('/api/mobile/v1/buyer/checkout/summary');
+
+        $summaryResponse->assertStatus(200)
+            ->assertJsonPath('data.total_subtotal', 3500)
+            ->assertJsonPath('data.total_shipping', 140); // 90 + 50 = 140
+
+        // Process checkout
+        $checkoutResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->withHeader('Idempotency-Key', 'TEST_CHECKOUT_IDEMP_KEY_001')
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+            ]);
+
+        $checkoutResponse->assertStatus(201)
+            ->assertJsonPath('data.orders_count', 2)
+            ->assertJsonStructure(['data' => ['orders', 'checkout_session_id']]);
+
+        // Verifications
+        $orders = Order::where('buyer_id', $this->buyer->id)->get();
+        $this->assertCount(2, $orders);
+
+        // Seller 1 order: subtotal 3000, shipping 90, total 3090
+        $order1 = $orders->firstWhere('seller_id', $this->seller1->id);
+        $this->assertNotNull($order1);
+        $this->assertEquals(3000.00, (float) $order1->subtotal);
+        $this->assertEquals(90.00, (float) $order1->shipping_fee);
+        $this->assertEquals(3090.00, (float) $order1->total);
+        $this->assertEquals('cod', $order1->payment_method);
+        $this->assertEquals('placed', $order1->status);
+
+        // Seller 2 order: subtotal 500, shipping 50, total 550
+        $order2 = $orders->firstWhere('seller_id', $this->seller2->id);
+        $this->assertNotNull($order2);
+        $this->assertEquals(500.00, (float) $order2->subtotal);
+        $this->assertEquals(50.00, (float) $order2->shipping_fee);
+        $this->assertEquals(550.00, (float) $order2->total);
+
+        // Shared checkout_session_id
+        $this->assertEquals($order1->checkout_session_id, $order2->checkout_session_id);
+
+        // Product stock decremented
+        $this->assertEquals(18, $this->product1->fresh()->stock);
+        $this->assertEquals(14, $this->product2->fresh()->stock);
+
+        // Commissions created (10%)
+        $this->assertDatabaseHas('commissions', [
+            'order_id' => $order1->id,
+            'rate' => 0.10,
+            'commission_amount' => 300.00,
+            'seller_payout' => 2700.00,
+        ]);
+
+        // Cart items cleared
+        $this->assertCount(0, $this->buyer->fresh()->cartItems);
+    }
+
+    public function test_buyer_can_cancel_pre_shipping_order_restoring_stock(): void
+    {
+        $order = Order::create([
+            'order_number' => 'NX-CANCEL001',
+            'checkout_session_id' => 'CS-CANCEL001',
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller1->id,
+            'address_id' => $this->address->id,
+            'status' => 'placed',
+            'payment_method' => 'cod',
+            'subtotal' => 1500.00,
+            'total' => 1550.00,
+            'placed_at' => now(),
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $this->product1->id,
+            'product_name' => $this->product1->name,
+            'price' => 1500.00,
+            'quantity' => 2,
+        ]);
+        $this->product1->update(['stock' => 18]);
+
+        $cancelResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson("/api/mobile/v1/buyer/orders/{$order->id}/cancel", [
+                'reason' => 'Changed my mind.',
+            ]);
+
+        $cancelResponse->assertStatus(200)
+            ->assertJsonPath('data.status', 'cancelled');
+
+        $this->assertEquals('cancelled', $order->fresh()->status);
+        $this->assertEquals(20, $this->product1->fresh()->stock); // Stock restored!
+    }
+
+    public function test_buyer_can_chat_with_seller(): void
+    {
+        // Start chat
+        $startResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/chat/start', [
+                'seller_id' => $this->seller1->id,
+                'product_id' => $this->product1->id,
+            ]);
+
+        $startResponse->assertStatus(200);
+        $convoId = $startResponse->json('data.id');
+
+        // Send message
+        $msgResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson("/api/mobile/v1/buyer/chat/{$convoId}/message", [
+                'body' => 'Is this shoe size 10 available?',
+            ]);
+
+        $msgResponse->assertStatus(201)
+            ->assertJsonPath('data.body', 'Is this shoe size 10 available?');
+    }
+}
+

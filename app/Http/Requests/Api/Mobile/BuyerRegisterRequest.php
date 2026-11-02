@@ -69,7 +69,7 @@ class BuyerRegisterRequest extends FormRequest
                 'regex:/^[\pL\s]+$/u',
             ],
             'middle_initial' => ['nullable', 'string', 'max:5', 'regex:/^[\pL\s]+$/u'],
-            'sex' => ['required', 'in:male,female,other'],
+            'sex' => ['nullable', 'in:male,female,other'],
             'birthday' => [
                 'required',
                 'date',
@@ -106,15 +106,15 @@ class BuyerRegisterRequest extends FormRequest
                     ->numbers()
                     ->symbols(),
             ],
-            'province_code' => ['required', 'string'],
-            'province_name' => ['required', 'string'],
-            'municipality_code' => ['required', 'string'],
-            'municipality_name' => ['required', 'string'],
-            'barangay_code' => ['required', 'string'],
-            'barangay_name' => ['required', 'string'],
+            'province_code' => ['nullable', 'string'],
+            'province_name' => ['nullable', 'string'],
+            'municipality_code' => ['nullable', 'string'],
+            'municipality_name' => ['nullable', 'string'],
+            'barangay_code' => ['nullable', 'string'],
+            'barangay_name' => ['nullable', 'string'],
             'street' => ['nullable', 'string', 'max:255'],
             'house_number' => ['nullable', 'string', 'max:255'],
-            'valid_id' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'valid_id' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             'terms' => ['accepted'],
         ];
     }
