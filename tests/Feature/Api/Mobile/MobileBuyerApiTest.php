@@ -318,5 +318,136 @@ class MobileBuyerApiTest extends TestCase
         $msgResponse->assertStatus(201)
             ->assertJsonPath('data.body', 'Is this shoe size 10 available?');
     }
+
+    public function test_checkout_parity_between_web_controller_and_mobile_checkout_service(): void
+    {
+        // 1. Setup a web buyer with identical address & vouchers
+        $webBuyer = User::factory()->create([
+            'role' => 'buyer',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        $webAddress = Address::create([
+            'user_id' => $webBuyer->id,
+            'recipient_name' => 'Maria Clara',
+            'recipient_phone' => '09181234567',
+            'province_code' => '043400000',
+            'province_name' => 'Laguna',
+            'municipality_code' => '043426000',
+            'municipality_name' => 'Santa Cruz',
+            'barangay_code' => '043426001',
+            'barangay_name' => 'Poblacion I',
+            'street' => '456 Rizal St',
+            'is_default' => true,
+        ]);
+
+        // Platform voucher: 10% discount, min spend 1000
+        $platformVoucher = Voucher::create([
+            'code' => 'PLATFORM10',
+            'voucher_scope' => 'platform',
+            'type' => 'percent',
+            'value' => 10,
+            'min_spend' => 1000,
+            'is_active' => true,
+        ]);
+
+        // Claim voucher for both web buyer and mobile buyer
+        $webBuyer->vouchers()->attach($platformVoucher->id);
+        $this->buyer->vouchers()->attach($platformVoucher->id);
+
+        // Put identical items in web buyer cart:
+        // Seller 1 product: qty 2 (2 * 1500 = 3000, weight 2.4kg -> billed 3kg -> shipping 50 + 20*(3-1) = 90)
+        // Seller 2 product: qty 1 (1 * 500 = 500, weight 0.5kg -> billed 1kg -> shipping 50 + 20*(1-1) = 50)
+        $webBuyer->cartItems()->create([
+            'product_id' => $this->product1->id,
+            'quantity' => 2,
+            'selected' => true,
+        ]);
+        $webBuyer->cartItems()->create([
+            'product_id' => $this->product2->id,
+            'quantity' => 1,
+            'selected' => true,
+        ]);
+
+        // Put identical items in mobile buyer cart:
+        $this->buyer->cartItems()->create([
+            'product_id' => $this->product1->id,
+            'quantity' => 2,
+            'selected' => true,
+        ]);
+        $this->buyer->cartItems()->create([
+            'product_id' => $this->product2->id,
+            'quantity' => 1,
+            'selected' => true,
+        ]);
+
+        // 2. Perform Web Checkout via POST /checkout
+        $webResponse = $this->actingAs($webBuyer)
+            ->post('/checkout', [
+                'address_id' => $webAddress->id,
+                'platform_voucher_id' => $platformVoucher->id,
+                'payment_method' => 'cod',
+            ]);
+        $webResponse->assertSessionHasNoErrors();
+        $webOrders = Order::where('buyer_id', $webBuyer->id)->orderBy('seller_id')->get();
+
+        // 3. Clear web session so Sanctum authenticates the mobile buyer
+        auth('web')->logout();
+        auth()->forgetGuards();
+
+        // Perform Mobile Checkout via POST /api/mobile/v1/buyer/checkout
+        $mobileResponse = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->withHeader('Idempotency-Key', 'PARITY_CHECKOUT_IDEMP_001')
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+                'platform_voucher_id' => $platformVoucher->id,
+                'payment_method' => 'cod',
+            ]);
+        $mobileResponse->assertStatus(201);
+        $mobileOrders = Order::where('buyer_id', $this->buyer->id)->orderBy('seller_id')->get();
+
+        // 4. Assert Exact Side-by-Side Parity Across Split Orders
+        $this->assertCount(2, $webOrders);
+        $this->assertCount(2, $mobileOrders);
+
+        for ($i = 0; $i < 2; $i++) {
+            $webOrder = $webOrders[$i];
+            $mobileOrder = $mobileOrders[$i];
+
+            // Same seller split
+            $this->assertEquals($webOrder->seller_id, $mobileOrder->seller_id);
+
+            // Same financial totals down to centavos
+            $this->assertEquals((float) $webOrder->subtotal, (float) $mobileOrder->subtotal);
+            $this->assertEquals((float) $webOrder->shipping_fee, (float) $mobileOrder->shipping_fee);
+            $this->assertEquals((float) $webOrder->discount, (float) $mobileOrder->discount);
+            $this->assertEquals((float) $webOrder->total, (float) $mobileOrder->total);
+            $this->assertEquals($webOrder->shipping_weight, $mobileOrder->shipping_weight);
+
+            // Same statuses & payment methods
+            $this->assertEquals($webOrder->status, $mobileOrder->status);
+            $this->assertEquals($webOrder->payment_method, $mobileOrder->payment_method);
+            $this->assertEquals($webOrder->payment_status, $mobileOrder->payment_status);
+
+            // Commission parity
+            $webComm = \App\Models\Commission::where('order_id', $webOrder->id)->first();
+            $mobileComm = \App\Models\Commission::where('order_id', $mobileOrder->id)->first();
+            $this->assertNotNull($webComm);
+            $this->assertNotNull($mobileComm);
+            $this->assertEquals((float) $webComm->rate, (float) $mobileComm->rate);
+            $this->assertEquals((float) $webComm->commission_amount, (float) $mobileComm->commission_amount);
+            $this->assertEquals((float) $webComm->seller_payout, (float) $mobileComm->seller_payout);
+
+            // Order items parity
+            $this->assertCount($webOrder->items->count(), $mobileOrder->items);
+            foreach ($webOrder->items as $wItem) {
+                $mItem = $mobileOrder->items->firstWhere('product_id', $wItem->product_id);
+                $this->assertNotNull($mItem);
+                $this->assertEquals((float) $wItem->price, (float) $mItem->price);
+                $this->assertEquals($wItem->quantity, $mItem->quantity);
+            }
+        }
+    }
 }
 
