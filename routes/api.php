@@ -43,3 +43,30 @@ Route::prefix('v1/rider')->group(function () {
         Route::post('/remittance', [RiderApiController::class, 'submitRemittance'])->name('api.rider.remittance');
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Mobile API Routes (v1)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('mobile/v1')->group(function () {
+    // Auth routes
+    Route::prefix('auth')->group(function () {
+        // Buyer auth
+        Route::post('/buyer/register', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'buyerRegister'])->name('api.mobile.buyer.register');
+        Route::post('/buyer/login', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'buyerLogin'])->name('api.mobile.buyer.login');
+        Route::post('/buyer/email/verify', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'verifyEmailOtp'])->name('api.mobile.buyer.email.verify');
+        Route::post('/buyer/email/resend', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'resendEmailOtp'])->name('api.mobile.buyer.email.resend');
+
+        // Rider auth
+        Route::post('/rider/login', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'riderLogin'])->name('api.mobile.rider.login');
+        Route::post('/rider/activate/{token}', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'riderActivate'])->name('api.mobile.rider.activate');
+
+        // Authenticated session routes
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/me', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'me'])->name('api.mobile.auth.me');
+            Route::post('/logout', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'logout'])->name('api.mobile.auth.logout');
+        });
+    });
+});
+
