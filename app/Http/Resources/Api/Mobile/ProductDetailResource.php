@@ -62,16 +62,25 @@ class ProductDetailResource extends JsonResource
             }
         }
 
+        $mainImage = !empty($gallery[0]) ? $gallery[0] : 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($this->name);
+
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'title' => $this->name,
             'description' => $this->description,
             'category_id' => $this->category_id,
             'category_name' => $this->category?->name ?? '',
+            'category' => $this->category?->name ?? '',
+            'image' => $mainImage,
+            'primary_image' => $mainImage,
+            'images' => $gallery,
             'seller' => [
                 'id' => $this->seller_id,
                 'name' => $sellerName,
-                'business_name' => $profile?->business_name,
+                'store_name' => $sellerName,
+                'business_name' => $profile?->business_name ?? $sellerName,
+                'city' => 'Metro Manila',
                 'avatar_url' => $seller?->avatar_url,
                 'is_vacation_mode' => (bool) ($profile?->is_vacation_mode ?? false),
                 'followers_count' => StoreFollow::where('seller_id', $this->seller_id)->count(),
@@ -79,9 +88,11 @@ class ProductDetailResource extends JsonResource
                 'is_following' => $isFollowingStore,
             ],
             'price' => (float) $this->effective_price,
+            'formatted_price' => '₱' . number_format($this->effective_price, 2),
             'regular_price' => (float) $this->price,
             'compare_price' => $this->compare_price ? (float) $this->compare_price : null,
             'stock' => (int) $this->stock,
+            'is_active' => $this->status === 'active',
             'weight' => (float) ($this->weight ?? 1.0),
             'max_purchase_limit' => $this->max_purchase_limit,
             'buyer_remaining_limit' => $buyerRemainingLimit,
