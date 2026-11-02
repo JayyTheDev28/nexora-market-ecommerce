@@ -26,7 +26,7 @@ class RegisteredUserController extends Controller
      * through a separate flow (not built yet), and admins are never
      * self-registered.
      */
-    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'sorting_center'];
+    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'logistics', 'sorting_center'];
 
     public function create(): View
     {
@@ -216,6 +216,12 @@ class RegisteredUserController extends Controller
 
         $validIdPath = $request->file('valid_id')->store('ids', 'public');
 
+        $roleToSave = match ($validated['role']) {
+            'sorting_center' => 'logistics',
+            'courier' => 'rider',
+            default => $validated['role'],
+        };
+
         $user = User::create([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
@@ -226,7 +232,7 @@ class RegisteredUserController extends Controller
             'email' => $validated['email'],
             'contact_number' => $validated['contact_number'],
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
+            'role' => $roleToSave,
             'approval_status' => 'pending',
             'valid_id_path' => $validIdPath,
         ]);
@@ -264,14 +270,24 @@ class RegisteredUserController extends Controller
                 'category' => $displayCategory ?: 'Retail & General Merchandise',
                 'business_permit_path' => $permitPath,
             ]);
-        } elseif ($validated['role'] === 'sorting_center') {
-            $permitPath = $request->file('business_permit')->store('permits', 'public');
+        } elseif ($validated['role'] === 'sorting_center' || $validated['role'] === 'logistics') {
+            $permitPath = $request->file('business_permit') ? $request->file('business_permit')->store('permits', 'public') : null;
+            LogisticsProfile::create([
+                'user_id' => $user->id,
+                'company_name' => $validated['business_name'] ?? ($user->full_name . ' Logistics'),
+                'contact_person_first_name' => $user->first_name,
+                'contact_person_last_name' => $user->last_name,
+                'email' => $user->email,
+                'mobile_number' => $user->contact_number,
+                'mayors_permit_path' => $permitPath,
+                'status' => 'pending_approval',
+            ]);
             SortingCenterProfile::create([
                 'user_id' => $user->id,
-                'business_name' => $validated['business_name'],
+                'business_name' => $validated['business_name'] ?? ($user->full_name . ' Logistics'),
                 'business_permit_path' => $permitPath,
             ]);
-        } elseif ($validated['role'] === 'courier') {
+        } elseif ($validated['role'] === 'courier' || $validated['role'] === 'rider') {
             $orCrPath = $request->file('or_cr') ? $request->file('or_cr')->store('couriers/or_cr', 'public') : null;
             CourierProfile::create([
                 'user_id' => $user->id,

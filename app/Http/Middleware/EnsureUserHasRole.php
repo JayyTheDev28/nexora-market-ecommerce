@@ -96,11 +96,25 @@ class EnsureUserHasRole
 
         // Approved, but trying to open another role's dashboard —
         // send them to their own instead of showing a 403.
-        if (! empty($roles) && ! in_array($user->role, $roles, true)) {
-            if ($request->expectsJson()) {
-                return response()->json(['message' => 'Forbidden.'], 403);
+        if (! empty($roles)) {
+            $normalizedRoles = array_map(fn ($r) => match ($r) {
+                'sorting_center' => 'logistics',
+                'courier' => 'rider',
+                default => $r,
+            }, $roles);
+
+            $normalizedUserRole = match ($user->role) {
+                'sorting_center' => 'logistics',
+                'courier' => 'rider',
+                default => $user->role,
+            };
+
+            if (! in_array($normalizedUserRole, $normalizedRoles, true) && ! in_array($user->role, $roles, true)) {
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'Forbidden.'], 403);
+                }
+                return redirect($user->homeRoute());
             }
-            return redirect($user->homeRoute());
         }
 
         return $next($request);

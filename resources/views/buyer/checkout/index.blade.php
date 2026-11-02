@@ -331,49 +331,49 @@
                         </div>
                     </div>
 
-                    {{-- 4. Payment Method Selection (Rule B9) --}}
+                    {{-- 4. Payment Method Selection (Exclusive COD) --}}
                     <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant/70 p-5 md:p-6 shadow-xs flex flex-col gap-4">
                         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
                             <div>
                                 <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
                                     <span class="material-symbols-outlined text-[16px] text-primary">payments</span>
-                                    <span>4. Payment Method & Guardrails</span>
+                                    <span>4. Payment Method</span>
                                 </h2>
                                 <p class="text-[11px] text-on-surface-variant mt-0.5">
-                                    Gateway orders (Card / e-Wallet) have a 60-minute payment countdown before auto-cancellation.
+                                    Nexora Market exclusively operates on Cash on Delivery (COD). No online bank, card, or e-wallet required.
                                 </p>
                             </div>
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                                COD Only
+                            </span>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <label class="p-4 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2"
-                                :class="paymentMethod === 'cod' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-outline-variant bg-surface'">
-                                <div class="flex items-center justify-between">
-                                    <input type="radio" name="payment_method" value="cod" x-model="paymentMethod" class="text-primary focus:ring-primary">
-                                    <span class="material-symbols-outlined text-[20px] text-primary">local_atm</span>
+                        <div>
+                            <label class="p-4 rounded-2xl border border-primary bg-primary/5 ring-1 ring-primary/20 flex items-start gap-4 cursor-default">
+                                <div class="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                                    <span class="material-symbols-outlined text-[22px]">payments</span>
                                 </div>
-                                <span class="text-xs font-bold text-on-surface">Cash on Delivery</span>
-                                <span class="text-[10px] text-on-surface-variant">Pay in cash upon physical receipt</span>
-                            </label>
-
-                            <label class="p-4 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2"
-                                :class="paymentMethod === 'ewallet' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-outline-variant bg-surface'">
-                                <div class="flex items-center justify-between">
-                                    <input type="radio" name="payment_method" value="ewallet" x-model="paymentMethod" class="text-primary focus:ring-primary">
-                                    <span class="material-symbols-outlined text-[20px] text-primary">account_balance_wallet</span>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <input type="radio" name="payment_method" value="cod" checked readonly class="text-primary focus:ring-primary pointer-events-none">
+                                        <span class="text-sm font-bold text-on-surface">Cash on Delivery (COD)</span>
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary text-on-primary">Active</span>
+                                    </div>
+                                    <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                                        Pay in Philippine Peso (PHP) cash directly to the courier upon physical receipt and verification of your parcel.
+                                    </p>
+                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-primary font-medium">
+                                        <span class="inline-flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[14px]">verified</span>
+                                            <span>Zero upfront transaction fees</span>
+                                        </span>
+                                        <span>•</span>
+                                        <span class="inline-flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[14px]">shield</span>
+                                            <span>Doorstep inspection prior to payment</span>
+                                        </span>
+                                    </div>
                                 </div>
-                                <span class="text-xs font-bold text-on-surface">e-Wallet (GCash / Maya)</span>
-                                <span class="text-[10px] text-on-surface-variant">60-minute payment window</span>
-                            </label>
-
-                            <label class="p-4 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2"
-                                :class="paymentMethod === 'card' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-outline-variant bg-surface'">
-                                <div class="flex items-center justify-between">
-                                    <input type="radio" name="payment_method" value="card" x-model="paymentMethod" class="text-primary focus:ring-primary">
-                                    <span class="material-symbols-outlined text-[20px] text-primary">credit_card</span>
-                                </div>
-                                <span class="text-xs font-bold text-on-surface">Credit / Debit Card</span>
-                                <span class="text-[10px] text-on-surface-variant">Visa, Mastercard, JCB</span>
                             </label>
                         </div>
                     </div>

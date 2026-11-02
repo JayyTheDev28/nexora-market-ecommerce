@@ -1,7 +1,19 @@
 <?php
 
+use App\Http\Controllers\Api\LocationApiController;
 use App\Http\Controllers\Api\RiderApiController;
 use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Locations & PSGC API Routes
+|--------------------------------------------------------------------------
+*/
+Route::prefix('locations')->group(function () {
+    Route::get('/provinces', [LocationApiController::class, 'provinces'])->name('api.locations.provinces');
+    Route::get('/provinces/{provinceCode}/cities', [LocationApiController::class, 'cities'])->name('api.locations.cities');
+    Route::get('/cities/{cityCode}/barangays', [LocationApiController::class, 'barangays'])->name('api.locations.barangays');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -12,7 +24,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1/rider')->group(function () {
     Route::post('/login', [RiderApiController::class, 'login'])->name('api.rider.login');
 
-    Route::middleware(['auth', 'role:courier'])->group(function () {
+    Route::middleware(['auth', 'role:rider,courier'])->group(function () {
         Route::get('/profile', [RiderApiController::class, 'profile'])->name('api.rider.profile');
         Route::post('/availability', [RiderApiController::class, 'toggleAvailability'])->name('api.rider.availability');
         

@@ -57,7 +57,7 @@ class PickupController extends Controller
         ];
 
         // Eligible active couriers for pickup assignment
-        $couriers = User::where('role', 'courier')
+        $couriers = User::whereIn('role', ['rider', 'courier'])
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->with('courierProfile')
@@ -81,7 +81,7 @@ class PickupController extends Controller
             'statusHistory.changedBy',
         ]);
 
-        $couriers = User::where('role', 'courier')
+        $couriers = User::whereIn('role', ['rider', 'courier'])
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->with('courierProfile')
@@ -104,7 +104,7 @@ class PickupController extends Controller
         ]);
 
         $courier = User::where('id', $validated['courier_id'])
-            ->where('role', 'courier')
+            ->whereIn('role', ['rider', 'courier'])
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->firstOrFail();
@@ -113,7 +113,10 @@ class PickupController extends Controller
 
         $order->update([
             'pickup_courier_id' => $courier->id,
+            'pickup_rider_id' => $courier->id,
             'sorting_center_id' => $request->user()->id,
+            'pickup_logistics_id' => $request->user()->id,
+            'current_custody_logistics_id' => $request->user()->id,
         ]);
 
         $note = "Pickup scheduled with rider {$courier->full_name}.";

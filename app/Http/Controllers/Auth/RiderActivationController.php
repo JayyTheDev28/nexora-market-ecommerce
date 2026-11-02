@@ -18,7 +18,7 @@ class RiderActivationController extends Controller
      */
     public function show(string $token): View
     {
-        $rider = User::where('role', 'courier')
+        $rider = User::whereIn('role', ['rider', 'courier'])
             ->where('activation_token', $token)
             ->first();
 
@@ -56,7 +56,7 @@ class RiderActivationController extends Controller
      */
     public function activate(Request $request, string $token): RedirectResponse
     {
-        $rider = User::where('role', 'courier')
+        $rider = User::whereIn('role', ['rider', 'courier'])
             ->where('activation_token', $token)
             ->first();
 

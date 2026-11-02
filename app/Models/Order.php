@@ -28,7 +28,16 @@ class Order extends Model
         'total',
         'pickup_courier_id',
         'delivery_courier_id',
+        'pickup_rider_id',
+        'delivery_rider_id',
         'sorting_center_id',
+        'pickup_logistics_id',
+        'delivery_logistics_id',
+        'current_custody_logistics_id',
+        'origin_hub_id',
+        'destination_hub_id',
+        'pickup_zone_id',
+        'delivery_zone_id',
         'delivery_area_id',
         'placed_at',
         'delivered_at',
@@ -64,6 +73,14 @@ class Order extends Model
         return (float) ($this->total ?? 0);
     }
 
+    /**
+     * Enforce COD as the exclusive payment method system-wide.
+     */
+    public function setPaymentMethodAttribute($value): void
+    {
+        $this->attributes['payment_method'] = 'cod';
+    }
+
     public function buyer()
     {
         return $this->belongsTo(User::class, 'buyer_id');
@@ -96,12 +113,67 @@ class Order extends Model
 
     public function pickupCourier()
     {
-        return $this->belongsTo(User::class, 'pickup_courier_id');
+        return $this->belongsTo(User::class, 'pickup_rider_id');
     }
 
     public function deliveryCourier()
     {
-        return $this->belongsTo(User::class, 'delivery_courier_id');
+        return $this->belongsTo(User::class, 'delivery_rider_id');
+    }
+
+    public function pickupRider()
+    {
+        return $this->belongsTo(User::class, 'pickup_rider_id');
+    }
+
+    public function deliveryRider()
+    {
+        return $this->belongsTo(User::class, 'delivery_rider_id');
+    }
+
+    public function pickupLogistics()
+    {
+        return $this->belongsTo(User::class, 'pickup_logistics_id');
+    }
+
+    public function deliveryLogistics()
+    {
+        return $this->belongsTo(User::class, 'delivery_logistics_id');
+    }
+
+    public function currentCustodyLogistics()
+    {
+        return $this->belongsTo(User::class, 'current_custody_logistics_id');
+    }
+
+    public function originHub()
+    {
+        return $this->belongsTo(Hub::class, 'origin_hub_id');
+    }
+
+    public function destinationHub()
+    {
+        return $this->belongsTo(Hub::class, 'destination_hub_id');
+    }
+
+    public function pickupZone()
+    {
+        return $this->belongsTo(Zone::class, 'pickup_zone_id');
+    }
+
+    public function deliveryZone()
+    {
+        return $this->belongsTo(Zone::class, 'delivery_zone_id');
+    }
+
+    public function transfers()
+    {
+        return $this->hasMany(HubTransfer::class, 'order_id');
+    }
+
+    public function latestTransfer()
+    {
+        return $this->hasOne(HubTransfer::class, 'order_id')->latestOfMany();
     }
 
     public function deliveryArea()

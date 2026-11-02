@@ -223,7 +223,7 @@
                         </div>
                         <div>
                             <span class="text-on-surface-variant font-medium">Payment Mode:</span>
-                            <p class="font-bold text-on-surface uppercase">{{ match($order->payment_method) { 'cod' => 'Cash on Delivery (Collect on delivery)', 'ewallet' => 'GCash / Maya (Prepaid)', 'card' => 'Debit / Credit Card (Prepaid)', default => $order->payment_method } }}</p>
+                            <p class="font-bold text-on-surface uppercase">{{ match(strtolower($order->payment_method)) { 'cod' => 'Cash on Delivery (Collect on delivery)', default => 'Cash on Delivery (COD)' } }}</p>
                         </div>
                     </div>
                 </div>

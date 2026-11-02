@@ -59,6 +59,15 @@ class User extends Authenticatable implements MustVerifyEmail
         ];
     }
 
+    public function setRoleAttribute($value): void
+    {
+        $this->attributes['role'] = match ($value) {
+            'sorting_center' => 'logistics',
+            'courier' => 'rider',
+            default => $value,
+        };
+    }
+
     public function getAvatarUrlAttribute(): string
     {
         if ($this->avatar_path) {
@@ -198,8 +207,10 @@ class User extends Authenticatable implements MustVerifyEmail
     // --- Role checks ---
     public function isBuyer(): bool { return $this->role === 'buyer'; }
     public function isSeller(): bool { return $this->role === 'seller'; }
-    public function isCourier(): bool { return $this->role === 'courier'; }
-    public function isSortingCenter(): bool { return $this->role === 'sorting_center'; }
+    public function isRider(): bool { return $this->role === 'rider' || $this->role === 'courier'; }
+    public function isCourier(): bool { return $this->isRider(); }
+    public function isLogistics(): bool { return $this->role === 'logistics' || $this->role === 'sorting_center'; }
+    public function isSortingCenter(): bool { return $this->isLogistics(); }
     public function isAdmin(): bool { return $this->role === 'admin'; }
 
     public function address()
@@ -257,6 +268,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(CourierProfile::class);
     }
 
+    public function riderProfile()
+    {
+        return $this->hasOne(CourierProfile::class);
+    }
+
     public function sortingCenterProfile()
     {
         return $this->hasOne(SortingCenterProfile::class);
@@ -265,6 +281,31 @@ class User extends Authenticatable implements MustVerifyEmail
     public function logisticsProfile()
     {
         return $this->hasOne(LogisticsProfile::class);
+    }
+
+    public function hubs()
+    {
+        return $this->hasMany(Hub::class, 'logistics_company_id');
+    }
+
+    public function zones()
+    {
+        return $this->hasMany(Zone::class, 'logistics_company_id');
+    }
+
+    public function assignedZones()
+    {
+        return $this->belongsToMany(Zone::class, 'rider_zones', 'rider_id', 'zone_id')->withTimestamps();
+    }
+
+    public function sentTransfers()
+    {
+        return $this->hasMany(HubTransfer::class, 'sender_logistics_id');
+    }
+
+    public function receivedTransfers()
+    {
+        return $this->hasMany(HubTransfer::class, 'receiver_logistics_id');
     }
 
     public function products()
@@ -371,8 +412,8 @@ class User extends Authenticatable implements MustVerifyEmail
         return match ($this->role) {
             'buyer' => '/catalog',
             'seller' => '/seller/dashboard',
-            'sorting_center' => '/logistics/dashboard',
-            'courier' => '/courier/dashboard',
+            'logistics', 'sorting_center' => '/logistics/dashboard',
+            'rider', 'courier' => '/rider/dashboard',
             'admin' => '/admin/dashboard',
             default => '/',
         };
@@ -386,8 +427,8 @@ class User extends Authenticatable implements MustVerifyEmail
         return match ($this->role) {
             'buyer' => 'Buyer',
             'seller' => 'Seller',
-            'sorting_center' => 'Logistics / Sorting Center',
-            'courier' => 'Rider / Courier',
+            'logistics', 'sorting_center' => 'Logistics Partner',
+            'rider', 'courier' => 'Rider',
             'admin' => 'Administrator',
             default => 'User',
         };

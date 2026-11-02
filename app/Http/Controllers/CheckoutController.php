@@ -157,7 +157,7 @@ class CheckoutController extends Controller
             'barangay_name' => ['nullable', 'string'],
             'street' => ['nullable', 'string', 'max:255'],
             'postal_code' => ['nullable', 'string', 'max:10'],
-            'payment_method' => ['required', 'in:cod,ewallet,card'],
+            'payment_method' => ['nullable', 'string', 'in:cod'],
             'platform_voucher_id' => ['nullable', 'integer', 'exists:vouchers,id'],
             'shipping_voucher_id' => ['nullable', 'integer', 'exists:vouchers,id'],
             'store_voucher_id' => ['nullable', 'integer', 'exists:vouchers,id'],
@@ -339,11 +339,10 @@ class CheckoutController extends Controller
                 $storeTotalDiscount = round($storeDiscount + $storePlatformDiscount + $storeShippingDiscount, 2);
                 $storeTotal = max(0.00, round($storeSubtotal + $effectiveShippingFee - $storeDiscount - $storePlatformDiscount, 2));
 
-                // B9: Payment status and 1-hour expiration for unpaid gateway orders
-                $paymentMethod = $validated['payment_method'];
-                $isGateway = in_array($paymentMethod, ['card', 'ewallet'], true);
+                // Exclusive COD Payment Method: All orders pay cash upon delivery
+                $paymentMethod = 'cod';
                 $paymentStatus = 'unpaid';
-                $paymentExpiresAt = $isGateway ? now()->addMinutes(60) : null;
+                $paymentExpiresAt = null;
 
                 $order = Order::create([
                     'order_number' => 'NX-' . strtoupper(Str::random(10)),

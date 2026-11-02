@@ -108,6 +108,7 @@ class IncomingController extends Controller
 
         $extra = [
             'sorting_center_id' => $request->user()->id,
+            'current_custody_logistics_id' => $request->user()->id,
         ];
 
         if ($matchedArea && empty($order->delivery_area_id)) {

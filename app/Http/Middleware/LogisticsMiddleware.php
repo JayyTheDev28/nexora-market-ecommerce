@@ -19,8 +19,8 @@ class LogisticsMiddleware
             return redirect()->route('login');
         }
 
-        // Must be sorting_center (Logistics partner)
-        if (! $user->isSortingCenter()) {
+        // Must be logistics partner
+        if (! $user->isLogistics()) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Forbidden. Logistics partner access required.'], 403);
             }

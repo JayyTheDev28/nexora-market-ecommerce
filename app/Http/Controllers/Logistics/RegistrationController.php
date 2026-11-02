@@ -168,7 +168,7 @@ class RegistrationController extends Controller
                 'email' => $cleanEmail,
                 'contact_number' => $cleanPhone,
                 'password' => Hash::make($validated['password']),
-                'role' => 'sorting_center',
+                'role' => 'logistics',
                 'approval_status' => 'pending',
                 'account_status' => 'active',
                 'valid_id_path' => $idPath,

@@ -24,20 +24,20 @@ class DashboardController extends Controller
             'completedOrders' => Order::where('status', 'completed')->count(),
             'activeDisputes' => Dispute::whereIn('status', ['open', 'under_review'])->count(),
             'pendingApplications' => User::where('approval_status', 'pending')
-                ->whereIn('role', ['buyer', 'seller', 'sorting_center'])
+                ->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])
                 ->count(),
             'totalProducts' => Product::count(),
             'activeProducts' => Product::where('status', 'active')->count(),
             'totalBuyers' => User::where('role', 'buyer')->count(),
             'totalSellers' => User::where('role', 'seller')->count(),
-            'totalLogistics' => User::where('role', 'sorting_center')->count(),
-            'totalCouriers' => User::where('role', 'courier')->count(),
+            'totalLogistics' => User::whereIn('role', ['logistics', 'sorting_center'])->count(),
+            'totalCouriers' => User::whereIn('role', ['rider', 'courier'])->count(),
             'suspendedUsers' => User::where('account_status', 'suspended')->count(),
         ];
 
         $pendingApplications = User::where('approval_status', 'pending')
-            ->whereIn('role', ['buyer', 'seller', 'sorting_center'])
-            ->with(['sellerProfile', 'sortingCenterProfile'])
+            ->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])
+            ->with(['sellerProfile', 'sortingCenterProfile', 'logisticsProfile'])
             ->latest()
             ->limit(5)
             ->get();

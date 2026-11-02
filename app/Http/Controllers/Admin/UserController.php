@@ -22,10 +22,16 @@ class UserController extends Controller
         $approval = $request->query('approval');
         $search = $request->query('q');
 
-        $query = User::query()->with(['sellerProfile', 'sortingCenterProfile', 'courierProfile', 'address']);
+        $query = User::query()->with(['sellerProfile', 'sortingCenterProfile', 'logisticsProfile', 'courierProfile', 'address']);
 
         if ($role) {
-            $query->where('role', $role);
+            if ($role === 'sorting_center' || $role === 'logistics') {
+                $query->whereIn('role', ['logistics', 'sorting_center']);
+            } elseif ($role === 'courier' || $role === 'rider') {
+                $query->whereIn('role', ['rider', 'courier']);
+            } else {
+                $query->where('role', $role);
+            }
         }
 
         if ($status) {
@@ -56,8 +62,8 @@ class UserController extends Controller
             'deactivated' => User::where('account_status', 'deactivated')->count(),
             'buyers' => User::where('role', 'buyer')->count(),
             'sellers' => User::where('role', 'seller')->count(),
-            'sortingCenters' => User::where('role', 'sorting_center')->count(),
-            'couriers' => User::where('role', 'courier')->count(),
+            'sortingCenters' => User::whereIn('role', ['logistics', 'sorting_center'])->count(),
+            'couriers' => User::whereIn('role', ['rider', 'courier'])->count(),
         ];
 
         return view('admin.users.index', compact('users', 'role', 'status', 'approval', 'search', 'stats'));

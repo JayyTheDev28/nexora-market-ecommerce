@@ -75,11 +75,14 @@
                         </div>
 
                         <div class="mt-2.5 pt-2 border-t border-outline-variant/60">
-                            <div class="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider mb-1">Assigned Areas</div>
+                            <div class="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider mb-1">Assigned Zones</div>
                             <div class="flex flex-wrap gap-1">
-                                @forelse ($courier->deliveryAreas as $cArea)
-                                    <span class="inline-block px-2 py-0.5 rounded-md bg-secondary/10 text-secondary text-[10px] font-medium truncate max-w-[120px]" title="{{ $cArea->name }}">
-                                        {{ $cArea->name }}
+                                @php
+                                    $allZones = $courier->assignedZones->pluck('name')->merge($courier->deliveryAreas->pluck('name'))->unique();
+                                @endphp
+                                @forelse ($allZones as $zName)
+                                    <span class="inline-block px-2 py-0.5 rounded-md bg-secondary/10 text-secondary text-[10px] font-medium truncate max-w-[120px]" title="{{ $zName }}">
+                                        {{ $zName }}
                                     </span>
                                 @empty
                                     <span class="text-[10px] text-on-surface-variant/70 italic">No assigned zones</span>
@@ -296,10 +299,10 @@
                         <option value="">-- Choose Rider --</option>
                         @foreach ($couriers as $c)
                             @php
-                                $areaNames = $c->deliveryAreas->pluck('name')->implode(', ');
+                                $zoneNames = $c->assignedZones->pluck('name')->merge($c->deliveryAreas->pluck('name'))->unique()->filter()->implode(', ');
                             @endphp
                             <option value="{{ $c->id }}">
-                                {{ $c->full_name }} ({{ $c->workload_count }} active parcels) — Zones: {{ $areaNames ?: 'None' }}
+                                {{ $c->full_name }} ({{ $c->workload_count }} active parcels) — Zones: {{ $zoneNames ?: 'None' }}
                             </option>
                         @endforeach
                     </select>

@@ -65,7 +65,7 @@ class ReportController extends Controller
             ->get();
 
         // 3. Rider Performance table
-        $riderPerformance = User::where('role', 'courier')
+        $riderPerformance = User::whereIn('role', ['rider', 'courier'])
             ->where('approval_status', 'approved')
             ->with(['courierProfile'])
             ->withCount([

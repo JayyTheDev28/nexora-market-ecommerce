@@ -16,13 +16,16 @@ class ShipmentStateMachineService
     protected const VALID_TRANSITIONS = [
         'ready_for_pickup' => ['assigned', 'picked_up'],
         'assigned' => ['picked_up', 'ready_for_pickup'], // ready_for_pickup if unassigned/rider suspended
-        'picked_up' => ['at_hub', 'sorted'],
-        'at_hub' => ['sorted', 'assigned_to_rider', 'out_for_delivery'],
-        'sorted' => ['assigned_to_rider', 'out_for_delivery'],
-        'assigned_to_rider' => ['out_for_delivery', 'at_hub', 'sorted'],
+        'picked_up' => ['at_hub', 'sorted', 'at_sorting_center', 'received_at_hub'],
+        'at_hub' => ['sorted', 'assigned_to_rider', 'out_for_delivery', 'in_transit_hub', 'received_at_hub'],
+        'at_sorting_center' => ['sorted', 'assigned_to_rider', 'out_for_delivery', 'in_transit_hub', 'received_at_hub'],
+        'received_at_hub' => ['sorted', 'in_transit_hub', 'assigned_to_rider', 'out_for_delivery'],
+        'in_transit_hub' => ['received_at_hub', 'at_hub', 'at_sorting_center', 'sorted'],
+        'sorted' => ['assigned_to_rider', 'out_for_delivery', 'in_transit_hub'],
+        'assigned_to_rider' => ['out_for_delivery', 'at_hub', 'sorted', 'received_at_hub'],
         'out_for_delivery' => ['delivered', 'failed_delivery', 'delivery_failed'],
-        'failed_delivery' => ['out_for_delivery', 'return_to_sender'],
-        'delivery_failed' => ['out_for_delivery', 'return_to_sender'],
+        'failed_delivery' => ['out_for_delivery', 'return_to_sender', 'received_at_hub'],
+        'delivery_failed' => ['out_for_delivery', 'return_to_sender', 'received_at_hub'],
         'return_to_sender' => ['returned_to_sender'],
     ];
 

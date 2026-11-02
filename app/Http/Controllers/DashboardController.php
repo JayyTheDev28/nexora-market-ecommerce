@@ -88,7 +88,7 @@ class DashboardController extends Controller
             'assignedToRider' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'assigned_to_rider')->count(),
             'outForDelivery' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'out_for_delivery')->count(),
             'exceptionsCount' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['delivery_failed', 'returned'])->count(),
-            'pendingRiders' => User::where('role', 'courier')->where('approval_status', 'pending')->count(),
+            'pendingRiders' => User::whereIn('role', ['rider', 'courier'])->where('approval_status', 'pending')->count(),
         ];
 
         $pendingPickups = Order::where('status', 'ready_for_pickup')

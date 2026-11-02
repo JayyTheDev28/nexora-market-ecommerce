@@ -43,7 +43,6 @@
             @php
                 $tabItems = [
                     ['key' => 'all', 'label' => 'All Orders', 'count' => $counts['all']],
-                    ['key' => 'to_pay', 'label' => 'To Pay', 'count' => $counts['to_pay']],
                     ['key' => 'to_ship', 'label' => 'To Ship', 'count' => $counts['to_ship']],
                     ['key' => 'to_receive', 'label' => 'To Receive', 'count' => $counts['to_receive']],
                     ['key' => 'completed', 'label' => 'Completed', 'count' => $counts['completed']],
@@ -122,18 +121,6 @@
                             </div>
                         </div>
 
-                        {{-- 60-Minute Payment Countdown Banner (Rule B9) --}}
-                        @if($order->payment_status === 'unpaid' && in_array($order->payment_method, ['card', 'ewallet']) && $order->status !== 'cancelled' && $order->payment_expires_at)
-                            <div class="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex items-center justify-between text-xs text-amber-800">
-                                <div class="flex items-center gap-2">
-                                    <span class="material-symbols-outlined text-[18px]">timer</span>
-                                    <span><strong>Payment Window:</strong> Please complete your gateway payment. Orders unpaid within 60 minutes are automatically cancelled.</span>
-                                </div>
-                                <span class="font-mono font-bold text-amber-900">
-                                    Expires {{ $order->payment_expires_at->diffForHumans() }}
-                                </span>
-                            </div>
-                        @endif
 
                         {{-- Delivery OTP Security Banner (Rule R5) --}}
                         @if($order->status === 'out_for_delivery')

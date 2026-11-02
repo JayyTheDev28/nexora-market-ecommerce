@@ -17,6 +17,8 @@
 
     $pendingRidersCount = \App\Models\User::where('role', 'courier')->where('approval_status', 'pending')->count();
 
+    $incomingTransfersCount = \App\Models\HubTransfer::where('receiver_logistics_id', $user->id)->where('status', 'in_transit')->count();
+
     $sections = [
         [
             'title' => null,
@@ -28,6 +30,7 @@
         [
             'title' => 'DAILY OPERATIONS',
             'items' => [
+                'transfers' => ['label' => 'Hub transfers', 'icon' => 'sync_alt', 'url' => route('logistics.transfers.index'), 'badge' => $incomingTransfersCount ?: null, 'badgeColor' => 'bg-indigo-600 text-white'],
                 'sorting' => ['label' => 'Parcel sorting', 'icon' => 'hub', 'url' => route('logistics.sorting.index'), 'badge' => null],
                 'assignments' => ['label' => 'Assign deliveries', 'icon' => 'assignment_ind', 'url' => route('logistics.assignments.index'), 'badge' => null],
                 'deliveries' => ['label' => 'Delivery tracking', 'icon' => 'local_shipping', 'url' => route('logistics.deliveries.index'), 'badge' => null],
@@ -35,9 +38,16 @@
             ],
         ],
         [
+            'title' => 'LOGISTICS NETWORK',
+            'items' => [
+                'hubs' => ['label' => 'Sorting hubs', 'icon' => 'warehouse', 'url' => route('logistics.hubs.index'), 'badge' => null],
+                'zones' => ['label' => 'Coverage zones', 'icon' => 'share_location', 'url' => route('logistics.zones.index'), 'badge' => null],
+                'riders' => ['label' => 'Rider fleet', 'icon' => 'two_wheeler', 'url' => route('logistics.riders.index'), 'badge' => $pendingRidersCount ?: null, 'badgeColor' => 'bg-amber-600 text-white'],
+            ],
+        ],
+        [
             'title' => 'MORE TOOLS',
             'items' => [
-                'riders' => ['label' => 'Rider fleet', 'icon' => 'two_wheeler', 'url' => route('logistics.riders.index'), 'badge' => $pendingRidersCount ?: null, 'badgeColor' => 'bg-amber-600 text-white'],
                 'remittances' => ['label' => 'COD remittances', 'icon' => 'account_balance_wallet', 'url' => route('logistics.remittances.index'), 'badge' => null],
                 'reports' => ['label' => 'Activity log', 'icon' => 'bar_chart', 'url' => route('logistics.reports.index'), 'badge' => null],
                 'account' => ['label' => 'Facility settings', 'icon' => 'settings', 'url' => route('logistics.account.show'), 'badge' => null],

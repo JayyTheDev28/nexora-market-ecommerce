@@ -46,23 +46,28 @@ class JobDispatchService
             ->pluck('courier_id')
             ->all();
 
-        // Find eligible riders
-        $candidate = User::query()
-            ->where('role', 'courier')
-            ->where('approval_status', 'approved')
-            ->where('account_status', 'active')
-            ->whereHas('courierProfile', function ($query) use ($order) {
-                $query->where('is_online', true);
-                if ($order->sorting_center_id) {
-                    $query->where('sorting_center_id', $order->sorting_center_id);
-                }
-            })
-            ->whereNotIn('id', $alreadyOfferedRiderIds)
-            ->with('courierProfile')
-            ->get()
-            ->first(function (User $rider) {
-                return $rider->courierProfile && $rider->courierProfile->activeJobsCount() < 3;
-            });
+        // Find eligible riders using multi-region hierarchical matching
+        $companyId = ($type === 'pickup')
+            ? ($order->pickup_logistics_id ?? $order->sorting_center_id)
+            : ($order->delivery_logistics_id ?? $order->sorting_center_id);
+
+        if (! $companyId) {
+            $companyId = $order->sorting_center_id;
+        }
+
+        $address = ($type === 'pickup') ? $order->seller_address : $order->address;
+        $barangayCode = $address?->barangay_code;
+        $cityCode = $address?->municipality_code;
+        $provinceCode = $address?->province_code;
+
+        $interRegionService = app(InterRegionLogisticsService::class);
+        $candidate = $interRegionService->findBestEligibleRider(
+            (int) $companyId,
+            $barangayCode,
+            $cityCode,
+            $provinceCode,
+            $alreadyOfferedRiderIds
+        );
 
         if (! $candidate) {
             // No eligible online rider found right now
@@ -123,6 +128,7 @@ class JobDispatchService
         if ($offer->type === 'pickup') {
             $order->update([
                 'pickup_courier_id' => $courier->id,
+                'pickup_rider_id' => $courier->id,
                 'status' => 'assigned',
             ]);
             $statusText = 'assigned';
@@ -130,6 +136,7 @@ class JobDispatchService
         } else {
             $order->update([
                 'delivery_courier_id' => $courier->id,
+                'delivery_rider_id' => $courier->id,
                 'status' => 'assigned_to_rider',
             ]);
             $statusText = 'assigned_to_rider';

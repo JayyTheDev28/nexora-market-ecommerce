@@ -19,7 +19,7 @@ class ApplicationController extends Controller
         $search = $request->query('q');
 
         $query = User::query()
-            ->whereIn('role', ['buyer', 'seller', 'sorting_center'])
+            ->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])
             ->with(['sellerProfile', 'sortingCenterProfile', 'logisticsProfile']);
 
         if ($status !== 'all') {
@@ -27,7 +27,11 @@ class ApplicationController extends Controller
         }
 
         if ($role) {
-            $query->where('role', $role);
+            if ($role === 'sorting_center' || $role === 'logistics') {
+                $query->whereIn('role', ['logistics', 'sorting_center']);
+            } else {
+                $query->where('role', $role);
+            }
         }
 
         if ($search) {
@@ -47,9 +51,9 @@ class ApplicationController extends Controller
         $applications = $query->latest()->paginate(15)->withQueryString();
 
         $counts = [
-            'pending' => User::where('approval_status', 'pending')->whereIn('role', ['buyer', 'seller', 'sorting_center'])->count(),
-            'approved' => User::where('approval_status', 'approved')->whereIn('role', ['buyer', 'seller', 'sorting_center'])->count(),
-            'disapproved' => User::where('approval_status', 'disapproved')->whereIn('role', ['buyer', 'seller', 'sorting_center'])->count(),
+            'pending' => User::where('approval_status', 'pending')->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])->count(),
+            'approved' => User::where('approval_status', 'approved')->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])->count(),
+            'disapproved' => User::where('approval_status', 'disapproved')->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])->count(),
         ];
 
         return view('admin.applications.index', compact('applications', 'status', 'role', 'search', 'counts'));

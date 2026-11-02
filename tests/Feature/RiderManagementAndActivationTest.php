@@ -166,7 +166,7 @@ class RiderManagementAndActivationTest extends TestCase
 
         $rider = User::where('email', 'danilo.reyes@example.com')->first();
         $this->assertNotNull($rider);
-        $this->assertEquals('courier', $rider->role);
+        $this->assertEquals('rider', $rider->role);
         $this->assertEquals('pending_activation', $rider->account_status);
         $this->assertEquals('approved', $rider->approval_status);
         $this->assertNull($rider->email_verified_at);
@@ -355,21 +355,21 @@ class RiderManagementAndActivationTest extends TestCase
         // Rider blocked from buyer dashboard / account
         $this->actingAs($rider)
             ->get('/buyer/dashboard')
-            ->assertRedirect('/courier/dashboard');
+            ->assertRedirect('/rider/dashboard');
 
         // Rider blocked from seller dashboard
         $this->actingAs($rider)
             ->get('/seller/dashboard')
-            ->assertRedirect('/courier/dashboard');
+            ->assertRedirect('/rider/dashboard');
 
         // Rider blocked from admin dashboard
         $this->actingAs($rider)
             ->get('/admin/dashboard')
-            ->assertRedirect('/courier/dashboard');
+            ->assertRedirect('/rider/dashboard');
 
         // Rider blocked from logistics dashboard
         $this->actingAs($rider)
             ->get('/logistics/dashboard')
-            ->assertRedirect('/courier/dashboard');
+            ->assertRedirect('/rider/dashboard');
     }
 }

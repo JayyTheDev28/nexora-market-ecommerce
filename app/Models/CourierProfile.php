@@ -9,6 +9,7 @@ class CourierProfile extends Model
     protected $fillable = [
         'user_id',
         'sorting_center_id',
+        'logistics_company_id',
         'is_online',
         'earnings_balance',
         'unremitted_cod_balance',
@@ -69,5 +70,10 @@ class CourierProfile extends Model
     public function sortingCenter()
     {
         return $this->belongsTo(User::class, 'sorting_center_id');
+    }
+
+    public function logisticsCompany()
+    {
+        return $this->belongsTo(User::class, 'logistics_company_id');
     }
 }

@@ -74,7 +74,7 @@ class SettingController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'body' => ['required', 'string', 'max:5000'],
             'target_roles' => ['nullable', 'array'],
-            'target_roles.*' => ['string', 'in:buyer,seller,sorting_center,courier'],
+            'target_roles.*' => ['string', 'in:buyer,seller,sorting_center,courier,logistics,rider'],
             'published_at' => ['nullable', 'date'],
         ]);
 
@@ -103,7 +103,7 @@ class SettingController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'body' => ['required', 'string', 'max:5000'],
             'target_roles' => ['nullable', 'array'],
-            'target_roles.*' => ['string', 'in:buyer,seller,sorting_center,courier'],
+            'target_roles.*' => ['string', 'in:buyer,seller,sorting_center,courier,logistics,rider'],
             'published_at' => ['nullable', 'date'],
         ]);
 

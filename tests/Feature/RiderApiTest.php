@@ -114,7 +114,7 @@ class RiderApiTest extends TestCase
         ]);
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('user.role', 'courier');
+            ->assertJsonPath('user.role', 'rider');
     }
 
     public function test_api_rider_profile_and_availability_toggle(): void

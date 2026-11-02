@@ -503,10 +503,23 @@ class BuyerSubsystemsTest extends TestCase
             'selected' => true,
         ]);
 
-        // Place Order via Gateway Payment (Card)
-        $resCheckout = $this->post(route('checkout.store'), [
+        // Attempting to checkout with non-COD payment methods (card/ewallet) must be rejected
+        $resInvalidCard = $this->post(route('checkout.store'), [
             'address_id' => $address->id,
             'payment_method' => 'card',
+        ]);
+        $resInvalidCard->assertSessionHasErrors(['payment_method']);
+
+        $resInvalidEwallet = $this->post(route('checkout.store'), [
+            'address_id' => $address->id,
+            'payment_method' => 'ewallet',
+        ]);
+        $resInvalidEwallet->assertSessionHasErrors(['payment_method']);
+
+        // Place Order via Exclusive COD Payment
+        $resCheckout = $this->post(route('checkout.store'), [
+            'address_id' => $address->id,
+            'payment_method' => 'cod',
         ]);
         $resCheckout->assertRedirect(route('buyer.orders'));
 
@@ -530,9 +543,10 @@ class BuyerSubsystemsTest extends TestCase
         $this->assertEquals(1.00, (float) $order2->shipping_weight);
         $this->assertEquals(50.00, (float) $order2->shipping_fee);
 
-        // Gateway 60-minute payment countdown
+        // Exclusive COD: unpaid until rider delivery, no gateway expiration timer
+        $this->assertEquals('cod', $order1->payment_method);
         $this->assertEquals('unpaid', $order1->payment_status);
-        $this->assertNotNull($order1->payment_expires_at);
+        $this->assertNull($order1->payment_expires_at);
 
         // Immutable address snapshot
         $this->assertNotNull($order1->address_snapshot);

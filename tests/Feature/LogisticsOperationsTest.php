@@ -477,7 +477,7 @@ class LogisticsOperationsTest extends TestCase
 
         $this->sortingCenter->refresh();
         $this->assertEquals('UpdatedManager', $this->sortingCenter->first_name);
-        $this->assertEquals('sorting_center', $this->sortingCenter->role); // Role remains protected
+        $this->assertEquals('logistics', $this->sortingCenter->role); // Role remains protected
         $this->assertEquals('Nexora Hub Updated Laguna', $this->sortingCenter->sortingCenterProfile->business_name);
     }
 }

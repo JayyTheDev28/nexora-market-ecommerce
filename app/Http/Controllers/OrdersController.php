@@ -33,17 +33,11 @@ class OrdersController extends Controller
             ->with(['items.product', 'seller.sellerProfile', 'dispute', 'review', 'statusHistory'])
             ->latest('placed_at');
 
-        // Apply Tab Filter (Rule B10)
+        // Apply Tab Filter (Rule B10 - System is exclusively COD)
         match ($activeTab) {
-            'to_pay' => $query->where('payment_status', 'unpaid')
-                ->whereIn('payment_method', ['card', 'ewallet'])
-                ->where('status', '!=', 'cancelled'),
+            'to_pay' => $query->whereRaw('1 = 0'),
 
-            'to_ship' => $query->whereIn('status', ['placed', 'confirmed', 'preparing'])
-                ->where(function ($q) {
-                    $q->where('payment_method', 'cod')
-                      ->orWhere('payment_status', 'paid');
-                }),
+            'to_ship' => $query->whereIn('status', ['placed', 'confirmed', 'preparing']),
 
             'to_receive' => $query->whereIn('status', [
                 'ready_for_pickup',
@@ -72,13 +66,8 @@ class OrdersController extends Controller
         $allOrders = $user->orders()->get();
         $counts = [
             'all' => $allOrders->count(),
-            'to_pay' => $allOrders->where('payment_status', 'unpaid')
-                ->whereIn('payment_method', ['card', 'ewallet'])
-                ->where('status', '!=', 'cancelled')
-                ->count(),
-            'to_ship' => $allOrders->whereIn('status', ['placed', 'confirmed', 'preparing'])
-                ->filter(fn ($o) => $o->payment_method === 'cod' || $o->payment_status === 'paid')
-                ->count(),
+            'to_pay' => 0,
+            'to_ship' => $allOrders->whereIn('status', ['placed', 'confirmed', 'preparing'])->count(),
             'to_receive' => $allOrders->whereIn('status', [
                 'ready_for_pickup',
                 'picked_up',

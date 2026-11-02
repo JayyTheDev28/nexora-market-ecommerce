@@ -106,7 +106,7 @@
                     All product prices are stated in Philippine Pesos (₱/PHP) and include statutory taxes where applicable.
                 </p>
                 <ul class="list-disc list-inside space-y-1.5 ml-2">
-                    <li><strong>Payment Methods:</strong> Nexora supports Cash on Delivery (COD), e-wallets (GCash, Maya), and Credit/Debit cards (Visa, Mastercard).</li>
+                    <li><strong>Payment Methods:</strong> Nexora Market operates exclusively on Cash on Delivery (COD). Buyers pay in cash directly to the delivery rider upon physical arrival and inspection of the parcel.</li>
                     <li><strong>Marketplace Commission:</strong> The Platform automatically deducts a standard <strong>2.5% marketplace commission</strong> on confirmed orders to maintain operations, secure infrastructure, and logistics coordination.</li>
                 </ul>
             </section>

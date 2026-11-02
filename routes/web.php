@@ -197,8 +197,29 @@ Route::prefix('logistics')->name('logistics.')->group(function () {
     });
 });
 
-Route::middleware(['role:sorting_center', 'logistics'])->prefix('logistics')->name('logistics.')->group(function () {
+Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logistics')->name('logistics.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'logistics'])->name('dashboard');
+
+    // Hubs Management (Physical locations owned by company)
+    Route::get('/hubs', [Logistics\HubController::class, 'index'])->name('hubs.index');
+    Route::get('/hubs/create', [Logistics\HubController::class, 'create'])->name('hubs.create');
+    Route::post('/hubs', [Logistics\HubController::class, 'store'])->name('hubs.store');
+    Route::get('/hubs/{hub}/edit', [Logistics\HubController::class, 'edit'])->name('hubs.edit');
+    Route::put('/hubs/{hub}', [Logistics\HubController::class, 'update'])->name('hubs.update');
+    Route::post('/hubs/{hub}/toggle-status', [Logistics\HubController::class, 'toggleStatus'])->name('hubs.toggle-status');
+
+    // Zones Management (Barangay coverage groups)
+    Route::get('/zones', [Logistics\ZoneController::class, 'index'])->name('zones.index');
+    Route::get('/zones/create', [Logistics\ZoneController::class, 'create'])->name('zones.create');
+    Route::post('/zones', [Logistics\ZoneController::class, 'store'])->name('zones.store');
+    Route::get('/zones/{zone}/edit', [Logistics\ZoneController::class, 'edit'])->name('zones.edit');
+    Route::put('/zones/{zone}', [Logistics\ZoneController::class, 'update'])->name('zones.update');
+    Route::delete('/zones/{zone}', [Logistics\ZoneController::class, 'destroy'])->name('zones.destroy');
+
+    // Inter-Hub Transfers
+    Route::get('/transfers', [Logistics\TransferController::class, 'index'])->name('transfers.index');
+    Route::post('/transfers/{order}/dispatch', [Logistics\TransferController::class, 'dispatch'])->name('transfers.dispatch');
+    Route::post('/transfers/{transfer}/confirm-receipt', [Logistics\TransferController::class, 'confirmReceipt'])->name('transfers.confirm-receipt');
 
     // Rider Management
     Route::get('/riders', [Logistics\RiderController::class, 'index'])->name('riders.index');
@@ -306,7 +327,22 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::post('/account/password', [\App\Http\Controllers\Admin\AccountController::class, 'updatePassword'])->name('account.password');
 });
 
-Route::middleware('role:courier')->prefix('courier')->name('courier.')->group(function () {
+Route::middleware('role:rider,courier')->prefix('rider')->name('rider.')->group(function () {
+    Route::get('/dashboard', [Courier\DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/toggle-online', [Courier\DashboardController::class, 'toggleOnline'])->name('toggle-online');
+    Route::post('/vehicle/update', [Courier\DashboardController::class, 'updateVehicle'])->name('vehicle.update');
+    Route::post('/offers/{offer}/accept', [Courier\DashboardController::class, 'acceptOffer'])->name('offers.accept');
+    Route::post('/offers/{offer}/decline', [Courier\DashboardController::class, 'declineOffer'])->name('offers.decline');
+    Route::post('/pickup/confirm', [Courier\DashboardController::class, 'confirmPickup'])->name('pickup.confirm');
+    Route::post('/deliveries/{order}/complete', [Courier\DashboardController::class, 'completeDelivery'])->name('deliveries.complete');
+    Route::post('/deliveries/{order}/fail', [Courier\DashboardController::class, 'failDelivery'])->name('deliveries.fail');
+    Route::get('/earnings', [Courier\DashboardController::class, 'earnings'])->name('earnings');
+    Route::post('/remittance/submit', [Courier\DashboardController::class, 'submitRemittance'])->name('remittance.submit');
+    Route::post('/deliveries/{order}/status', [Courier\DashboardController::class, 'updateStatus'])->name('deliveries.update-status');
+});
+
+// Backward compatibility alias for courier prefix and named routes
+Route::middleware('role:rider,courier')->prefix('courier')->name('courier.')->group(function () {
     Route::get('/dashboard', [Courier\DashboardController::class, 'index'])->name('dashboard');
     Route::post('/toggle-online', [Courier\DashboardController::class, 'toggleOnline'])->name('toggle-online');
     Route::post('/vehicle/update', [Courier\DashboardController::class, 'updateVehicle'])->name('vehicle.update');
@@ -329,6 +365,11 @@ Route::middleware('role:courier')->prefix('courier')->name('courier.')->group(fu
 | active) since they're tied to a real account in the database — not
 | fully public localStorage state anymore.
 */
+// Official PSGC Location Endpoints
+Route::get('/locations/provinces', [\App\Http\Controllers\Api\LocationApiController::class, 'provinces'])->name('locations.provinces');
+Route::get('/locations/provinces/{provinceCode}/cities', [\App\Http\Controllers\Api\LocationApiController::class, 'cities'])->name('locations.cities');
+Route::get('/locations/cities/{cityCode}/barangays', [\App\Http\Controllers\Api\LocationApiController::class, 'barangays'])->name('locations.barangays');
+
 Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
 Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
 Route::get('/stores/{seller}', [StoreController::class, 'show'])->name('stores.show');

@@ -78,7 +78,7 @@ class MonitoringController extends Controller
             'all' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed', 'delivery_failed', 'returned'])->count(),
         ];
 
-        $couriers = User::where('role', 'courier')
+        $couriers = User::whereIn('role', ['rider', 'courier'])
             ->where('approval_status', 'approved')
             ->orderBy('first_name')
             ->get();

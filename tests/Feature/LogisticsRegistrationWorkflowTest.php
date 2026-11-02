@@ -173,10 +173,10 @@ class LogisticsRegistrationWorkflowTest extends TestCase
             'status' => 'unverified',
         ]);
 
-        // User created with role sorting_center
+        // User created with role logistics
         $this->assertDatabaseHas('users', [
             'email' => 'partner@express.ph',
-            'role' => 'sorting_center',
+            'role' => 'logistics',
             'approval_status' => 'pending',
         ]);
 

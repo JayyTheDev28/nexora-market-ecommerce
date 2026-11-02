@@ -22,13 +22,26 @@ class Address extends Model
         'recipient_phone',
         'postal_code',
         'is_default',
+        'needs_manual_review',
+        'manual_review_reason',
     ];
 
     protected function casts(): array
     {
         return [
             'is_default' => 'boolean',
+            'needs_manual_review' => 'boolean',
         ];
+    }
+
+    public function getCityCodeAttribute(): ?string
+    {
+        return $this->municipality_code;
+    }
+
+    public function getCityNameAttribute(): ?string
+    {
+        return $this->municipality_name;
     }
 
     public function user()

@@ -29,9 +29,9 @@ class RiderController extends Controller
         $tab = $request->query('tab', 'active');
         $search = $request->query('q');
 
-        // Tenant isolation: Only couriers belonging to this sorting center
-        $query = User::where('role', 'courier')
-            ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId))
+        // Tenant isolation: Only riders belonging to this logistics company
+        $query = User::whereIn('role', ['rider', 'courier'])
+            ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))
             ->with(['courierProfile', 'address', 'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId)])
             ->withCount([
                 'activeDeliveries as active_deliveries_count',
@@ -59,8 +59,8 @@ class RiderController extends Controller
 
         $riders = $query->latest()->paginate(15)->withQueryString();
 
-        $baseCount = fn () => User::where('role', 'courier')
-            ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId));
+        $baseCount = fn () => User::whereIn('role', ['rider', 'courier'])
+            ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId));
 
         $counts = [
             'pending_activation' => (clone $baseCount())->where('account_status', 'pending_activation')->count(),
@@ -138,7 +138,7 @@ class RiderController extends Controller
                 'email' => strtolower(trim($validated['email'])),
                 'contact_number' => trim($validated['contact_number']),
                 'password' => Hash::make(Str::random(32)),
-                'role' => 'courier',
+                'role' => 'rider',
                 'approval_status' => 'approved',
                 'account_status' => 'pending_activation',
                 'email_verified_at' => null,
@@ -150,6 +150,7 @@ class RiderController extends Controller
             CourierProfile::create([
                 'user_id' => $user->id,
                 'sorting_center_id' => $request->user()->id,
+                'logistics_company_id' => $request->user()->id,
                 'vehicle_type' => $validated['vehicle_type'],
                 'plate_number' => strtoupper(trim($validated['plate_number'])),
                 'license_number' => strtoupper(trim($validated['license_number'])),

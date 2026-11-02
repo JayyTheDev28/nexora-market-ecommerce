@@ -46,8 +46,8 @@ class RiderApiController extends Controller
             return response()->json(['error' => 'Invalid email or password.'], 401);
         }
 
-        if (! $user->isCourier()) {
-            return response()->json(['error' => 'Access denied. Account is not a registered courier.'], 403);
+        if (! $user->isRider()) {
+            return response()->json(['error' => 'Access denied. Account is not a registered rider.'], 403);
         }
 
         if ($user->account_status === 'pending_activation') {

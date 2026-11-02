@@ -39,7 +39,7 @@
                 </div>
                 <div>
                     <h5 class="font-headline-sm text-xs font-bold text-on-surface">Cash on Delivery</h5>
-                    <p class="font-body-sm text-[11px] text-on-surface-variant">COD, GCash, Maya & Cards</p>
+                    <p class="font-body-sm text-[11px] text-on-surface-variant">Pay safely in cash upon arrival</p>
                 </div>
             </div>
         </div>
@@ -101,13 +101,10 @@
 
             {{-- Payments & Security --}}
             <div class="col-span-2 md:col-span-1 flex flex-col gap-3">
-                <h4 class="font-label-md text-xs font-bold text-on-surface uppercase tracking-wider">Payment Methods</h4>
+                <h4 class="font-label-md text-xs font-bold text-on-surface uppercase tracking-wider">Payment Method</h4>
                 <div class="flex flex-wrap gap-1.5">
-                    <span class="px-2.5 py-1 rounded-lg bg-surface-container border border-outline-variant/60 text-[10px] font-bold text-on-surface">Cash on Delivery</span>
-                    <span class="px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary">GCash</span>
-                    <span class="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-700">Maya</span>
-                    <span class="px-2.5 py-1 rounded-lg bg-surface-container border border-outline-variant/60 text-[10px] font-bold text-on-surface">Visa</span>
-                    <span class="px-2.5 py-1 rounded-lg bg-surface-container border border-outline-variant/60 text-[10px] font-bold text-on-surface">Mastercard</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary">Cash on Delivery (COD)</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-surface-container border border-outline-variant/60 text-[10px] font-medium text-on-surface">Pay Upon Arrival</span>
                 </div>
 
                 <h4 class="font-label-md text-xs font-bold text-on-surface uppercase tracking-wider mt-2">Logistics</h4>

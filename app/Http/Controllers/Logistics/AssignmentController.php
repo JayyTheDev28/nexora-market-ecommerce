@@ -61,11 +61,12 @@ class AssignmentController extends Controller
             'all' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['sorted', 'assigned_to_rider', 'out_for_delivery'])->count(),
         ];
 
-        // Active and approved couriers with their workload and assigned areas
-        $couriers = User::where('role', 'courier')
+        // Active and approved riders with their workload and assigned areas/zones
+        $couriers = User::whereIn('role', ['rider', 'courier'])
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
-            ->with(['courierProfile', 'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId)])
+            ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))
+            ->with(['courierProfile', 'assignedZones.barangays', 'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId)])
             ->withCount([
                 'activeDeliveries as workload_count',
             ])
@@ -76,7 +77,10 @@ class AssignmentController extends Controller
             ->with('courier')
             ->get();
 
-        return view('logistics.assignments.index', compact('parcels', 'counts', 'tab', 'couriers', 'deliveryAreas', 'areaFilter', 'search'));
+        $zones = \App\Models\Zone::where('logistics_company_id', $sortingCenterId)->with('barangays')->get();
+        $hubs = \App\Models\Hub::where('logistics_company_id', $sortingCenterId)->get();
+
+        return view('logistics.assignments.index', compact('parcels', 'counts', 'tab', 'couriers', 'deliveryAreas', 'zones', 'hubs', 'areaFilter', 'search'));
     }
 
     /**
@@ -103,7 +107,7 @@ class AssignmentController extends Controller
             );
 
             $courier = User::where('id', $validated['courier_id'])
-                ->where('role', 'courier')
+                ->whereIn('role', ['rider', 'courier'])
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -111,12 +115,15 @@ class AssignmentController extends Controller
             abort_unless($courier->isApproved(), 422, 'Cannot assign parcel to an unapproved courier.');
             abort_unless($courier->isActive(), 422, 'Cannot assign parcel to a deactivated courier.');
 
-            // Verify area eligibility
-            $coversArea = $courier->deliveryAreas()->where('delivery_areas.id', $lockedOrder->delivery_area_id)->exists();
+            // Verify area or zone coverage eligibility
+            $coversZone = $courier->assignedZones()
+                ->whereHas('barangays', fn ($b) => $b->where('barangay_code', $lockedOrder->address?->barangay_code))
+                ->exists();
+            $coversArea = $coversZone || $courier->deliveryAreas()->where('delivery_areas.id', $lockedOrder->delivery_area_id)->exists();
 
             if (! $coversArea && empty($validated['override_reason'])) {
                 return back()->withInput()->withErrors([
-                    'override_reason' => "Courier {$courier->full_name} is not assigned to this parcel's delivery area. An override reason is required.",
+                    'override_reason' => "Rider {$courier->full_name} is not assigned to this parcel's zone/delivery area. An override reason is required.",
                 ]);
             }
 
@@ -124,7 +131,7 @@ class AssignmentController extends Controller
 
             $note = "Assigned for delivery to rider: {$courier->full_name} ({$courier->contact_number}).";
             if (! $coversArea) {
-                $note .= " [Area Override: {$validated['override_reason']}]";
+                $note .= " [Coverage Override: {$validated['override_reason']}]";
             }
             if ($isReassignment) {
                 $note .= " (Reassigned from previous courier)";
@@ -140,7 +147,9 @@ class AssignmentController extends Controller
                 note: $note,
                 extraAttributes: [
                     'delivery_courier_id' => $courier->id,
+                    'delivery_rider_id' => $courier->id,
                     'sorting_center_id' => $sortingCenterId,
+                    'delivery_logistics_id' => $sortingCenterId,
                 ]
             );
 

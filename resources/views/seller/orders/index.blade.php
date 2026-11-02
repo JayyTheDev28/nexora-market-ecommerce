@@ -99,11 +99,7 @@
                                 <span class="text-xs text-on-surface-variant font-medium">{{ $order->placed_at->format('M j, Y H:i') }}</span>
                                 <span class="text-xs text-on-surface-variant">•</span>
                                 <span class="text-xs text-on-surface font-semibold">{{ $order->buyer->full_name }}</span>
-                                @if($order->payment_method === 'cod')
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">COD</span>
-                                @else
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Prepaid ({{ strtoupper($order->payment_method) }})</span>
-                                @endif
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">COD</span>
                             </div>
                             <div>
                                 <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
