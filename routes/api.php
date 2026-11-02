@@ -131,5 +131,21 @@ Route::prefix('mobile/v1')->group(function () {
         Route::post('/chat/start', [\App\Http\Controllers\Api\Mobile\Buyer\ChatController::class, 'startWithSeller'])->name('api.mobile.buyer.chat.start');
         Route::post('/chat/{conversation}/message', [\App\Http\Controllers\Api\Mobile\Buyer\ChatController::class, 'sendMessage'])->name('api.mobile.buyer.chat.message');
     });
+
+    // Protected rider routes
+    Route::middleware(['auth:sanctum', 'role:rider,courier'])->prefix('rider')->group(function () {
+        Route::get('/profile', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'profile'])->name('api.mobile.rider.profile');
+        Route::post('/availability', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'toggleAvailability'])->name('api.mobile.rider.availability');
+        Route::get('/offers', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'offers'])->name('api.mobile.rider.offers');
+        Route::post('/offers/{offer}/accept', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'acceptOffer'])->name('api.mobile.rider.offers.accept');
+        Route::post('/offers/{offer}/decline', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'declineOffer'])->name('api.mobile.rider.offers.decline');
+        Route::post('/pickup', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'confirmPickup'])->name('api.mobile.rider.pickup');
+        Route::get('/deliveries/active', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'activeDeliveries'])->name('api.mobile.rider.deliveries.active');
+        Route::get('/deliveries/history', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'deliveryHistory'])->name('api.mobile.rider.deliveries.history');
+        Route::post('/deliveries/{order}/complete', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'completeDelivery'])->name('api.mobile.rider.deliveries.complete');
+        Route::post('/deliveries/{order}/fail', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'failDelivery'])->name('api.mobile.rider.deliveries.fail');
+        Route::get('/earnings', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'earnings'])->name('api.mobile.rider.earnings');
+        Route::post('/remittance', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'submitRemittance'])->name('api.mobile.rider.remittance');
+    });
 });
 
