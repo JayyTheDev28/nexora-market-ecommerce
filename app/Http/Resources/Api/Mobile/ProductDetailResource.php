@@ -53,16 +53,26 @@ class ProductDetailResource extends JsonResource
             $isFollowingStore = StoreFollow::where('user_id', $user->id)->where('seller_id', $this->seller_id)->exists();
         }
 
-        $gallery = $this->gallery ?: [];
+        $toAbsoluteUrl = function (?string $path, string $fallbackName): string {
+            if (empty($path)) {
+                return 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($fallbackName);
+            }
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+                return $path;
+            }
+            return url(\Illuminate\Support\Facades\Storage::url($path));
+        };
+
+        $rawGallery = $this->gallery ?: [];
         if (! empty($this->variants_data) && is_array($this->variants_data)) {
             foreach ($this->variants_data as $v) {
-                if (! empty($v['image']) && ! in_array($v['image'], $gallery, true)) {
-                    $gallery[] = $v['image'];
+                if (! empty($v['image']) && ! in_array($v['image'], $rawGallery, true)) {
+                    $rawGallery[] = $v['image'];
                 }
             }
         }
-
-        $mainImage = !empty($gallery[0]) ? $gallery[0] : 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($this->name);
+        $gallery = array_map(fn ($img) => $toAbsoluteUrl($img, $this->name), $rawGallery);
+        $mainImage = !empty($gallery[0]) ? $gallery[0] : $toAbsoluteUrl(null, $this->name);
 
         return [
             'id' => $this->id,

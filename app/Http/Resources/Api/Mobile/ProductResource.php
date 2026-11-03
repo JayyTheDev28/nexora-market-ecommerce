@@ -11,7 +11,20 @@ class ProductResource extends JsonResource
     {
         $seller = $this->seller;
         $sellerName = $seller?->sellerProfile?->business_name ?? $seller?->full_name ?? 'Seller';
-        $mainImage = !empty($this->gallery[0]) ? $this->gallery[0] : 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($this->name);
+
+        $toAbsoluteUrl = function (?string $path, string $fallbackName): string {
+            if (empty($path)) {
+                return 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($fallbackName);
+            }
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+                return $path;
+            }
+            return url(\Illuminate\Support\Facades\Storage::url($path));
+        };
+
+        $rawGallery = !empty($this->gallery) && is_array($this->gallery) ? $this->gallery : [];
+        $gallery = array_map(fn ($img) => $toAbsoluteUrl($img, $this->name), $rawGallery);
+        $mainImage = !empty($gallery[0]) ? $gallery[0] : $toAbsoluteUrl(null, $this->name);
 
         return [
             'id' => $this->id,

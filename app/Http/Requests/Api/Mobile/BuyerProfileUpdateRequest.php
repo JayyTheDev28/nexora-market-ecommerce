@@ -19,8 +19,8 @@ class BuyerProfileUpdateRequest extends FormRequest
             'first_name' => ['required', 'string', 'min:2', 'max:50', 'regex:/^[a-zA-Z\s\-]+$/'],
             'last_name' => ['required', 'string', 'min:2', 'max:50', 'regex:/^[a-zA-Z\s\-]+$/'],
             'middle_initial' => ['nullable', 'string', 'max:10', 'regex:/^[a-zA-Z]+$/'],
-            'sex' => ['required', 'in:male,female,other'],
-            'birthday' => ['required', 'date', 'before:today'],
+            'sex' => ['sometimes', 'required', 'in:male,female,other'],
+            'birthday' => ['sometimes', 'required', 'date', 'before:today'],
             'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
         ];
     }

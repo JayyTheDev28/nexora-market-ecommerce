@@ -46,7 +46,9 @@ class AccountController extends Controller
     {
         $user = $request->user();
         $validated = $request->validated();
-        $validated['age'] = Carbon::parse($validated['birthday'])->age;
+        if (isset($validated['birthday'])) {
+            $validated['age'] = Carbon::parse($validated['birthday'])->age;
+        }
 
         if ($request->hasFile('avatar')) {
             if ($user->avatar_path && Storage::disk('public')->exists($user->avatar_path)) {
