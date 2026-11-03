@@ -9,9 +9,10 @@ class ConversationResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $user = $request->user();
-        $otherParticipant = $this->participants->firstWhere('id', '!=', $user->id);
-        $lastMessage = $this->messages()->latest()->first();
+        $userId = $request->user()?->id ?? auth('sanctum')->id() ?? auth()->id();
+        $participants = $this->relationLoaded('participants') ? $this->participants : $this->participants()->get();
+        $otherParticipant = $userId ? $participants->firstWhere('id', '!=', $userId) : $participants->first();
+        $lastMessage = $this->relationLoaded('messages') ? $this->messages->first() : $this->messages()->latest()->first();
 
         return [
             'id' => $this->id,

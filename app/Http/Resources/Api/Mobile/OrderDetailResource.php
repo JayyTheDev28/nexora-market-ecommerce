@@ -12,6 +12,15 @@ class OrderDetailResource extends JsonResource
         $seller = $this->seller;
         $sellerName = $seller?->sellerProfile?->business_name ?? $seller?->full_name ?? 'Seller';
 
+        $toAbsoluteUrl = function (?string $path): ?string {
+            if (empty($path)) return null;
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) return $path;
+            if (str_starts_with($path, '/storage/') || str_starts_with($path, 'storage/')) {
+                return url('/' . ltrim($path, '/'));
+            }
+            return url(\Illuminate\Support\Facades\Storage::url($path));
+        };
+
         return [
             'id' => $this->id,
             'order_number' => $this->order_number,
@@ -53,7 +62,7 @@ class OrderDetailResource extends JsonResource
                 'price' => (float) $item->price,
                 'quantity' => (int) $item->quantity,
                 'variant' => $item->variant,
-                'image' => $item->product?->gallery[0] ?? null,
+                'image' => $toAbsoluteUrl($item->product?->gallery[0] ?? null),
             ]),
             'status_history' => $this->statusHistory->map(fn ($h) => [
                 'id' => $h->id,

@@ -130,6 +130,10 @@ class ChatController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
+        if ($request->has('message') && ! $request->has('body')) {
+            $request->merge(['body' => $request->input('message')]);
+        }
+
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:2000'],
         ]);

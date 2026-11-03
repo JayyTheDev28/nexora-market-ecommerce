@@ -60,9 +60,6 @@ class ProductDetailResource extends JsonResource
             if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
                 return $path;
             }
-            if (str_starts_with($path, '/storage/') || str_starts_with($path, 'storage/')) {
-                return url('/' . ltrim($path, '/'));
-            }
             return url(\Illuminate\Support\Facades\Storage::url($path));
         };
 
@@ -75,19 +72,12 @@ class ProductDetailResource extends JsonResource
                     $rawGallery[] = $v['image'];
                 }
                 $vName = $v['name'] ?? (is_string($key) ? str_replace('_', ' / ', $key) : ($v['sku'] ?? 'Option'));
-                $vColor = $v['color'] ?? null;
-                $vSize = $v['size'] ?? null;
-                if (! $vColor && ! $vSize && str_contains($vName, ' / ')) {
-                    $parts = explode(' / ', $vName, 2);
-                    $vColor = trim($parts[0]);
-                    $vSize = trim($parts[1]);
-                }
                 $vImage = ! empty($v['image']) ? $toAbsoluteUrl($v['image'], $vName) : null;
                 $normalizedVariants[] = [
                     'name' => $vName,
                     'sku' => $v['sku'] ?? '',
-                    'color' => $vColor,
-                    'size' => $vSize,
+                    'color' => $v['color'] ?? null,
+                    'size' => $v['size'] ?? null,
                     'price' => isset($v['price']) ? (float) $v['price'] : (float) $this->effective_price,
                     'stock' => isset($v['stock']) ? (int) $v['stock'] : (int) $this->stock,
                     'image' => $vImage,

@@ -13,10 +13,18 @@ class CheckoutRequest extends FormRequest
         return true;
     }
 
+    public function prepareForValidation(): void
+    {
+        if ($this->has('shipping_address_id') && !$this->has('address_id')) {
+            $this->merge(['address_id' => $this->input('shipping_address_id')]);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'address_id' => ['nullable', 'integer'],
+            'shipping_address_id' => ['nullable', 'integer'],
             'recipient_name' => ['required_without:address_id', 'nullable', 'string', 'max:255'],
             'recipient_phone' => ['required_without:address_id', 'nullable', 'string', 'regex:/^(09|\+639)\d{9}$/'],
             'region_code' => ['nullable', 'string'],

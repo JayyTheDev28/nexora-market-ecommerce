@@ -92,7 +92,7 @@ Route::prefix('mobile/v1')->group(function () {
         Route::get('/addresses', [\App\Http\Controllers\Api\Mobile\Buyer\AddressController::class, 'index'])->name('api.mobile.buyer.addresses.index');
         Route::post('/addresses', [\App\Http\Controllers\Api\Mobile\Buyer\AddressController::class, 'store'])->name('api.mobile.buyer.addresses.store');
         Route::put('/addresses/{address}', [\App\Http\Controllers\Api\Mobile\Buyer\AddressController::class, 'update'])->name('api.mobile.buyer.addresses.update');
-        Route::post('/addresses/{address}/default', [\App\Http\Controllers\Api\Mobile\Buyer\AddressController::class, 'setDefault'])->name('api.mobile.buyer.addresses.default');
+        Route::match(['post', 'patch'], '/addresses/{address}/default', [\App\Http\Controllers\Api\Mobile\Buyer\AddressController::class, 'setDefault'])->name('api.mobile.buyer.addresses.default');
         Route::delete('/addresses/{address}', [\App\Http\Controllers\Api\Mobile\Buyer\AddressController::class, 'destroy'])->name('api.mobile.buyer.addresses.destroy');
 
         // Wishlist & Store Follow

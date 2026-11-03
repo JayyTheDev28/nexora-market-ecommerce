@@ -13,11 +13,27 @@ class CartItemResource extends JsonResource
         $seller = $product?->seller;
         $sellerName = $seller?->sellerProfile?->business_name ?? $seller?->full_name ?? 'Seller';
 
+        $toAbsoluteUrl = function (?string $path, string $fallbackName): string {
+            if (empty($path)) {
+                return 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($fallbackName);
+            }
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+                return $path;
+            }
+            if (str_starts_with($path, '/storage/') || str_starts_with($path, 'storage/')) {
+                return url('/' . ltrim($path, '/'));
+            }
+            return url(\Illuminate\Support\Facades\Storage::url($path));
+        };
+
+        $rawImg = $product ? $product->getVariantImageUrl($this->variant) : null;
+        $imageUrl = $product ? $toAbsoluteUrl($rawImg, $product->name) : null;
+
         return [
             'id' => $this->id,
             'product_id' => $this->product_id,
             'name' => $product?->name ?? 'Unavailable Product',
-            'image' => $product ? $product->getVariantImageUrl($this->variant) : null,
+            'image' => $imageUrl,
             'price' => (float) $this->unit_price,
             'regular_price' => (float) ($product?->price ?? 0),
             'quantity' => (int) $this->quantity,
