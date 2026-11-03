@@ -19,6 +19,9 @@ class ProductResource extends JsonResource
             if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
                 return $path;
             }
+            if (str_starts_with($path, '/storage/') || str_starts_with($path, 'storage/')) {
+                return url('/' . ltrim($path, '/'));
+            }
             return url(\Illuminate\Support\Facades\Storage::url($path));
         };
 

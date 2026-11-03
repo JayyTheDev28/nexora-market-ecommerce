@@ -114,6 +114,7 @@ class WishlistController extends Controller
         return response()->json([
             'data' => [
                 'is_following' => $following,
+                'following' => $following,
                 'followers_count' => StoreFollow::where('seller_id', $seller->id)->count(),
             ],
             'message' => $message,
