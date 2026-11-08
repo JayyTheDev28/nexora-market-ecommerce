@@ -67,5 +67,20 @@ class HubTransfer extends Model
     {
         return $this->belongsTo(User::class, 'received_by');
     }
+
+    public function getIsInternalAttribute(): bool
+    {
+        return (int) $this->sender_logistics_id === (int) $this->receiver_logistics_id;
+    }
+
+    public function getTransferTypeAttribute(): string
+    {
+        return $this->is_internal ? 'internal' : 'inter_company';
+    }
+
+    public function getTransferTypeLabelAttribute(): string
+    {
+        return $this->is_internal ? 'Internal Hub Transfer' : 'Inter-Company Custody Transfer';
+    }
 }
 

@@ -30,17 +30,82 @@ class HubController extends Controller
 
         // Calculate parcels currently at hub
         $hubs->getCollection()->transform(function ($hub) use ($companyId) {
-            $hub->parcels_at_hub_count = Order::where('current_custody_logistics_id', $companyId)
-                ->where(function ($q) use ($hub) {
-                    $q->where('origin_hub_id', $hub->id)
-                      ->orWhere('destination_hub_id', $hub->id);
+            $hub->parcels_at_hub_count = Order::where(function ($q) use ($hub) {
+                    $q->where('current_hub_id', $hub->id)
+                      ->orWhere(function ($q2) use ($hub) {
+                          $q2->whereNull('current_hub_id')
+                             ->where('origin_hub_id', $hub->id)
+                             ->whereDoesntHave('transfers', fn ($t) => $t->where('status', 'in_transit'));
+                      });
                 })
+                ->where('current_custody_logistics_id', $companyId)
                 ->whereIn('status', ['received_at_hub', 'at_sorting_center', 'sorted'])
                 ->count();
             return $hub;
         });
 
         return view('logistics.hubs.index', compact('hubs'));
+    }
+
+    /**
+     * Display hub details and parcel inventory currently at this hub.
+     */
+    public function show(Request $request, Hub $hub): View
+    {
+        abort_unless((int) $hub->logistics_company_id === (int) $request->user()->id, 403);
+
+        $tab = $request->query('tab', 'all');
+        $search = $request->query('q');
+
+        $query = Order::where(function ($q) use ($hub) {
+                $q->where('current_hub_id', $hub->id)
+                  ->orWhere(function ($q2) use ($hub) {
+                      $q2->whereNull('current_hub_id')
+                         ->where('origin_hub_id', $hub->id)
+                         ->whereDoesntHave('transfers', fn ($t) => $t->where('status', 'in_transit'));
+                  });
+            })
+            ->whereIn('status', ['received_at_hub', 'at_sorting_center', 'sorted', 'assigned_to_rider'])
+            ->with(['buyer', 'address', 'originHub', 'destinationHub.logisticsCompany', 'deliveryLogistics', 'items.product', 'deliveryCourier']);
+
+        if ($tab === 'staged_transfer') {
+            $query->whereColumn('origin_hub_id', '!=', 'destination_hub_id')
+                  ->where('destination_hub_id', '!=', $hub->id);
+        } elseif ($tab === 'local_delivery') {
+            $query->where(function ($q) use ($hub) {
+                $q->where('destination_hub_id', $hub->id)
+                  ->orWhereColumn('origin_hub_id', '=', 'destination_hub_id');
+            });
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('order_number', 'like', "%{$search}%")
+                  ->orWhere('tracking_number', 'like', "%{$search}%")
+                  ->orWhereHas('buyer', fn ($bq) => $bq->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
+                  ->orWhereHas('address', fn ($aq) => $aq->where('municipality_name', 'like', "%{$search}%")->orWhere('barangay_name', 'like', "%{$search}%"));
+            });
+        }
+
+        $parcels = $query->latest()->paginate(15)->withQueryString();
+
+        $allAtHub = Order::where(function ($q) use ($hub) {
+                $q->where('current_hub_id', $hub->id)
+                  ->orWhere(function ($q2) use ($hub) {
+                      $q2->whereNull('current_hub_id')
+                         ->where('origin_hub_id', $hub->id)
+                         ->whereDoesntHave('transfers', fn ($t) => $t->where('status', 'in_transit'));
+                  });
+            })
+            ->whereIn('status', ['received_at_hub', 'at_sorting_center', 'sorted', 'assigned_to_rider']);
+
+        $counts = [
+            'all' => (clone $allAtHub)->count(),
+            'staged_transfer' => (clone $allAtHub)->whereColumn('origin_hub_id', '!=', 'destination_hub_id')->where('destination_hub_id', '!=', $hub->id)->count(),
+            'local_delivery' => (clone $allAtHub)->where(fn ($q) => $q->where('destination_hub_id', $hub->id)->orWhereColumn('origin_hub_id', '=', 'destination_hub_id'))->count(),
+        ];
+
+        return view('logistics.hubs.show', compact('hub', 'parcels', 'counts', 'tab', 'search'));
     }
 
     /**

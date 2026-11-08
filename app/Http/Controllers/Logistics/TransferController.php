@@ -57,15 +57,20 @@ class TransferController extends Controller
         }
 
         $query = match ($tab) {
-            // Incoming: Dispatched by other companies to our hubs, awaiting receipt
+            // Incoming: Dispatched by other companies or other hubs to our hubs, awaiting receipt
             'incoming' => $baseQuery()
                 ->where('receiver_logistics_id', $companyId)
                 ->where('status', 'in_transit'),
 
-            // In Transit / Outgoing: Dispatched by us to other companies, traveling between hubs
+            // In Transit / Outgoing: Dispatched by us, traveling between hubs
             'in_transit' => $baseQuery()
                 ->where('sender_logistics_id', $companyId)
                 ->where('status', 'in_transit'),
+
+            // Internal: Internal hub transfers within our own company
+            'internal' => $baseQuery()
+                ->where('sender_logistics_id', $companyId)
+                ->where('receiver_logistics_id', $companyId),
 
             // Completed: Received transfers history
             'completed' => $baseQuery()
@@ -83,24 +88,29 @@ class TransferController extends Controller
         $counts = [
             'incoming' => HubTransfer::where('receiver_logistics_id', $companyId)->where('status', 'in_transit')->count(),
             'in_transit' => HubTransfer::where('sender_logistics_id', $companyId)->where('status', 'in_transit')->count(),
+            'internal' => HubTransfer::where('sender_logistics_id', $companyId)->where('receiver_logistics_id', $companyId)->count(),
             'completed' => HubTransfer::where(fn ($q) => $q->where('receiver_logistics_id', $companyId)->orWhere('sender_logistics_id', $companyId))->where('status', 'received')->count(),
         ];
 
-        // Parcels in this company currently awaiting inter-hub dispatch
+        // Parcels in this company currently awaiting hub dispatch (both internal and cross-company!)
         $awaitingDispatch = Order::where('current_custody_logistics_id', $companyId)
-            ->whereColumn('pickup_logistics_id', '!=', 'delivery_logistics_id')
+            ->where(function ($q) {
+                $q->whereColumn('origin_hub_id', '!=', 'destination_hub_id')
+                  ->orWhereNull('origin_hub_id');
+            })
             ->whereIn('status', ['received_at_hub', 'at_sorting_center', 'sorted'])
-            ->with(['buyer', 'address', 'destinationHub.logisticsCompany'])
+            ->whereDoesntHave('transfers', fn ($t) => $t->where('status', 'in_transit'))
+            ->with(['buyer', 'address', 'originHub', 'destinationHub.logisticsCompany', 'pickupLogistics', 'deliveryLogistics'])
             ->get();
 
-        $myHubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->get();
-        $otherHubs = Hub::where('logistics_company_id', '!=', $companyId)->where('is_active', true)->with('logisticsCompany')->get();
+        $myHubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
+        $allDestinationHubs = Hub::where('is_active', true)->with('logisticsCompany')->orderBy('name')->get();
 
-        return view('logistics.transfers.index', compact('transfers', 'counts', 'tab', 'search', 'awaitingDispatch', 'myHubs', 'otherHubs'));
+        return view('logistics.transfers.index', compact('transfers', 'counts', 'tab', 'search', 'awaitingDispatch', 'myHubs', 'allDestinationHubs'));
     }
 
     /**
-     * Dispatch an inter-hub transfer from this company's hub to another company's hub.
+     * Dispatch an inter-hub or internal transfer to the destination hub.
      */
     public function dispatch(Request $request, Order $order): RedirectResponse
     {
@@ -112,6 +122,12 @@ class TransferController extends Controller
             'Parcel is not in the custody of your logistics company.'
         );
 
+        abort_if(
+            !empty($order->destination_hub_id) && (int) $order->current_hub_id === (int) $order->destination_hub_id,
+            422,
+            'This parcel has already arrived at its destination hub (' . ($order->destinationHub?->name ?? 'Destination Hub') . '). Hub transfer is already complete.'
+        );
+
         $validated = $request->validate([
             'sender_hub_id' => ['required', 'exists:hubs,id'],
             'receiver_hub_id' => ['required', 'exists:hubs,id'],
@@ -121,6 +137,14 @@ class TransferController extends Controller
         $senderHub = Hub::where('id', $validated['sender_hub_id'])->where('logistics_company_id', $companyId)->firstOrFail();
         $receiverHub = Hub::where('id', $validated['receiver_hub_id'])->firstOrFail();
 
+        abort_if((int) $senderHub->id === (int) $receiverHub->id, 422, 'Origin and destination hubs cannot be the same hub.');
+
+        if (!empty($order->current_hub_id) && (int) $order->current_hub_id !== (int) $senderHub->id) {
+            return back()->withInput()->withErrors([
+                'sender_hub_id' => "Parcel is currently physically located at " . ($order->currentHub?->name ?? 'another hub') . ", not at {$senderHub->name}.",
+            ]);
+        }
+
         $transfer = $this->logisticsService->dispatchHubTransfer(
             $order,
             $senderHub,
@@ -129,7 +153,8 @@ class TransferController extends Controller
             $validated['notes'] ?? null
         );
 
-        return back()->with('status', "Parcel #{$order->order_number} dispatched in transit to {$receiverHub->name}. Custody remains with your company until receipt.");
+        $transferType = $transfer->is_internal ? 'internal hub transfer' : 'inter-company transfer';
+        return back()->with('status', "Parcel #{$order->order_number} dispatched in {$transferType} to {$receiverHub->name}. Custody remains with your company until receipt.");
     }
 
     /**

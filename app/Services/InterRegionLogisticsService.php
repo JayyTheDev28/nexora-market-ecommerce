@@ -20,29 +20,42 @@ class InterRegionLogisticsService
      */
     public function matchLogisticsAndRouteOrder(Order $order): Order
     {
-        $sellerAddress = $order->seller_address;
+        $sellerAddress = $order->seller_address ?? Address::where('user_id', $order->seller_id)->first();
         $buyerAddress = $order->address;
+        $buyerSnapshot = $order->address_snapshot;
 
         $sellerBarangayCode = $sellerAddress?->barangay_code;
         $sellerCityCode = $sellerAddress?->municipality_code;
         $sellerProvinceCode = $sellerAddress?->province_code;
+        $sellerBarangayName = $sellerAddress?->barangay_name;
+        $sellerCityName = $sellerAddress?->municipality_name;
+        $sellerProvinceName = $sellerAddress?->province_name;
 
-        $buyerBarangayCode = $buyerAddress?->barangay_code;
-        $buyerCityCode = $buyerAddress?->municipality_code;
-        $buyerProvinceCode = $buyerAddress?->province_code;
+        $buyerBarangayCode = $buyerAddress?->barangay_code ?? ($buyerSnapshot['barangay_code'] ?? null);
+        $buyerCityCode = $buyerAddress?->municipality_code ?? ($buyerSnapshot['municipality_code'] ?? null);
+        $buyerProvinceCode = $buyerAddress?->province_code ?? ($buyerSnapshot['province_code'] ?? null);
+        $buyerBarangayName = $buyerAddress?->barangay_name ?? ($buyerSnapshot['barangay_name'] ?? null);
+        $buyerCityName = $buyerAddress?->municipality_name ?? ($buyerSnapshot['municipality_name'] ?? null);
+        $buyerProvinceName = $buyerAddress?->province_name ?? ($buyerSnapshot['province_name'] ?? null);
 
         // 1. Resolve Pickup Logistics, Zone, and Origin Hub
         $pickupRoute = $this->resolveCoverage(
             $sellerBarangayCode,
             $sellerCityCode,
-            $sellerProvinceCode
+            $sellerProvinceCode,
+            $sellerBarangayName,
+            $sellerCityName,
+            $sellerProvinceName
         );
 
         // 2. Resolve Delivery Logistics, Zone, and Destination Hub
         $deliveryRoute = $this->resolveCoverage(
             $buyerBarangayCode,
             $buyerCityCode,
-            $buyerProvinceCode
+            $buyerProvinceCode,
+            $buyerBarangayName,
+            $buyerCityName,
+            $buyerProvinceName
         );
 
         // Fallbacks if no specific zone covers the area
@@ -59,16 +72,21 @@ class InterRegionLogisticsService
         $originHubId = $pickupRoute['hub_id'] ?? Hub::where('logistics_company_id', $pickupLogisticsId)->value('id');
         $destinationHubId = $deliveryRoute['hub_id'] ?? Hub::where('logistics_company_id', $deliveryLogisticsId)->value('id');
 
-        $order->update([
+        $updateData = [
             'pickup_logistics_id' => $pickupLogisticsId,
             'delivery_logistics_id' => $deliveryLogisticsId,
-            'current_custody_logistics_id' => $pickupLogisticsId,
             'pickup_zone_id' => $pickupZoneId,
             'delivery_zone_id' => $deliveryZoneId,
             'origin_hub_id' => $originHubId,
             'destination_hub_id' => $destinationHubId,
             'sorting_center_id' => $pickupLogisticsId, // for backwards compatibility
-        ]);
+        ];
+
+        if (empty($order->current_custody_logistics_id)) {
+            $updateData['current_custody_logistics_id'] = $pickupLogisticsId;
+        }
+
+        $order->update($updateData);
 
         return $order->fresh();
     }
@@ -76,17 +94,26 @@ class InterRegionLogisticsService
     /**
      * Resolve zone, hub, and company covering a given location using:
      * 1. Exact barangay code match
-     * 2. City fallback match
-     * 3. Province fallback match
+     * 2. Barangay name + city name match
+     * 3. City code fallback match
+     * 4. City name fallback match
+     * 5. Province code fallback match
+     * 6. Direct Hub location match
      */
-    public function resolveCoverage(?string $barangayCode, ?string $cityCode, ?string $provinceCode): ?array
-    {
-        // 1. Exact barangay match
+    public function resolveCoverage(
+        ?string $barangayCode,
+        ?string $cityCode,
+        ?string $provinceCode,
+        ?string $barangayName = null,
+        ?string $cityName = null,
+        ?string $provinceName = null
+    ): ?array {
+        // 1. Exact barangay code match
         if ($barangayCode) {
             $zb = ZoneBarangay::where('barangay_code', $barangayCode)->with('zone')->first();
             if ($zb && $zb->zone) {
                 return [
-                    'match_level' => 'barangay',
+                    'match_level' => 'barangay_code',
                     'zone_id' => $zb->zone_id,
                     'logistics_company_id' => $zb->logistics_company_id,
                     'hub_id' => $zb->zone->hub_id,
@@ -94,12 +121,28 @@ class InterRegionLogisticsService
             }
         }
 
-        // 2. City fallback match
+        // 2. Barangay name + City name match
+        if ($barangayName && $cityName) {
+            $zb = ZoneBarangay::where('barangay_name', 'like', $barangayName)
+                ->where('city_name', 'like', "%{$cityName}%")
+                ->with('zone')
+                ->first();
+            if ($zb && $zb->zone) {
+                return [
+                    'match_level' => 'barangay_name',
+                    'zone_id' => $zb->zone_id,
+                    'logistics_company_id' => $zb->logistics_company_id,
+                    'hub_id' => $zb->zone->hub_id,
+                ];
+            }
+        }
+
+        // 3. City code fallback match
         if ($cityCode) {
             $zb = ZoneBarangay::where('city_code', $cityCode)->with('zone')->first();
             if ($zb && $zb->zone) {
                 return [
-                    'match_level' => 'city',
+                    'match_level' => 'city_code',
                     'zone_id' => $zb->zone_id,
                     'logistics_company_id' => $zb->logistics_company_id,
                     'hub_id' => $zb->zone->hub_id,
@@ -107,15 +150,71 @@ class InterRegionLogisticsService
             }
         }
 
-        // 3. Province fallback match
+        // 4. City name fallback match on ZoneBarangay or Zone
+        if ($cityName) {
+            $zb = ZoneBarangay::where('city_name', 'like', "%{$cityName}%")->with('zone')->first();
+            if ($zb && $zb->zone) {
+                return [
+                    'match_level' => 'city_name_zone_barangay',
+                    'zone_id' => $zb->zone_id,
+                    'logistics_company_id' => $zb->logistics_company_id,
+                    'hub_id' => $zb->zone->hub_id,
+                ];
+            }
+
+            $zone = Zone::where('city_name', 'like', "%{$cityName}%")->first();
+            if ($zone) {
+                return [
+                    'match_level' => 'city_name_zone',
+                    'zone_id' => $zone->id,
+                    'logistics_company_id' => $zone->logistics_company_id,
+                    'hub_id' => $zone->hub_id,
+                ];
+            }
+
+            // Direct Hub match by city
+            $hub = Hub::where('is_active', true)
+                ->where(function ($q) use ($cityName) {
+                    $q->where('city_name', 'like', "%{$cityName}%")
+                      ->orWhere('name', 'like', "%{$cityName}%");
+                })
+                ->first();
+            if ($hub) {
+                $hubZone = Zone::where('hub_id', $hub->id)->first();
+                return [
+                    'match_level' => 'hub_city',
+                    'zone_id' => $hubZone?->id,
+                    'logistics_company_id' => $hub->logistics_company_id,
+                    'hub_id' => $hub->id,
+                ];
+            }
+        }
+
+        // 5. Province code fallback match
         if ($provinceCode) {
             $zb = ZoneBarangay::where('province_code', $provinceCode)->with('zone')->first();
             if ($zb && $zb->zone) {
                 return [
-                    'match_level' => 'province',
+                    'match_level' => 'province_code',
                     'zone_id' => $zb->zone_id,
                     'logistics_company_id' => $zb->logistics_company_id,
                     'hub_id' => $zb->zone->hub_id,
+                ];
+            }
+        }
+
+        // 6. Province name fallback match
+        if ($provinceName) {
+            $hub = Hub::where('is_active', true)
+                ->where('province_name', 'like', "%{$provinceName}%")
+                ->first();
+            if ($hub) {
+                $hubZone = Zone::where('hub_id', $hub->id)->first();
+                return [
+                    'match_level' => 'hub_province',
+                    'zone_id' => $hubZone?->id,
+                    'logistics_company_id' => $hub->logistics_company_id,
+                    'hub_id' => $hub->id,
                 ];
             }
         }
@@ -202,19 +301,35 @@ class InterRegionLogisticsService
     public function confirmReceiptAtHub(Order $order, Hub $hub, User $actor, ?string $note = null): Order
     {
         return DB::transaction(function () use ($order, $hub, $actor, $note) {
-            $isSameCompany = (int) $order->pickup_logistics_id === (int) $order->delivery_logistics_id;
+            // Ensure order has routing populated
+            if (empty($order->origin_hub_id) || empty($order->destination_hub_id)) {
+                $order = $this->matchLogisticsAndRouteOrder($order);
+            }
+
+            // Determine if origin and destination use the same hub
+            $isSameHub = !empty($order->origin_hub_id) && !empty($order->destination_hub_id) && (int) $order->origin_hub_id === (int) $order->destination_hub_id;
+            $isDestinationHubReached = (int) $hub->id === (int) $order->destination_hub_id;
 
             $newStatus = 'received_at_hub';
             $defaultNote = "Parcel received at Hub: {$hub->name} ({$hub->city_name}, {$hub->province_name}).";
 
-            if ($isSameCompany) {
-                // Same-company delivery: skip transfer and go directly to sorting/delivery preparation
+            if ($isSameHub || $isDestinationHubReached) {
+                // Same hub delivery or already reached destination hub:
+                // Skip unnecessary hub-to-hub transportation and proceed to delivery assignment
                 $newStatus = 'sorted';
-                $defaultNote .= " Same-company logistics route: Parcel sorted directly for local delivery.";
+                $defaultNote .= " Destination hub confirmed: Ready for local delivery rider assignment.";
+            } else {
+                // Different hubs: parcel is received at origin hub, awaiting hub dispatch
+                $isInternal = (int) $order->pickup_logistics_id === (int) $order->delivery_logistics_id;
+                $destHub = $order->destinationHub;
+                $transferType = $isInternal ? 'Internal Hub Transfer' : 'Inter-Company Custody Transfer';
+                $defaultNote .= " Staged for {$transferType} to " . ($destHub ? $destHub->name : 'destination hub') . ".";
             }
 
             $order->update([
                 'status' => $newStatus,
+                'current_hub_id' => $hub->id,
+                'origin_hub_id' => $order->origin_hub_id ?: $hub->id,
                 'current_custody_logistics_id' => $hub->logistics_company_id,
             ]);
 
@@ -231,7 +346,7 @@ class InterRegionLogisticsService
     }
 
     /**
-     * Dispatch an inter-hub transfer to another logistics company.
+     * Dispatch an internal or inter-company hub transfer to the destination hub.
      * Custody STAYS with the sender company during transit!
      */
     public function dispatchHubTransfer(
@@ -249,6 +364,14 @@ class InterRegionLogisticsService
                 'Parcel is not in the custody of the sending logistics company.'
             );
 
+            abort_if(
+                (int) $senderHub->id === (int) $receiverHub->id,
+                422,
+                'Origin and destination hubs cannot be the same.'
+            );
+
+            $isInternal = (int) $senderHub->logistics_company_id === (int) $receiverHub->logistics_company_id;
+
             $transfer = HubTransfer::create([
                 'order_id' => $order->id,
                 'tracking_number' => $order->tracking_number,
@@ -262,17 +385,23 @@ class InterRegionLogisticsService
                 'notes' => $notes,
             ]);
 
-            // Status transitions to in_transit_hub, custody remains with sender
+            // Status transitions to in_transit_hub, custody remains with sender, current_hub_id is null in transit
             $order->update([
                 'status' => 'in_transit_hub',
+                'current_hub_id' => null,
                 'current_custody_logistics_id' => $senderHub->logistics_company_id,
+                'destination_hub_id' => $receiverHub->id,
             ]);
+
+            $dispatchMsg = $isInternal
+                ? "Internal Hub Transfer: Dispatched in transit between hubs from {$senderHub->name} to {$receiverHub->name}."
+                : "Inter-Company Custody Transfer: Dispatched in transit from {$senderHub->name} to {$receiverHub->name}. Custody remains with {$senderHub->logisticsCompany?->full_name} during transit.";
 
             OrderStatusHistory::create([
                 'order_id' => $order->id,
                 'status' => 'in_transit_hub',
                 'changed_by' => $actor->id,
-                'note' => "Dispatched in transit from {$senderHub->name} to {$receiverHub->name}. Custody remains with {$senderHub->logisticsCompany?->full_name}.",
+                'note' => $dispatchMsg,
                 'changed_at' => now(),
             ]);
 
@@ -281,8 +410,9 @@ class InterRegionLogisticsService
     }
 
     /**
-     * Confirm receipt of an inter-hub transfer at the destination hub.
+     * Confirm receipt of a hub transfer at the destination hub.
      * CUSTODY MOVES TO RECEIVER ONLY HERE!
+     * Supports both internal transfers and inter-company transfers.
      */
     public function confirmHubTransferReceipt(
         HubTransfer $transfer,
@@ -296,8 +426,10 @@ class InterRegionLogisticsService
                 'Transfer is not currently in transit.'
             );
 
-            // Verify receiver belongs to destination company
+            $isInternal = (int) $transfer->sender_logistics_id === (int) $transfer->receiver_logistics_id;
             $receiverLogisticsId = $transfer->receiver_logistics_id;
+
+            // Verify receiver belongs to destination company
             abort_unless(
                 (int) $actor->id === (int) $receiverLogisticsId,
                 403,
@@ -313,19 +445,39 @@ class InterRegionLogisticsService
 
             $order = $transfer->order;
 
-            // Custody transfers to receiving company!
-            $order->update([
+            $orderUpdates = [
                 'status' => 'received_at_hub',
+                'current_hub_id' => $transfer->receiver_hub_id,
                 'current_custody_logistics_id' => $receiverLogisticsId,
                 'sorting_center_id' => $receiverLogisticsId, // so receiver's dashboard has it
                 'destination_hub_id' => $transfer->receiver_hub_id,
-            ]);
+            ];
+
+            // Auto-match destination delivery area if available
+            $matchedArea = \App\Models\DeliveryArea::where('sorting_center_id', $receiverLogisticsId)
+                ->where(function ($q) use ($order) {
+                    if ($order->address?->municipality_name) {
+                        $q->where('name', 'like', "%{$order->address->municipality_name}%");
+                    }
+                })
+                ->first();
+
+            if ($matchedArea && empty($order->delivery_area_id)) {
+                $orderUpdates['delivery_area_id'] = $matchedArea->id;
+            }
+
+            // Custody transfers to receiving company! Parcel appears in destination hub inventory
+            $order->update($orderUpdates);
+
+            $receiptMsg = $isInternal
+                ? "Internal hub transfer confirmed and received at destination hub: {$transfer->receiverHub?->name}. Parcel is now in destination hub inventory, ready for local delivery rider assignment."
+                : "Transfer received and confirmed at destination hub: {$transfer->receiverHub?->name}. Custody officially transferred to {$transfer->receiverLogistics?->full_name}. Ready for local delivery rider assignment.";
 
             OrderStatusHistory::create([
                 'order_id' => $order->id,
                 'status' => 'received_at_hub',
                 'changed_by' => $actor->id,
-                'note' => "Transfer received at destination hub: {$transfer->receiverHub?->name}. Custody officially transferred to {$transfer->receiverLogistics?->full_name}.",
+                'note' => $receiptMsg,
                 'changed_at' => now(),
             ]);
 

@@ -26,13 +26,13 @@ class SortingController extends Controller
         $deliveryAreas = DeliveryArea::where('sorting_center_id', $sortingCenterId)
             ->with('courier')
             ->withCount([
-                'orders as unsorted_orders_count' => fn ($q) => $q->where('status', 'at_sorting_center'),
+                'orders as unsorted_orders_count' => fn ($q) => $q->whereIn('status', ['at_sorting_center', 'received_at_hub']),
                 'orders as sorted_orders_count' => fn ($q) => $q->where('status', 'sorted'),
             ])
             ->orderBy('name')
             ->get();
 
-        $query = Order::where('sorting_center_id', $sortingCenterId)
+        $query = Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId))
             ->with([
                 'buyer',
                 'address',
@@ -42,10 +42,10 @@ class SortingController extends Controller
             ]);
 
         match ($tab) {
-            'unsorted' => $query->where('status', 'at_sorting_center'),
+            'unsorted' => $query->whereIn('status', ['at_sorting_center', 'received_at_hub']),
             'sorted' => $query->where('status', 'sorted'),
-            'all' => $query->whereIn('status', ['at_sorting_center', 'sorted']),
-            default => $query->where('status', 'at_sorting_center'),
+            'all' => $query->whereIn('status', ['at_sorting_center', 'received_at_hub', 'sorted']),
+            default => $query->whereIn('status', ['at_sorting_center', 'received_at_hub']),
         };
 
         if ($areaFilter) {
@@ -63,10 +63,12 @@ class SortingController extends Controller
 
         $parcels = $query->latest()->paginate(15)->withQueryString();
 
+        $baseCountQuery = fn () => Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId));
+
         $counts = [
-            'unsorted' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'at_sorting_center')->count(),
-            'sorted' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'sorted')->count(),
-            'all' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['at_sorting_center', 'sorted'])->count(),
+            'unsorted' => (clone $baseCountQuery())->whereIn('status', ['at_sorting_center', 'received_at_hub'])->count(),
+            'sorted' => (clone $baseCountQuery())->where('status', 'sorted')->count(),
+            'all' => (clone $baseCountQuery())->whereIn('status', ['at_sorting_center', 'received_at_hub', 'sorted'])->count(),
         ];
 
         return view('logistics.sorting.index', compact('parcels', 'counts', 'tab', 'deliveryAreas', 'areaFilter', 'search'));
@@ -77,7 +79,14 @@ class SortingController extends Controller
      */
     public function confirm(Request $request, Order $order): RedirectResponse
     {
-        abort_unless(in_array($order->status, ['at_sorting_center', 'sorted']), 422, 'Order must be at sorting center to be sorted.');
+        abort_unless(in_array($order->status, ['at_sorting_center', 'received_at_hub', 'sorted']), 422, 'Order must be at sorting center or hub to be sorted.');
+
+        // Guard: parcels requiring a hub transfer must reach their destination hub before local sorting
+        if ($order->requiresHubTransfer() && !empty($order->destination_hub_id) && (int) $order->current_hub_id !== (int) $order->destination_hub_id) {
+            return back()->withInput()->withErrors([
+                'delivery_area_id' => "This parcel is currently at " . ($order->currentHub?->name ?? 'origin hub') . " and must first be transferred to its destination hub (" . ($order->destinationHub?->name ?? 'destination hub') . ") before local sorting and delivery rider assignment.",
+            ]);
+        }
 
         $validated = $request->validate([
             'delivery_area_id' => ['required', 'exists:delivery_areas,id'],
@@ -126,7 +135,7 @@ class SortingController extends Controller
 
         $orders = Order::whereIn('id', $validated['order_ids'])
             ->where('sorting_center_id', $request->user()->id)
-            ->where('status', 'at_sorting_center')
+            ->whereIn('status', ['at_sorting_center', 'received_at_hub'])
             ->whereNotNull('delivery_area_id')
             ->with('deliveryArea')
             ->get();

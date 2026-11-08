@@ -39,6 +39,11 @@ class JobDispatchService
             return null;
         }
 
+        // Cannot dispatch delivery rider until parcel has arrived and been confirmed at destination hub
+        if ($type === 'delivery' && $order->requiresHubTransfer() && (int) $order->current_hub_id !== (int) $order->destination_hub_id) {
+            return null;
+        }
+
         // Get riders already offered in this sequence
         $alreadyOfferedRiderIds = JobOffer::where('order_id', $order->id)
             ->whereIn('status', ['declined', 'expired'])

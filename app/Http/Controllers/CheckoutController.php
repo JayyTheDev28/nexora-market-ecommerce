@@ -400,6 +400,13 @@ class CheckoutController extends Controller
                     'changed_at' => now(),
                 ]);
 
+                // Auto-route order to assign origin & destination hubs and logistics
+                try {
+                    app(\App\Services\InterRegionLogisticsService::class)->matchLogisticsAndRouteOrder($order);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning("Could not auto-route order {$order->id}: " . $e->getMessage());
+                }
+
                 $orders[] = $order;
             }
 

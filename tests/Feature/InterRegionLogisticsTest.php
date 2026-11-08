@@ -331,15 +331,15 @@ class InterRegionLogisticsTest extends TestCase
      */
     public function test_same_company_delivery_with_no_transfer(): void
     {
-        // Buyer in Calamba (also covered by Laguna Express)
+        // Buyer in Santa Cruz (same hub as seller - no transfer needed)
         $buyerLaguna = User::create([
-            'first_name' => 'Calamba',
+            'first_name' => 'Santa Cruz',
             'last_name' => 'Buyer',
             'sex' => 'other',
             'birthday' => '1994-08-20',
             'age' => 32,
             'contact_number' => '09171112233',
-            'email' => 'calamba_buyer_' . uniqid() . '@nexora.test',
+            'email' => 'sc_buyer_' . uniqid() . '@nexora.test',
             'password' => Hash::make('Password123!@#'),
             'role' => 'buyer',
             'approval_status' => 'approved',
@@ -349,15 +349,15 @@ class InterRegionLogisticsTest extends TestCase
 
         Address::create([
             'user_id' => $buyerLaguna->id,
-            'recipient_name' => 'Calamba Buyer',
+            'recipient_name' => 'Santa Cruz Buyer',
             'recipient_phone' => '09171112233',
             'province_code' => '043400000',
             'province_name' => 'Laguna',
-            'municipality_code' => '043405000',
-            'municipality_name' => 'City of Calamba',
-            'barangay_code' => '043405001',
-            'barangay_name' => 'Bagong Kalsada',
-            'street' => 'Crossing Calamba',
+            'municipality_code' => '043426000',
+            'municipality_name' => 'Santa Cruz',
+            'barangay_code' => '043426001',
+            'barangay_name' => 'Poblacion I',
+            'street' => 'Crossing Santa Cruz',
             'house_number' => '45',
             'is_default' => true,
             'needs_manual_review' => false,
@@ -366,16 +366,97 @@ class InterRegionLogisticsTest extends TestCase
         $order = $this->createOrder($this->sellerLaguna, $buyerLaguna);
         $routedOrder = $this->service->matchLogisticsAndRouteOrder($order);
 
-        // Both pickup and delivery belong to Laguna Express
+        // Both pickup and delivery belong to Laguna Express and share the same hub
         $this->assertEquals($this->lagunaCompany->id, $routedOrder->pickup_logistics_id);
         $this->assertEquals($this->lagunaCompany->id, $routedOrder->delivery_logistics_id);
+        $this->assertEquals($routedOrder->origin_hub_id, $routedOrder->destination_hub_id);
 
         $routedOrder->update(['status' => 'picked_up']);
 
-        // When confirmed at hub, it goes straight to sorted / delivery queue (no transfer needed)
+        // When confirmed at same hub, skips unnecessary transportation and goes straight to sorted
         $confirmedOrder = $this->service->confirmReceiptAtHub($routedOrder, $this->lagunaHub, $this->lagunaCompany);
         $this->assertEquals('sorted', $confirmedOrder->status);
         $this->assertEquals(0, HubTransfer::where('order_id', $order->id)->count());
+    }
+
+    /**
+     * TEST: Internal hub transfer within the same company between different hubs.
+     */
+    public function test_internal_hub_transfer_within_same_company(): void
+    {
+        // Buyer in Calamba (covered by Laguna West Hub - Calamba, different hub than Santa Cruz)
+        $buyerCalamba = User::create([
+            'first_name' => 'Calamba',
+            'last_name' => 'Buyer',
+            'sex' => 'other',
+            'birthday' => '1993-01-15',
+            'age' => 33,
+            'contact_number' => '09172223344',
+            'email' => 'calamba_int_' . uniqid() . '@nexora.test',
+            'password' => Hash::make('Password123!@#'),
+            'role' => 'buyer',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+
+        Address::create([
+            'user_id' => $buyerCalamba->id,
+            'recipient_name' => 'Calamba Internal Buyer',
+            'recipient_phone' => '09172223344',
+            'province_code' => '043400000',
+            'province_name' => 'Laguna',
+            'municipality_code' => '043404000',
+            'municipality_name' => 'City of Calamba',
+            'barangay_code' => '043404001',
+            'barangay_name' => 'Bagong Kalsada',
+            'street' => 'Turbina Highway',
+            'house_number' => '88',
+            'is_default' => true,
+            'needs_manual_review' => false,
+        ]);
+
+        $order = $this->createOrder($this->sellerLaguna, $buyerCalamba);
+        $routedOrder = $this->service->matchLogisticsAndRouteOrder($order);
+
+        // Same company, but different hubs: Santa Cruz (origin) -> Calamba (destination)
+        $this->assertEquals($this->lagunaCompany->id, $routedOrder->pickup_logistics_id);
+        $this->assertEquals($this->lagunaCompany->id, $routedOrder->delivery_logistics_id);
+        $this->assertNotEquals($routedOrder->origin_hub_id, $routedOrder->destination_hub_id);
+
+        $calambaHub = Hub::where('code', 'HUB-LAG-CAL')->firstOrFail();
+        $this->assertEquals($calambaHub->id, $routedOrder->destination_hub_id);
+
+        // 1. Received at Origin Hub (Santa Cruz)
+        $atOriginHub = $this->service->confirmReceiptAtHub($routedOrder, $this->lagunaHub, $this->lagunaCompany);
+        $this->assertEquals('received_at_hub', $atOriginHub->status);
+        $this->assertEquals($this->lagunaHub->id, $atOriginHub->current_hub_id);
+
+        // 2. Dispatched via internal hub transfer
+        $transfer = $this->service->dispatchHubTransfer(
+            order: $atOriginHub,
+            senderHub: $this->lagunaHub,
+            receiverHub: $calambaHub,
+            actor: $this->lagunaCompany,
+            notes: 'Internal transfer from Santa Cruz to Calamba'
+        );
+
+        $this->assertTrue($transfer->is_internal);
+        $this->assertEquals('internal', $transfer->transfer_type);
+        $this->assertEquals('in_transit', $transfer->status);
+
+        $atOriginHub->refresh();
+        $this->assertEquals('in_transit_hub', $atOriginHub->status);
+        $this->assertNull($atOriginHub->current_hub_id);
+        // Custody remains with Laguna company
+        $this->assertEquals($this->lagunaCompany->id, $atOriginHub->current_custody_logistics_id);
+
+        // 3. Calamba Hub confirms receipt of internal transfer
+        $atDestHub = $this->service->confirmHubTransferReceipt($transfer, $this->lagunaCompany);
+        $this->assertEquals('received_at_hub', $atDestHub->status);
+        $this->assertEquals($calambaHub->id, $atDestHub->current_hub_id);
+        $this->assertEquals($this->lagunaCompany->id, $atDestHub->current_custody_logistics_id);
+        $this->assertEquals('received', $transfer->fresh()->status);
     }
 
     /**

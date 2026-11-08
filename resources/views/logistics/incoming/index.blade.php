@@ -64,9 +64,21 @@
                     </p>
                 </div>
 
-                <form method="POST" action="{{ route('logistics.incoming.scan') }}" class="w-full lg:w-auto flex-1 max-w-xl">
+                <form method="POST" action="{{ route('logistics.incoming.scan') }}" class="w-full lg:w-auto flex-1 max-w-2xl">
                     @csrf
                     <div class="flex flex-col sm:flex-row items-stretch gap-2">
+                        @if ($myHubs->isNotEmpty())
+                            <div class="sm:w-2/5">
+                                <select name="hub_id" class="w-full px-3 py-3 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl text-xs font-semibold text-on-surface focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all">
+                                    <option value="">Auto-Detect Origin Hub</option>
+                                    @foreach ($myHubs as $hub)
+                                        <option value="{{ $hub->id }}" {{ old('hub_id', request('hub_id')) == $hub->id ? 'selected' : '' }}>
+                                            📍 {{ $hub->name }} ({{ $hub->city_name }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
                         <div class="relative flex-1">
                             <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-primary text-[20px]">qr_code_scanner</span>
                             <input
@@ -236,10 +248,15 @@
                                             <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
                                             En Route to Hub
                                         </span>
-                                    @elseif ($parcel->status === 'at_sorting_center')
+                                    @elseif ($parcel->status === 'in_transit_hub')
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-700 text-xs font-medium border border-indigo-500/20">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                                            In Transit Between Hubs
+                                        </span>
+                                    @elseif (in_array($parcel->status, ['received_at_hub', 'at_sorting_center']))
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 text-xs font-medium">
                                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                            At Sorting Hub
+                                            Received at Hub
                                         </span>
                                     @else
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface text-xs font-medium">
@@ -261,13 +278,22 @@
                                                     <span>Receive at Hub</span>
                                                 </button>
                                             </form>
-                                        @elseif ($parcel->status === 'at_sorting_center')
-                                            <a
-                                                href="{{ route('logistics.sorting.index', ['q' => $parcel->order_number]) }}"
-                                                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-on-secondary font-label-md text-xs font-semibold hover:bg-secondary/90 transition-all">
-                                                <span class="material-symbols-outlined text-[15px]">sort</span>
-                                                <span>Sort Parcel</span>
-                                            </a>
+                                        @elseif (in_array($parcel->status, ['at_sorting_center', 'received_at_hub']))
+                                            @if ($parcel->requiresHubTransfer() && !empty($parcel->destination_hub_id) && (int)$parcel->current_hub_id !== (int)$parcel->destination_hub_id)
+                                                <a
+                                                    href="{{ route('logistics.transfers.index', ['q' => $parcel->order_number]) }}"
+                                                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-xs font-semibold hover:bg-primary/90 transition-all">
+                                                    <span class="material-symbols-outlined text-[15px]">local_shipping</span>
+                                                    <span>Dispatch Hub Transfer</span>
+                                                </a>
+                                            @else
+                                                <a
+                                                    href="{{ route('logistics.sorting.index', ['q' => $parcel->order_number]) }}"
+                                                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-on-secondary font-label-md text-xs font-semibold hover:bg-secondary/90 transition-all">
+                                                    <span class="material-symbols-outlined text-[15px]">sort</span>
+                                                    <span>Sort Parcel</span>
+                                                </a>
+                                            @endif
                                         @endif
 
                                         <button

@@ -46,10 +46,10 @@
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-amber-600 text-[22px]">swap_horizontal_circle</span>
                                 <h2 class="text-sm font-bold text-on-surface uppercase tracking-wide">
-                                    Cross-Region Parcels Awaiting Hub Dispatch ({{ $awaitingDispatch->count() }})
+                                    Parcels Awaiting Hub Dispatch ({{ $awaitingDispatch->count() }})
                                 </h2>
                             </div>
-                            <span class="text-xs text-on-surface-variant">Parcels received at your hub destined for another logistics company's territory.</span>
+                            <span class="text-xs text-on-surface-variant">Parcels received at an origin hub staged for internal or inter-company transfer to destination hub.</span>
                         </div>
 
                         <div class="divide-y divide-outline-variant/50">
@@ -61,14 +61,25 @@
                                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-container text-on-surface-variant uppercase">
                                                 {{ str_replace('_', ' ', $order->status) }}
                                             </span>
+                                            @if ($order->isInternalTransfer())
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-700 border border-blue-500/20">
+                                                    Internal Transfer
+                                                </span>
+                                            @else
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20">
+                                                    Inter-Company Transfer
+                                                </span>
+                                            @endif
                                         </div>
                                         <p class="text-xs text-on-surface mt-1">
                                             <strong>Destination:</strong> {{ $order->shipping_barangay }}, {{ $order->shipping_city }}, {{ $order->shipping_province }}
                                         </p>
                                         <p class="text-[11px] text-on-surface-variant mt-0.5">
-                                            Destination Carrier: <strong>{{ $order->deliveryLogistics?->full_name ?? 'Assigned Logistics' }}</strong>
-                                            @if ($order->destinationHub)
-                                                &bull; Hub: <strong>{{ $order->destinationHub->name }}</strong>
+                                            Current Facility: <strong class="text-primary">{{ $order->currentHub?->name ?? ($order->originHub?->name ?? 'Origin Hub') }}</strong>
+                                            &bull; Origin Hub: <span>{{ $order->originHub?->name ?? 'Origin Hub' }}</span>
+                                            &bull; Destination Hub: <strong>{{ $order->destinationHub?->name ?? 'Destination Hub' }}</strong>
+                                            @if ($order->destinationHub?->logisticsCompany && (int)$order->destinationHub->logistics_company_id !== (int)auth()->id())
+                                                ({{ $order->destinationHub->logisticsCompany->full_name }})
                                             @endif
                                         </p>
                                     </div>
@@ -80,7 +91,7 @@
                                             <select name="sender_hub_id" required class="px-2.5 py-1.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface">
                                                 <option value="">Dispatch From Hub...</option>
                                                 @foreach ($myHubs as $mHub)
-                                                    <option value="{{ $mHub->id }}" {{ $order->origin_hub_id == $mHub->id ? 'selected' : '' }}>
+                                                    <option value="{{ $mHub->id }}" {{ ($order->current_hub_id ?: $order->origin_hub_id) == $mHub->id ? 'selected' : '' }}>
                                                         {{ $mHub->name }}
                                                     </option>
                                                 @endforeach
@@ -90,11 +101,22 @@
                                         <div>
                                             <select name="receiver_hub_id" required class="px-2.5 py-1.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface">
                                                 <option value="">Destination Hub...</option>
-                                                @foreach ($otherHubs as $oHub)
-                                                    <option value="{{ $oHub->id }}" {{ $order->destination_hub_id == $oHub->id ? 'selected' : '' }}>
-                                                        {{ $oHub->name }} ({{ $oHub->logisticsCompany?->full_name }})
-                                                    </option>
-                                                @endforeach
+                                                <optgroup label="Internal Company Hubs">
+                                                    @foreach ($myHubs as $mHub)
+                                                        <option value="{{ $mHub->id }}" {{ $order->destination_hub_id == $mHub->id ? 'selected' : '' }}>
+                                                            {{ $mHub->name }} (Internal)
+                                                        </option>
+                                                    @endforeach
+                                                </optgroup>
+                                                @if ($allDestinationHubs->where('logistics_company_id', '!=', auth()->id())->isNotEmpty())
+                                                    <optgroup label="Partner Logistics Hubs">
+                                                        @foreach ($allDestinationHubs->where('logistics_company_id', '!=', auth()->id()) as $pHub)
+                                                            <option value="{{ $pHub->id }}" {{ $order->destination_hub_id == $pHub->id ? 'selected' : '' }}>
+                                                                {{ $pHub->name }} ({{ $pHub->logisticsCompany?->full_name }})
+                                                            </option>
+                                                        @endforeach
+                                                    </optgroup>
+                                                @endif
                                             </select>
                                         </div>
 
@@ -127,6 +149,14 @@
                                 <span>Outgoing in Transit</span>
                                 <span class="px-1.5 py-0.2 rounded-full text-[10px] {{ $tab === 'in_transit' ? 'bg-white/20 text-white' : 'bg-surface text-on-surface-variant' }}">
                                     {{ $counts['in_transit'] }}
+                                </span>
+                            </a>
+
+                            <a href="{{ route('logistics.transfers.index', ['tab' => 'internal']) }}"
+                               class="px-4 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 shrink-0 {{ $tab === 'internal' ? 'bg-primary text-on-primary' : 'bg-surface-container hover:bg-surface-container-high text-on-surface' }}">
+                                <span>Internal Hub Transfers</span>
+                                <span class="px-1.5 py-0.2 rounded-full text-[10px] {{ $tab === 'internal' ? 'bg-white/20 text-white' : 'bg-surface text-on-surface-variant' }}">
+                                    {{ $counts['internal'] }}
                                 </span>
                             </a>
 
@@ -186,6 +216,17 @@
                                             <td class="py-3.5 px-3">
                                                 <p class="font-mono font-bold text-primary">{{ $t->tracking_number }}</p>
                                                 <p class="text-[11px] text-on-surface-variant mt-0.5">Order #{{ $t->order?->order_number }}</p>
+                                                @if ($t->is_internal)
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-700 border border-blue-500/20 mt-1">
+                                                        <span class="material-symbols-outlined text-[12px]">sync_alt</span>
+                                                        <span>Internal Transfer</span>
+                                                    </span>
+                                                @else
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20 mt-1">
+                                                        <span class="material-symbols-outlined text-[12px]">hub</span>
+                                                        <span>Inter-Company Transfer</span>
+                                                    </span>
+                                                @endif
                                             </td>
 
                                             <td class="py-3.5 px-3">
@@ -209,12 +250,17 @@
                                                 @if ($t->received_at)
                                                     <p class="text-[11px] text-emerald-700 font-semibold mt-0.5">Received: {{ $t->received_at->format('M d, Y h:i A') }}</p>
                                                 @else
-                                                    <p class="text-[11px] text-amber-600 font-medium mt-0.5">In Transit</p>
+                                                    <p class="text-[11px] text-amber-600 font-medium mt-0.5">In Transit Between Hubs</p>
                                                 @endif
                                             </td>
 
                                             <td class="py-3.5 px-3">
-                                                @if ($t->status === 'received')
+                                                @if ($t->is_internal)
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-700">
+                                                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                                        <span>Company Internal ({{ $t->senderLogistics?->full_name }})</span>
+                                                    </span>
+                                                @elseif ($t->status === 'received')
                                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700">
                                                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                                                         <span>Custody with {{ $t->receiverLogistics?->full_name }}</span>
@@ -228,9 +274,9 @@
                                             </td>
 
                                             <td class="py-3.5 px-3 text-right">
-                                                @if ($tab === 'incoming' && $t->status === 'in_transit')
+                                                @if (in_array($tab, ['incoming', 'internal']) && $t->status === 'in_transit' && (int)$t->receiver_logistics_id === (int)auth()->id())
                                                     <form method="POST" action="{{ route('logistics.transfers.confirm', $t) }}"
-                                                          onsubmit="return confirm('Confirm receipt of parcel #{{ $t->order?->order_number }} at {{ $t->receiverHub?->name }}? Legal custody will shift to your company.');">
+                                                          onsubmit="return confirm('Confirm receipt of parcel #{{ $t->order?->order_number }} at {{ $t->receiverHub?->name }}?');">
                                                         @csrf
                                                         <button type="submit" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs inline-flex items-center gap-1">
                                                             <span class="material-symbols-outlined text-[16px]">how_to_reg</span>
@@ -239,7 +285,7 @@
                                                     </form>
                                                 @else
                                                     <span class="text-[11px] text-on-surface-variant italic">
-                                                        {{ ucfirst($t->status) }}
+                                                        {{ ucfirst(str_replace('_', ' ', $t->status)) }}
                                                     </span>
                                                 @endif
                                             </td>

@@ -204,6 +204,7 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::get('/hubs', [Logistics\HubController::class, 'index'])->name('hubs.index');
     Route::get('/hubs/create', [Logistics\HubController::class, 'create'])->name('hubs.create');
     Route::post('/hubs', [Logistics\HubController::class, 'store'])->name('hubs.store');
+    Route::get('/hubs/{hub}', [Logistics\HubController::class, 'show'])->name('hubs.show');
     Route::get('/hubs/{hub}/edit', [Logistics\HubController::class, 'edit'])->name('hubs.edit');
     Route::put('/hubs/{hub}', [Logistics\HubController::class, 'update'])->name('hubs.update');
     Route::post('/hubs/{hub}/toggle-status', [Logistics\HubController::class, 'toggleStatus'])->name('hubs.toggle-status');
@@ -220,6 +221,7 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::get('/transfers', [Logistics\TransferController::class, 'index'])->name('transfers.index');
     Route::post('/transfers/{order}/dispatch', [Logistics\TransferController::class, 'dispatch'])->name('transfers.dispatch');
     Route::post('/transfers/{transfer}/confirm-receipt', [Logistics\TransferController::class, 'confirmReceipt'])->name('transfers.confirm-receipt');
+    Route::post('/transfers/{transfer}/confirm', [Logistics\TransferController::class, 'confirmReceipt'])->name('transfers.confirm');
 
     // Rider Management
     Route::get('/riders', [Logistics\RiderController::class, 'index'])->name('riders.index');

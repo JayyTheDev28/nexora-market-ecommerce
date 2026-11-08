@@ -156,6 +156,10 @@
                                     <div class="text-[11px] text-on-surface-variant mt-1">
                                         ₱{{ number_format($parcel->total, 2) }} · {{ $parcel->items->count() }} item(s)
                                     </div>
+                                    <div class="text-[10px] text-on-surface-variant flex items-center gap-1 mt-1">
+                                        <span class="material-symbols-outlined text-[13px] text-primary">warehouse</span>
+                                        <span>Current: <strong>{{ $parcel->currentHub?->name ?? ($parcel->destinationHub?->name ?? 'Hub') }}</strong></span>
+                                    </div>
                                 </td>
 
                                 <td class="px-5 py-4">
@@ -208,6 +212,11 @@
                                             <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
                                             Needs Sorting
                                         </span>
+                                    @elseif ($parcel->status === 'received_at_hub')
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-700 text-xs font-medium">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                                            Received at Hub
+                                        </span>
                                     @elseif ($parcel->status === 'sorted')
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 text-xs font-medium">
                                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
@@ -222,7 +231,7 @@
 
                                 <td class="px-5 py-4 text-right whitespace-nowrap">
                                     <div class="inline-flex items-center gap-2">
-                                        @if ($parcel->status === 'at_sorting_center')
+                                        @if (in_array($parcel->status, ['at_sorting_center', 'received_at_hub']))
                                             {{-- If already has area, quick 1-click confirm --}}
                                             @if ($parcel->delivery_area_id)
                                                 <form method="POST" action="{{ route('logistics.sorting.confirm', $parcel) }}" class="inline">

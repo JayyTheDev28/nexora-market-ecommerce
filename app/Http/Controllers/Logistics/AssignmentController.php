@@ -24,20 +24,23 @@ class AssignmentController extends Controller
         $areaFilter = $request->query('area_id');
         $search = $request->query('q');
 
-        $query = Order::where('sorting_center_id', $sortingCenterId)
+        $query = Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId))
             ->with([
                 'buyer',
                 'address',
                 'deliveryArea',
                 'deliveryCourier.courierProfile',
                 'items.product',
+                'originHub',
+                'destinationHub',
+                'currentHub',
             ]);
 
         match ($tab) {
-            'unassigned' => $query->where('status', 'sorted'),
+            'unassigned' => $query->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center']),
             'assigned' => $query->where('status', 'assigned_to_rider'),
-            'all' => $query->whereIn('status', ['sorted', 'assigned_to_rider', 'out_for_delivery']),
-            default => $query->where('status', 'sorted'),
+            'all' => $query->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center', 'assigned_to_rider', 'out_for_delivery']),
+            default => $query->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center']),
         };
 
         if ($areaFilter) {
@@ -55,10 +58,12 @@ class AssignmentController extends Controller
 
         $parcels = $query->latest()->paginate(15)->withQueryString();
 
+        $baseCountQuery = fn () => Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId));
+
         $counts = [
-            'unassigned' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'sorted')->count(),
-            'assigned' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'assigned_to_rider')->count(),
-            'all' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['sorted', 'assigned_to_rider', 'out_for_delivery'])->count(),
+            'unassigned' => (clone $baseCountQuery())->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center'])->count(),
+            'assigned' => (clone $baseCountQuery())->where('status', 'assigned_to_rider')->count(),
+            'all' => (clone $baseCountQuery())->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center', 'assigned_to_rider', 'out_for_delivery'])->count(),
         ];
 
         // Active and approved riders with their workload and assigned areas/zones
@@ -101,10 +106,17 @@ class AssignmentController extends Controller
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
 
             abort_unless(
-                in_array($lockedOrder->status, ['sorted', 'assigned_to_rider']),
+                in_array($lockedOrder->status, ['sorted', 'assigned_to_rider', 'received_at_hub', 'at_sorting_center']),
                 422,
                 "Order cannot be assigned in status '" . ucwords(str_replace('_', ' ', $lockedOrder->status)) . "'."
             );
+
+            // Guard: If parcel requires a hub transfer and has not reached the destination hub yet
+            if ($lockedOrder->requiresHubTransfer() && (int) $lockedOrder->current_hub_id !== (int) $lockedOrder->destination_hub_id) {
+                return back()->withInput()->withErrors([
+                    'courier_id' => "This parcel requires a hub transfer to {$lockedOrder->destinationHub?->name} before local delivery assignment. Current status: " . ucwords(str_replace('_', ' ', $lockedOrder->status)) . ".",
+                ]);
+            }
 
             $courier = User::where('id', $validated['courier_id'])
                 ->whereIn('role', ['rider', 'courier'])
@@ -116,8 +128,17 @@ class AssignmentController extends Controller
             abort_unless($courier->isActive(), 422, 'Cannot assign parcel to a deactivated courier.');
 
             // Verify area or zone coverage eligibility
+            $barangayCode = $lockedOrder->address?->barangay_code ?? ($lockedOrder->address_snapshot['barangay_code'] ?? null);
+            $barangayName = $lockedOrder->address?->barangay_name ?? ($lockedOrder->address_snapshot['barangay_name'] ?? null);
+
             $coversZone = $courier->assignedZones()
-                ->whereHas('barangays', fn ($b) => $b->where('barangay_code', $lockedOrder->address?->barangay_code))
+                ->whereHas('barangays', function ($b) use ($barangayCode, $barangayName) {
+                    if ($barangayCode) {
+                        $b->where('barangay_code', $barangayCode);
+                    } elseif ($barangayName) {
+                        $b->where('barangay_name', 'like', $barangayName);
+                    }
+                })
                 ->exists();
             $coversArea = $coversZone || $courier->deliveryAreas()->where('delivery_areas.id', $lockedOrder->delivery_area_id)->exists();
 

@@ -36,6 +36,7 @@ class Order extends Model
         'current_custody_logistics_id',
         'origin_hub_id',
         'destination_hub_id',
+        'current_hub_id',
         'pickup_zone_id',
         'delivery_zone_id',
         'delivery_area_id',
@@ -154,6 +155,31 @@ class Order extends Model
     public function destinationHub()
     {
         return $this->belongsTo(Hub::class, 'destination_hub_id');
+    }
+
+    public function currentHub()
+    {
+        return $this->belongsTo(Hub::class, 'current_hub_id');
+    }
+
+    public function requiresHubTransfer(): bool
+    {
+        return !empty($this->origin_hub_id) &&
+               !empty($this->destination_hub_id) &&
+               (int) $this->origin_hub_id !== (int) $this->destination_hub_id;
+    }
+
+    public function isInternalTransfer(): bool
+    {
+        return $this->requiresHubTransfer() &&
+               (int) $this->pickup_logistics_id === (int) $this->delivery_logistics_id;
+    }
+
+    public function isSameHub(): bool
+    {
+        return !empty($this->origin_hub_id) &&
+               !empty($this->destination_hub_id) &&
+               (int) $this->origin_hub_id === (int) $this->destination_hub_id;
     }
 
     public function pickupZone()

@@ -73,10 +73,10 @@
 
                                     {{-- Facility Statistics --}}
                                     <div class="grid grid-cols-3 gap-2 bg-surface-container-low rounded-xl p-3 my-3 text-center">
-                                        <div>
+                                        <a href="{{ route('logistics.hubs.show', $hub) }}" class="hover:bg-surface-container-high/60 rounded-lg p-1 transition-colors block">
                                             <p class="text-[10px] uppercase font-bold text-on-surface-variant">Parcels at Hub</p>
                                             <p class="text-base font-bold text-primary mt-0.5">{{ $hub->parcels_at_hub_count }}</p>
-                                        </div>
+                                        </a>
                                         <div>
                                             <p class="text-[10px] uppercase font-bold text-on-surface-variant">Linked Zones</p>
                                             <p class="text-base font-bold text-on-surface mt-0.5">{{ $hub->zones_count }}</p>
@@ -90,10 +90,16 @@
 
                                 {{-- Actions --}}
                                 <div class="pt-4 mt-2 border-t border-outline-variant/60 flex items-center justify-between">
-                                    <a href="{{ route('logistics.zones.index') }}" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
-                                        <span class="material-symbols-outlined text-[14px]">share_location</span>
-                                        <span>View Coverage</span>
-                                    </a>
+                                    <div class="flex items-center gap-2">
+                                        <a href="{{ route('logistics.hubs.show', $hub) }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-colors shadow-xs">
+                                            <span class="material-symbols-outlined text-[15px]">inventory_2</span>
+                                            <span>Inventory ({{ $hub->parcels_at_hub_count }})</span>
+                                        </a>
+                                        <a href="{{ route('logistics.zones.index') }}" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1 ml-2">
+                                            <span class="material-symbols-outlined text-[14px]">share_location</span>
+                                            <span>Coverage</span>
+                                        </a>
+                                    </div>
                                     <div class="flex items-center gap-2">
                                         <a href="{{ route('logistics.hubs.edit', $hub) }}" class="px-3 py-1.5 rounded-lg border border-outline-variant hover:bg-surface-container text-xs font-medium text-on-surface transition-colors">
                                             Edit
