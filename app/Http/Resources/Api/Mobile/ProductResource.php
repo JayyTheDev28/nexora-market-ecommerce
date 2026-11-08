@@ -58,7 +58,7 @@ class ProductResource extends JsonResource
             'sold_count' => (int) ($this->orderItems()->sum('quantity') ?? 0),
             'image' => $mainImage,
             'primary_image' => $mainImage,
-            'images' => $this->gallery ?? [$mainImage],
+            'images' => !empty($gallery) ? $gallery : [$mainImage],
             'status' => $this->status,
             'is_active' => $this->status === 'active',
         ];

@@ -13,6 +13,7 @@ use App\Models\UserVoucher;
 use App\Models\Voucher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -388,6 +389,13 @@ class MobileCheckoutService
                         'changed_by' => $user->id,
                         'changed_at' => now(),
                     ]);
+
+                    // Auto-route order to assign origin & destination hubs and logistics
+                    try {
+                        app(InterRegionLogisticsService::class)->matchLogisticsAndRouteOrder($order);
+                    } catch (\Throwable $e) {
+                        Log::warning("Could not auto-route mobile order {$order->id}: " . $e->getMessage());
+                    }
 
                     $orders[] = $order;
                 }
