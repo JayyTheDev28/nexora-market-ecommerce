@@ -21,7 +21,7 @@ class CatalogController extends Controller
         $query = Product::query()
             ->where('status', 'active')
             ->whereHas('seller', fn ($q) => $q->where('account_status', 'active'))
-            ->with(['category', 'seller.sellerProfile', 'reviews']);
+            ->with(['category', 'seller.sellerProfile', 'seller.defaultAddress', 'seller.address', 'reviews']);
 
         $rawQ = $request->query('q', '');
         $keyword = is_string($rawQ) ? trim($rawQ) : '';

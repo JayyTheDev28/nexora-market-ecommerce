@@ -35,16 +35,6 @@ class AddressRequest extends FormRequest
             $merge['region_name'] = $this->input('region');
         }
 
-        if (empty($this->input('province_code'))) {
-            $merge['province_code'] = '043400000';
-        }
-        if (empty($this->input('municipality_code'))) {
-            $merge['municipality_code'] = '043400000';
-        }
-        if (empty($this->input('barangay_code'))) {
-            $merge['barangay_code'] = '043400000';
-        }
-
         if (!empty($merge)) {
             $this->merge($merge);
         }
@@ -54,19 +44,26 @@ class AddressRequest extends FormRequest
     {
         return [
             'recipient_name' => ['required', 'string', 'max:255'],
-            'recipient_phone' => ['required', 'string'],
+            'recipient_phone' => ['required', 'string', 'regex:/^(09|\+639)\d{9}$/'],
             'region_code' => ['nullable', 'string', 'max:50'],
             'region_name' => ['nullable', 'string', 'max:100'],
-            'province_code' => ['nullable', 'string', 'max:50'],
+            'province_code' => ['required', 'string', 'max:50'],
             'province_name' => ['required', 'string', 'max:100'],
-            'municipality_code' => ['nullable', 'string', 'max:50'],
+            'municipality_code' => ['required', 'string', 'max:50'],
             'municipality_name' => ['required', 'string', 'max:100'],
-            'barangay_code' => ['nullable', 'string', 'max:50'],
+            'barangay_code' => ['required', 'string', 'max:50'],
             'barangay_name' => ['required', 'string', 'max:100'],
             'street' => ['nullable', 'string', 'max:255'],
             'house_number' => ['nullable', 'string', 'max:100'],
             'postal_code' => ['nullable', 'string', 'max:10'],
             'is_default' => ['nullable', 'boolean'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'recipient_phone.regex' => 'Mobile number must be a valid Philippine number (e.g. 09123456789 or +639123456789).',
         ];
     }
 

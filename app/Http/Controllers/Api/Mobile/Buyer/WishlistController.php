@@ -23,7 +23,7 @@ class WishlistController extends Controller
         $user = $request->user();
 
         $wishlists = Wishlist::where('user_id', $user->id)
-            ->with(['product' => fn ($q) => $q->withTrashed()->with(['seller.sellerProfile', 'category'])])
+            ->with(['product' => fn ($q) => $q->withTrashed()->with(['seller.sellerProfile', 'seller.defaultAddress', 'seller.address', 'category'])])
             ->latest()
             ->get();
 

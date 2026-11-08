@@ -20,6 +20,8 @@ class ProductController extends Controller
         $product = Product::with([
             'category',
             'seller.sellerProfile',
+            'seller.defaultAddress',
+            'seller.address',
             'reviews.buyer',
         ])->findOrFail($id);
 
@@ -33,7 +35,7 @@ class ProductController extends Controller
         $related = Product::where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->where('status', 'active')
-            ->with(['seller.sellerProfile', 'category'])
+            ->with(['seller.sellerProfile', 'seller.defaultAddress', 'seller.address', 'category'])
             ->limit(4)
             ->get();
 

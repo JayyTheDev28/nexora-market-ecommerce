@@ -28,6 +28,12 @@ class ProductResource extends JsonResource
         $rawGallery = !empty($this->gallery) && is_array($this->gallery) ? $this->gallery : [];
         $gallery = array_map(fn ($img) => $toAbsoluteUrl($img, $this->name), $rawGallery);
         $mainImage = !empty($gallery[0]) ? $gallery[0] : $toAbsoluteUrl(null, $this->name);
+        $sellerCity = $seller?->defaultAddress?->municipality_name ?? $seller?->address?->municipality_name;
+
+        $effectiveStock = (int) $this->stock;
+        if ($effectiveStock === 0 && ! empty($this->variants_data) && is_array($this->variants_data)) {
+            $effectiveStock = (int) array_sum(array_map(fn ($v) => (int) ($v['stock'] ?? 0), $this->variants_data));
+        }
 
         return [
             'id' => $this->id,
@@ -44,18 +50,23 @@ class ProductResource extends JsonResource
                 'name' => $sellerName,
                 'store_name' => $sellerName,
                 'business_name' => $sellerName,
-                'city' => 'Metro Manila',
+                'city' => $sellerCity,
             ],
             'price' => (float) $this->effective_price,
             'formatted_price' => '₱' . number_format($this->effective_price, 2),
             'regular_price' => (float) $this->price,
             'compare_price' => $this->compare_price ? (float) $this->compare_price : null,
             'is_flash_sale' => $this->isFlashSaleActive(),
-            'stock' => (int) $this->stock,
+            'flash_sale_price' => $this->isFlashSaleActive() ? (float) $this->flash_sale_price : null,
+            'flash_sale_remaining_seconds' => ($this->isFlashSaleActive() && $this->flash_sale_ends_at)
+                ? max(0, now()->diffInSeconds($this->flash_sale_ends_at, false))
+                : 0,
+            'stock' => $effectiveStock,
+            'max_purchase_limit' => $this->max_purchase_limit ? (int) $this->max_purchase_limit : null,
             'weight' => (float) ($this->weight ?? 1.0),
             'rating' => $this->averageRating(),
             'reviews_count' => $this->reviews()->count(),
-            'sold_count' => (int) ($this->orderItems()->sum('quantity') ?? 0),
+            'sold_count' => (int) ($this->orderItems()->whereHas('order', fn ($q) => $q->whereNotIn('status', ['cancelled', 'failed']))->sum('quantity') ?? 0),
             'image' => $mainImage,
             'primary_image' => $mainImage,
             'images' => !empty($gallery) ? $gallery : [$mainImage],

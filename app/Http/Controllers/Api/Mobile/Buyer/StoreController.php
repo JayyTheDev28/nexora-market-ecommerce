@@ -28,7 +28,7 @@ class StoreController extends Controller
 
         $productsQuery = Product::where('seller_id', $seller->id)
             ->where('status', 'active')
-            ->with(['category', 'seller.sellerProfile']);
+            ->with(['category', 'seller.sellerProfile', 'seller.defaultAddress', 'seller.address']);
 
         if ($catId = $request->query('store_category')) {
             $productsQuery->where('store_category_id', $catId);

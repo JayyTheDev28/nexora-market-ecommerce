@@ -37,7 +37,29 @@ class RiderController extends Controller
     {
         /** @var User $rider */
         $rider = $request->user();
-        $profile = $rider->courierProfile()->with('sortingCenter')->first();
+        $profile = $rider->courierProfile()->with(['sortingCenter', 'logisticsCompany'])->first();
+
+        $reviewsQuery = \App\Models\Review::whereHas('order', fn ($q) => $q->where('delivery_courier_id', $rider->id));
+        $reviewsCount = $reviewsQuery->count();
+        $avgRating = $reviewsCount > 0 ? (float) round($reviewsQuery->avg('rating'), 2) : 5.0;
+
+        $recentReviews = \App\Models\Review::whereHas('order', fn ($q) => $q->where('delivery_courier_id', $rider->id))
+            ->with(['order', 'buyer'])
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->id,
+                'rating' => (float) $r->rating,
+                'comment' => $r->comment ?? '',
+                'buyer_name' => $r->buyer?->full_name ?? 'Customer',
+                'order_number' => $r->order?->order_number ?? '',
+                'created_at' => $r->created_at?->toIso8601String(),
+            ]);
+
+        $totalDeliveries = Order::where('delivery_courier_id', $rider->id)
+            ->whereIn('status', ['delivered', 'completed'])
+            ->count();
 
         return response()->json([
             'data' => [
@@ -47,6 +69,10 @@ class RiderController extends Controller
                 'active_jobs_count' => $profile?->activeJobsCount() ?? 0,
                 'earnings_balance' => (float) ($profile?->earnings_balance ?? 0),
                 'unremitted_cod_balance' => (float) ($profile?->unremitted_cod_balance ?? 0),
+                'rating' => $avgRating,
+                'reviews_count' => $reviewsCount,
+                'total_deliveries' => $totalDeliveries,
+                'recent_reviews' => $recentReviews,
             ],
             'message' => 'Rider profile retrieved successfully.',
         ]);
@@ -79,6 +105,69 @@ class RiderController extends Controller
                 'is_online' => $isOnline,
             ],
             'message' => $isOnline ? 'Online on auto-dispatch' : 'Offline',
+        ]);
+    }
+
+    /**
+     * GET /api/mobile/v1/rider/hubs
+     */
+    public function hubs(Request $request): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $profile = $rider->courierProfile;
+
+        $query = \App\Models\Hub::where('is_active', true);
+        if ($profile && $profile->logistics_company_id) {
+            $query->where('logistics_company_id', $profile->logistics_company_id);
+        }
+
+        $hubs = $query->get()->map(fn ($h) => [
+            'id' => $h->id,
+            'name' => $h->name,
+            'code' => $h->code,
+            'city_name' => $h->city_name,
+            'province_name' => $h->province_name,
+            'street_address' => $h->street_address,
+            'full_location' => $h->full_location,
+            'is_selected' => $profile && ($profile->sorting_center_id == $h->id),
+        ]);
+
+        return response()->json([
+            'data' => $hubs,
+            'message' => 'Hubs retrieved successfully.',
+        ]);
+    }
+
+    /**
+     * POST /api/mobile/v1/rider/hub/select
+     */
+    public function selectHub(Request $request): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $profile = $rider->courierProfile;
+
+        if (! $profile) {
+            return response()->json(['message' => 'Courier profile not found.'], 404);
+        }
+
+        $validated = $request->validate([
+            'hub_id' => ['required', 'integer', 'exists:hubs,id'],
+        ]);
+
+        $hub = \App\Models\Hub::findOrFail($validated['hub_id']);
+        $profile->update([
+            'sorting_center_id' => $hub->id,
+        ]);
+
+        return response()->json([
+            'data' => [
+                'hub_id' => $hub->id,
+                'hub_name' => $hub->name,
+                'hub_code' => $hub->code,
+            ],
+            'message' => "Assigned to {$hub->name}.",
         ]);
     }
 
@@ -140,12 +229,13 @@ class RiderController extends Controller
             $result = $this->dispatchService->acceptOffer($offer, $rider);
 
             if (! ($result['success'] ?? false)) {
+                $status = ($offer->isExpired() || $offer->status !== 'pending') ? 409 : 422;
                 return response()->json([
                     'message' => $result['message'] ?? 'Unable to accept job offer.',
                     'errors' => [
                         'offer' => [$result['message'] ?? 'Unable to accept job offer.'],
                     ],
-                ], 422);
+                ], $status);
             }
 
             return response()->json([
@@ -248,6 +338,15 @@ class RiderController extends Controller
     }
 
     /**
+     * POST /api/mobile/v1/rider/deliveries/{order}/pickup
+     */
+    public function confirmPickupOrder(Request $request, Order $order): JsonResponse
+    {
+        $request->merge(['tracking_number' => $order->tracking_number]);
+        return $this->confirmPickup($request);
+    }
+
+    /**
      * GET /api/mobile/v1/rider/deliveries/active
      */
     public function activeDeliveries(Request $request): JsonResponse
@@ -256,11 +355,15 @@ class RiderController extends Controller
         $rider = $request->user();
 
         $orders = Order::where(function ($query) use ($rider) {
-            $query->where('pickup_courier_id', $rider->id)
-                ->orWhere('delivery_courier_id', $rider->id);
+            $query->where(function ($q) use ($rider) {
+                $q->where('pickup_courier_id', $rider->id)
+                    ->whereIn('status', ['ready_for_pickup', 'assigned']);
+            })->orWhere(function ($q) use ($rider) {
+                $q->where('delivery_courier_id', $rider->id)
+                    ->whereIn('status', ['assigned_to_rider', 'out_for_delivery']);
+            });
         })
-            ->whereIn('status', ['ready_for_pickup', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'assigned_to_rider'])
-            ->with(['items.product', 'buyer', 'seller'])
+            ->with(['items.product', 'buyer', 'seller.address', 'address'])
             ->orderBy('updated_at', 'desc')
             ->get()
             ->map(fn ($order) => $this->formatRiderOrder($order, $rider));
@@ -301,6 +404,20 @@ class RiderController extends Controller
     }
 
     /**
+     * GET /api/mobile/v1/rider/deliveries/{order}
+     */
+    public function showDelivery(Request $request, Order $order): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+
+        return response()->json([
+            'data' => $this->formatRiderOrder($order, $rider),
+            'message' => 'Delivery details retrieved.',
+        ]);
+    }
+
+    /**
      * POST /api/mobile/v1/rider/deliveries/{order}/complete
      */
     public function completeDelivery(Request $request, Order $order): JsonResponse
@@ -324,31 +441,46 @@ class RiderController extends Controller
 
         $validated = $request->validate([
             'delivery_otp' => ['required', 'string', 'digits:6'],
-            'pod_image' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
+            'pod_image' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
+            'pod_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $photoFile = $request->file('pod_image') ?? $request->file('pod_photo');
+        if (! $photoFile) {
+            return response()->json([
+                'message' => 'The pod_image or pod_photo field is required.',
+                'errors' => ['pod_photo' => ['Proof of delivery photo is required.']],
+            ], 422);
+        }
+
         $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
 
-        return IdempotencyService::run($key, $rider->id, "mobile_complete_delivery_{$order->id}", function () use ($request, $rider, $order, $validated) {
-            if ($order->isDeliveryOtpLocked()) {
+        return IdempotencyService::run($key, $rider->id, "mobile_complete_delivery_{$order->id}", function () use ($request, $rider, $order, $validated, $photoFile) {
+            if ($order->isDeliveryOtpLocked() || $order->delivery_otp_failed_attempts >= 3) {
+                if (! $order->isDeliveryOtpLocked()) {
+                    $order->update(['delivery_otp_locked_until' => now()->addMinutes(15)]);
+                }
                 $minutes = now()->diffInMinutes($order->delivery_otp_locked_until) + 1;
                 return response()->json([
-                    'message' => "OTP verification locked for {$minutes} minutes due to 5 consecutive failed attempts.",
+                    'message' => "OTP verification locked for {$minutes} minutes due to 3 consecutive failed attempts. Please report delivery failure.",
                     'errors' => ['delivery_otp' => ["OTP verification locked for {$minutes} minutes."]],
                 ], 422);
             }
 
             if (! $order->verifyDeliveryOtp($validated['delivery_otp'])) {
                 $failed = $order->delivery_otp_failed_attempts;
+                if ($failed >= 3) {
+                    $order->update(['delivery_otp_locked_until' => now()->addMinutes(15)]);
+                }
                 return response()->json([
-                    'message' => "Invalid Delivery OTP ({$failed}/5 failed attempts).",
-                    'errors' => ['delivery_otp' => ["Invalid Delivery OTP ({$failed}/5 failed attempts)."]],
+                    'message' => "Invalid Delivery OTP ({$failed}/3 failed attempts).",
+                    'errors' => ['delivery_otp' => ["Invalid Delivery OTP ({$failed}/3 failed attempts)."]],
                     'data' => ['failed_attempts' => $failed],
                 ], 422);
             }
 
-            $podPath = $request->file('pod_image')->store("couriers/{$rider->id}/pod", 'public');
+            $podPath = $photoFile->store("couriers/{$rider->id}/pod", 'public');
 
             ProofOfDelivery::create([
                 'order_id' => $order->id,
@@ -465,33 +597,61 @@ class RiderController extends Controller
 
         $todayPickups = RiderEarning::where('courier_id', $rider->id)->where('type', 'pickup')->where('earned_at', '>=', now()->startOfDay())->count();
         $todayDeliveries = RiderEarning::where('courier_id', $rider->id)->where('type', 'delivery')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayPay = ($todayPickups * 30.00) + ($todayDeliveries * 50.00);
+        $todayPay = (float) RiderEarning::where('courier_id', $rider->id)->where('earned_at', '>=', now()->startOfDay())->sum('amount');
 
-        $weeklyPay = RiderEarning::where('courier_id', $rider->id)->where('earned_at', '>=', now()->startOfWeek())->sum('amount');
+        $weeklyPay = (float) RiderEarning::where('courier_id', $rider->id)->where('earned_at', '>=', now()->startOfWeek())->sum('amount');
+        $totalEarned = (float) RiderEarning::where('courier_id', $rider->id)->sum('amount');
+
+        // Past 7 days daily breakdown for weekly performance chart
+        $past7Days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $dayDate = now()->subDays($i);
+            $dayStart = $dayDate->copy()->startOfDay();
+            $dayEnd = $dayDate->copy()->endOfDay();
+            $dayEarnings = RiderEarning::where('courier_id', $rider->id)
+                ->whereBetween('earned_at', [$dayStart, $dayEnd]);
+            $past7Days[] = [
+                'date' => $dayDate->format('Y-m-d'),
+                'day' => $dayDate->format('D'),
+                'amount' => (float) $dayEarnings->sum('amount'),
+                'trips' => (int) $dayEarnings->count(),
+            ];
+        }
 
         $recentEarnings = RiderEarning::where('courier_id', $rider->id)
+            ->with('order')
             ->orderBy('earned_at', 'desc')
-            ->limit(20)
+            ->limit(50)
             ->get()
-            ->map(fn ($e) => [
-                'id' => $e->id,
-                'type' => $e->type,
-                'amount' => (float) $e->amount,
-                'description' => $e->description,
-                'order_id' => $e->order_id,
-                'earned_at' => $e->earned_at?->toIso8601String(),
-            ]);
+            ->map(function ($e) {
+                $orderNum = $e->order?->order_number ?? '';
+                $fallbackDesc = $e->type === 'pickup'
+                    ? ($orderNum ? "Pickup Pay ({$orderNum})" : 'Pickup Pay')
+                    : ($orderNum ? "Delivery Pay ({$orderNum})" : 'Delivery Pay');
+
+                return [
+                    'id' => $e->id,
+                    'type' => $e->type,
+                    'amount' => (float) $e->amount,
+                    'description' => $e->description ?: $fallbackDesc,
+                    'order_id' => $e->order_id,
+                    'order_number' => $orderNum,
+                    'earned_at' => $e->earned_at?->toIso8601String(),
+                ];
+            });
 
         return response()->json([
             'data' => [
                 'earnings_balance' => (float) ($profile?->earnings_balance ?? 0),
                 'unremitted_cod_balance' => (float) ($profile?->unremitted_cod_balance ?? 0),
+                'total_earned_all_time' => $totalEarned,
                 'today_summary' => [
                     'pickups' => $todayPickups,
                     'deliveries' => $todayDeliveries,
                     'total_pay' => $todayPay,
                 ],
                 'weekly_total_pay' => (float) $weeklyPay,
+                'past_7_days' => $past7Days,
                 'recent_earnings' => $recentEarnings,
             ],
             'message' => 'Earnings retrieved successfully.',
@@ -549,6 +709,17 @@ class RiderController extends Controller
         $isPickup = (int) $order->pickup_courier_id === (int) $rider->id;
         $isDelivery = (int) $order->delivery_courier_id === (int) $rider->id;
 
+        $deliveryStatuses = ['assigned_to_rider', 'out_for_delivery', 'delivered', 'failed_delivery', 'return_to_sender', 'completed'];
+        if ($isDelivery && in_array($order->status, $deliveryStatuses, true)) {
+            $role = 'delivery';
+        } elseif ($isPickup) {
+            $role = 'pickup';
+        } elseif ($isDelivery) {
+            $role = 'delivery';
+        } else {
+            $role = 'courier';
+        }
+
         $pickupAddress = $order->seller_address
             ? "{$order->seller_address->street}, {$order->seller_address->barangay_name}, {$order->seller_address->municipality_name}"
             : 'Seller Store';
@@ -562,7 +733,7 @@ class RiderController extends Controller
             'order_number' => $order->order_number,
             'tracking_number' => $order->tracking_number,
             'status' => $order->status,
-            'role' => $isPickup ? 'pickup' : ($isDelivery ? 'delivery' : 'courier'),
+            'role' => $role,
             'total' => (float) $order->total,
             'payment_method' => $order->payment_method,
             'cod_amount' => strtolower($order->payment_method) === 'cod' ? (float) $order->total : 0.00,

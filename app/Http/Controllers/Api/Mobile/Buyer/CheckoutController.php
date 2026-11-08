@@ -8,6 +8,7 @@ use App\Http\Resources\Api\Mobile\AddressResource;
 use App\Http\Resources\Api\Mobile\CartItemResource;
 use App\Http\Resources\Api\Mobile\OrderResource;
 use App\Http\Resources\Api\Mobile\VoucherResource;
+use App\Services\IdempotencyService;
 use App\Services\MobileCheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,15 @@ class CheckoutController extends Controller
      */
     public function summary(Request $request): JsonResponse
     {
-        $summary = $this->checkoutService->getSummary($request->user());
+        $rawIds = $request->query('cart_item_ids');
+        $cartItemIds = null;
+        if (is_array($rawIds)) {
+            $cartItemIds = array_values(array_filter(array_map('intval', $rawIds), fn (int $id) => $id > 0));
+        } elseif (is_string($rawIds) && trim($rawIds) !== '') {
+            $cartItemIds = array_values(array_filter(array_map('intval', explode(',', $rawIds)), fn (int $id) => $id > 0));
+        }
+
+        $summary = $this->checkoutService->getSummary($request->user(), $cartItemIds);
 
         $formattedStores = [];
         foreach ($summary['grouped'] as $sellerId => $storeItems) {
@@ -62,27 +71,31 @@ class CheckoutController extends Controller
      */
     public function store(CheckoutRequest $request): JsonResponse
     {
-        $idempotencyKey = $request->header('Idempotency-Key') ?? $request->input('idempotency_token');
+        $user = $request->user();
+        $validated = $request->validated();
+        $idempotencyKey = $request->header('Idempotency-Key') ?? ($validated['idempotency_token'] ?? null);
 
-        $orders = $this->checkoutService->processCheckout(
-            $request->user(),
-            $request->validated(),
-            $idempotencyKey
-        );
+        return IdempotencyService::run($idempotencyKey, $user->id, 'mobile_checkout_' . $user->id, function () use ($user, $validated, $idempotencyKey) {
+            $orders = $this->checkoutService->processCheckout(
+                $user,
+                $validated,
+                $idempotencyKey
+            );
 
-        $orderCount = count($orders);
-        $message = $orderCount > 1
-            ? "Your checkout was split into {$orderCount} store orders and successfully placed!"
-            : "Order {$orders[0]->order_number} placed successfully!";
+            $orderCount = count($orders);
+            $message = $orderCount > 1
+                ? "Your checkout was split into {$orderCount} store orders and successfully placed!"
+                : "Order {$orders[0]->order_number} placed successfully!";
 
-        return response()->json([
-            'data' => [
-                'orders' => OrderResource::collection($orders),
-                'checkout_session_id' => $orders[0]->checkout_session_id ?? null,
-                'orders_count' => $orderCount,
-            ],
-            'message' => $message,
-        ], 201);
+            return response()->json([
+                'data' => [
+                    'orders' => OrderResource::collection($orders),
+                    'checkout_session_id' => $orders[0]->checkout_session_id ?? null,
+                    'orders_count' => $orderCount,
+                ],
+                'message' => $message,
+            ], 201);
+        });
     }
 }
 

@@ -449,5 +449,342 @@ class MobileBuyerApiTest extends TestCase
             }
         }
     }
+
+    public function test_s1_followed_stores_route_works_and_non_numeric_store_returns_404(): void
+    {
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson("/api/mobile/v1/buyer/stores/{$this->seller1->id}/follow-toggle")
+            ->assertStatus(200);
+
+        $followed = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson('/api/mobile/v1/buyer/stores/followed');
+
+        $followed->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $this->seller1->id);
+
+        $this->getJson('/api/mobile/v1/buyer/stores/nonexistent-slug')
+            ->assertStatus(404);
+    }
+
+    public function test_s2_orders_tabs_include_hub_and_return_statuses_and_block_transit_cancel(): void
+    {
+        $variantProduct = Product::create([
+            'seller_id' => $this->seller1->id,
+            'category_id' => $this->category->id,
+            'name' => 'Variant Tee',
+            'slug' => 'variant-tee',
+            'description' => 'Cotton tee with color image.',
+            'price' => 350.00,
+            'stock' => 10,
+            'weight' => 0.3,
+            'status' => 'active',
+            'gallery' => ['products/tee-default.jpg'],
+            'variants_data' => [
+                ['name' => 'Crimson Red', 'sku' => 'TEE-RED', 'stock' => 5, 'price' => 399.00, 'image' => 'products/tee-red.jpg'],
+            ],
+        ]);
+
+        $statuses = ['assigned', 'at_hub', 'received_at_hub', 'in_transit_hub', 'failed_delivery', 'delivery_failed'];
+        $transitOrder = null;
+        foreach ($statuses as $idx => $st) {
+            $o = Order::create([
+                'order_number' => 'NX-HUB000' . $idx,
+                'checkout_session_id' => 'CS-HUB000' . $idx,
+                'buyer_id' => $this->buyer->id,
+                'seller_id' => $this->seller1->id,
+                'address_id' => $this->address->id,
+                'status' => $st,
+                'payment_method' => 'cod',
+                'subtotal' => 399.00,
+                'total' => 449.00,
+                'placed_at' => now()->subMinutes($idx),
+            ]);
+            OrderItem::create([
+                'order_id' => $o->id,
+                'product_id' => $variantProduct->id,
+                'product_name' => $variantProduct->name,
+                'price' => 399.00,
+                'quantity' => 1,
+                'variant' => ['variation' => 'Crimson Red', 'size' => 'M'],
+            ]);
+            if ($st === 'in_transit_hub') {
+                $transitOrder = $o;
+            }
+        }
+
+        // Return/refund statuses + dispute order
+        $rts1 = Order::create([
+            'order_number' => 'NX-RTS0001',
+            'checkout_session_id' => 'CS-RTS0001',
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller1->id,
+            'address_id' => $this->address->id,
+            'status' => 'return_to_sender',
+            'payment_method' => 'cod',
+            'subtotal' => 500.00,
+            'total' => 550.00,
+            'placed_at' => now()->subHours(2),
+        ]);
+        $rts2 = Order::create([
+            'order_number' => 'NX-RTS0002',
+            'checkout_session_id' => 'CS-RTS0002',
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller1->id,
+            'address_id' => $this->address->id,
+            'status' => 'returned_to_sender',
+            'payment_method' => 'cod',
+            'subtotal' => 500.00,
+            'total' => 550.00,
+            'placed_at' => now()->subHours(3),
+        ]);
+        $disputedDelivered = Order::create([
+            'order_number' => 'NX-DISP0001',
+            'checkout_session_id' => 'CS-DISP0001',
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller1->id,
+            'address_id' => $this->address->id,
+            'status' => 'delivered',
+            'delivered_at' => now()->subDay(),
+            'payment_method' => 'cod',
+            'subtotal' => 500.00,
+            'total' => 550.00,
+            'placed_at' => now()->subHours(4),
+        ]);
+        $disputedDelivered->dispute()->create([
+            'raised_by' => $this->buyer->id,
+            'reason' => 'Damaged item',
+            'details' => 'Box was crushed upon delivery.',
+            'media_paths' => ['returns/evidence1.jpg'],
+            'status' => 'open',
+        ]);
+
+        $toReceiveRes = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson('/api/mobile/v1/buyer/orders?tab=to_receive');
+
+        $toReceiveRes->assertStatus(200)
+            ->assertJsonPath('counts.to_receive', 6)
+            ->assertJsonPath('counts.return_refund', 3)
+            ->assertJsonCount(6, 'data');
+
+        $firstImg = $toReceiveRes->json('data.0.items.0.image');
+        $this->assertStringContainsString('tee-red.jpg', (string) $firstImg);
+
+        $returnRes = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson('/api/mobile/v1/buyer/orders?tab=return_refund');
+
+        $returnRes->assertStatus(200)
+            ->assertJsonCount(3, 'data');
+
+        $cancelTransit = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson("/api/mobile/v1/buyer/orders/{$transitOrder->id}/cancel", [
+                'reason' => 'Already shipped',
+            ]);
+
+        $cancelTransit->assertStatus(422)
+            ->assertJsonPath('message', 'This order cannot be cancelled as it is already being processed or prepared for pickup.');
+    }
+
+    public function test_s3_buy_now_selective_checkout_vouchers_idempotency_and_variation_stock(): void
+    {
+        $variantProduct = Product::create([
+            'seller_id' => $this->seller1->id,
+            'category_id' => $this->category->id,
+            'name' => 'Pro Jersey',
+            'slug' => 'pro-jersey',
+            'description' => 'Variation stock only.',
+            'price' => 800.00,
+            'stock' => 0, // Parent stock 0, stock lives in variants_data
+            'weight' => 0.5,
+            'status' => 'active',
+            'gallery' => ['products/jersey-main.jpg'],
+            'variants_data' => [
+                ['name' => 'Blue', 'sku' => 'JER-BLUE', 'stock' => 4, 'price' => 850.00, 'image' => 'products/jersey-blue.jpg'],
+                ['name' => 'OutOfStockBlack', 'sku' => 'JER-BLK', 'stock' => 0, 'price' => 850.00],
+            ],
+        ]);
+
+        // Unrelated selected item stays in cart after selective Buy Now checkout
+        $unrelatedCartItem = $this->buyer->cartItems()->create([
+            'product_id' => $this->product2->id,
+            'quantity' => 1,
+            'selected' => true,
+        ]);
+
+        // Add variant via API, ignoring untrusted client price
+        $addRes = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/cart/items', [
+                'product_id' => $variantProduct->id,
+                'quantity' => 2,
+                'variant' => ['variation' => 'Blue', 'size' => 'L', 'price' => 1.00],
+            ]);
+
+        $addRes->assertStatus(201)
+            ->assertJsonPath('data.item.price', 850)
+            ->assertJsonPath('data.item.stock', 4);
+        $buyNowCartId = $addRes->json('data.cart_item_id');
+        $this->assertNotNull($buyNowCartId);
+
+        // Summary scoped to cart_item_ids only includes the Buy Now item (2 * 850 = 1700)
+        $summaryRes = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->getJson("/api/mobile/v1/buyer/checkout/summary?cart_item_ids={$buyNowCartId}");
+        $summaryRes->assertStatus(200)
+            ->assertJsonPath('data.total_subtotal', 1700)
+            ->assertJsonPath('data.total_shipping', 50);
+
+        // Foreign / nonexistent cart_item_id rejected with 422
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+                'cart_item_ids' => [999999],
+            ])
+            ->assertStatus(422);
+
+        // Expired voucher rejected with 422
+        $expiredVoucher = Voucher::create([
+            'code' => 'EXPIRED100',
+            'voucher_scope' => 'platform',
+            'type' => 'flat',
+            'value' => 100,
+            'min_spend' => 100,
+            'is_active' => true,
+            'expires_at' => now()->subDay(),
+        ]);
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+                'cart_item_ids' => [$buyNowCartId],
+                'platform_voucher_id' => $expiredVoucher->id,
+            ])
+            ->assertStatus(422);
+
+        // Below-min-spend voucher rejected with 422
+        $highMinVoucher = Voucher::create([
+            'code' => 'BIGSPEND500',
+            'voucher_scope' => 'platform',
+            'type' => 'flat',
+            'value' => 500,
+            'min_spend' => 10000,
+            'is_active' => true,
+        ]);
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+                'cart_item_ids' => [$buyNowCartId],
+                'platform_voucher_id' => $highMinVoucher->id,
+            ])
+            ->assertStatus(422);
+
+        // Double-tap / retry with same Idempotency-Key creates only 1 order
+        $idempKey = 'BUY-NOW-IDEMP-001';
+        $checkout1 = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->withHeader('Idempotency-Key', $idempKey)
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+                'cart_item_ids' => [$buyNowCartId],
+            ]);
+        $checkout1->assertStatus(201)->assertJsonPath('data.orders_count', 1);
+        $firstOrderNum = $checkout1->json('data.orders.0.order_number');
+        $firstOrderId = $checkout1->json('data.orders.0.id');
+
+        $checkout2 = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->withHeader('Idempotency-Key', $idempKey)
+            ->postJson('/api/mobile/v1/buyer/checkout', [
+                'address_id' => $this->address->id,
+                'cart_item_ids' => [$buyNowCartId],
+            ]);
+        $checkout2->assertStatus(201)
+            ->assertJsonPath('data.orders.0.order_number', $firstOrderNum);
+
+        // Only 1 order created, unrelated selected cart item preserved
+        $this->assertEquals(1, Order::where('buyer_id', $this->buyer->id)->count());
+        $this->assertDatabaseHas('cart_items', ['id' => $unrelatedCartItem->id]);
+        $this->assertDatabaseMissing('cart_items', ['id' => $buyNowCartId]);
+
+        // PSGC codes persisted in address_snapshot
+        $order = Order::findOrFail($firstOrderId);
+        $this->assertEquals('043400000', $order->address_snapshot['province_code']);
+        $this->assertEquals('043426000', $order->address_snapshot['municipality_code']);
+        $this->assertEquals('043426001', $order->address_snapshot['barangay_code']);
+
+        // Variation stock decremented cleanly without unsigned SQL error
+        $freshVariants = $variantProduct->fresh()->variants_data;
+        $this->assertEquals(2, $freshVariants[0]['stock']);
+    }
+
+    public function test_s4_cart_validation_rejects_vacation_and_out_of_stock_variants(): void
+    {
+        $vacationSeller = User::factory()->create([
+            'role' => 'seller',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        SellerProfile::create([
+            'user_id' => $vacationSeller->id,
+            'business_name' => 'Holiday Shop',
+            'category' => 'General',
+            'is_vacation_mode' => true,
+        ]);
+        $vacationProduct = Product::create([
+            'seller_id' => $vacationSeller->id,
+            'category_id' => $this->category->id,
+            'name' => 'Closed Shop Candle',
+            'slug' => 'closed-shop-candle',
+            'description' => 'Temp unavailable.',
+            'price' => 200.00,
+            'stock' => 10,
+            'status' => 'active',
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/cart/items', [
+                'product_id' => $vacationProduct->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment([
+                'message' => 'Holiday Shop is currently on vacation mode and not accepting new orders.',
+            ]);
+
+        $variantProduct = Product::create([
+            'seller_id' => $this->seller1->id,
+            'category_id' => $this->category->id,
+            'name' => 'Cap',
+            'slug' => 'cap',
+            'description' => 'Limited stock variant.',
+            'price' => 300.00,
+            'stock' => 10,
+            'status' => 'active',
+            'variants_data' => [
+                ['name' => 'Black', 'sku' => 'CAP-BLK', 'stock' => 0, 'price' => 300.00],
+                ['name' => 'White', 'sku' => 'CAP-WHT', 'stock' => 2, 'price' => 320.00],
+            ],
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/cart/items', [
+                'product_id' => $variantProduct->id,
+                'quantity' => 1,
+                'variant' => ['variation' => 'Black'],
+            ])
+            ->assertStatus(422);
+
+        $okAdd = $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->postJson('/api/mobile/v1/buyer/cart/items', [
+                'product_id' => $variantProduct->id,
+                'quantity' => 1,
+                'variant' => ['variation' => 'White'],
+            ])
+            ->assertStatus(201);
+
+        $itemId = $okAdd->json('data.cart_item_id');
+
+        $this->withHeader('Authorization', "Bearer {$this->buyerToken}")
+            ->patchJson("/api/mobile/v1/buyer/cart/items/{$itemId}", [
+                'quantity' => 3,
+            ])
+            ->assertStatus(422);
+    }
 }
 

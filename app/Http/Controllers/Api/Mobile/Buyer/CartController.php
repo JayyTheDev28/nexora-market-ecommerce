@@ -13,14 +13,71 @@ use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
-    /**
-     * B6: List cart items grouped by store
-     * GET /api/mobile/v1/buyer/cart
-     */
-    public function index(Request $request): JsonResponse
+    private function normalizeVariantPayload(mixed $v): ?array
     {
-        $user = $request->user();
+        if (empty($v)) {
+            return null;
+        }
+        if (is_string($v)) {
+            $decoded = json_decode($v, true);
+            if (is_array($decoded)) {
+                $v = $decoded;
+            }
+        }
+        if (! is_array($v) || empty($v)) {
+            return null;
+        }
+        ksort($v);
+        return $v;
+    }
 
+    /**
+     * Resolve variation stock, server-verified price, and variation image from product.variants_data.
+     *
+     * @return array{stock: int, price: ?float, image: ?string}
+     */
+    private function resolveVariantDetails(Product $product, ?array $variant): array
+    {
+        $availableStock = (int) $product->stock;
+        $variantPrice = null;
+        $variantImage = null;
+
+        if ($availableStock === 0 && ! empty($product->variants_data) && is_array($product->variants_data)) {
+            $availableStock = (int) array_sum(array_map(fn ($v) => (int) ($v['stock'] ?? 0), $product->variants_data));
+        }
+
+        $variation = is_array($variant) ? ($variant['variation'] ?? $variant['name'] ?? null) : null;
+        if (! empty($variation) && is_array($product->variants_data)) {
+            foreach ($product->variants_data as $key => $v) {
+                if (! is_array($v)) {
+                    continue;
+                }
+                $vName = $v['name'] ?? (is_string($key) ? str_replace('_', ' / ', $key) : null);
+                $vSku = $v['sku'] ?? null;
+                if ($vName === $variation || $vSku === $variation || (string) $key === $variation) {
+                    if (isset($v['stock'])) {
+                        $availableStock = (int) $v['stock'];
+                    }
+                    if (! $product->isFlashSaleActive() && isset($v['price']) && is_numeric($v['price']) && (float) $v['price'] > 0) {
+                        $variantPrice = (float) $v['price'];
+                    }
+                    if (! empty($v['image'])) {
+                        $variantImage = (string) $v['image'];
+                    }
+                    break;
+                }
+            }
+        }
+
+        return [
+            'stock' => $availableStock,
+            'price' => $variantPrice,
+            'image' => $variantImage,
+        ];
+    }
+
+    private function buildCartPayload(\App\Models\User $user): array
+    {
         $items = $user->cartItems()
             ->with(['product' => fn ($q) => $q->withTrashed()->with('seller.sellerProfile')])
             ->latest()
@@ -49,13 +106,23 @@ class CartController extends Controller
             ];
         }
 
+        return [
+            'items' => CartItemResource::collection($items),
+            'stores' => $formattedStores,
+            'claimed_vouchers' => VoucherResource::collection($claimedVouchers),
+            'total_items' => $items->count(),
+            'cart_count' => $items->count(),
+        ];
+    }
+
+    /**
+     * B6: List cart items grouped by store
+     * GET /api/mobile/v1/buyer/cart
+     */
+    public function index(Request $request): JsonResponse
+    {
         return response()->json([
-            'data' => [
-                'items' => CartItemResource::collection($items),
-                'stores' => $formattedStores,
-                'claimed_vouchers' => VoucherResource::collection($claimedVouchers),
-                'total_items' => $items->count(),
-            ],
+            'data' => $this->buildCartPayload($request->user()),
             'message' => 'Cart retrieved successfully.',
         ]);
     }
@@ -71,6 +138,13 @@ class CartController extends Controller
 
         $product = Product::with('seller.sellerProfile')->findOrFail($validated['product_id']);
 
+        if ($product->status !== 'active') {
+            return response()->json([
+                'message' => 'This product is no longer available.',
+                'errors' => ['product' => ['Product is not active.']],
+            ], 422);
+        }
+
         if ($product->seller?->sellerProfile?->is_vacation_mode) {
             $storeName = $product->seller->sellerProfile->business_name ?? 'The store';
             return response()->json([
@@ -80,17 +154,24 @@ class CartController extends Controller
         }
 
         $variant = $validated['variant'] ?? null;
+        if (is_array($variant)) {
+            // Never trust client-supplied prices; always resolve from server product/variants_data
+            unset($variant['price']);
+            if (empty($variant)) {
+                $variant = null;
+            }
+        }
         $quantity = $validated['quantity'] ?? 1;
 
-        $availableStock = (int) $product->stock;
-        if (! empty($variant['variation']) && is_array($product->variants_data)) {
-            foreach ($product->variants_data as $v) {
-                if (($v['name'] ?? null) === $variant['variation'] || ($v['sku'] ?? null) === $variant['variation']) {
-                    if (isset($v['stock'])) {
-                        $availableStock = (int) $v['stock'];
-                    }
-                    break;
-                }
+        $variantDetails = $this->resolveVariantDetails($product, $variant);
+        $availableStock = $variantDetails['stock'];
+
+        if (is_array($variant)) {
+            if ($variantDetails['price'] !== null) {
+                $variant['price'] = $variantDetails['price'];
+            }
+            if (empty($variant['image']) && $variantDetails['image'] !== null) {
+                $variant['image'] = $variantDetails['image'];
             }
         }
 
@@ -126,24 +207,13 @@ class CartController extends Controller
         }
 
         // B6: Variant line merging
-        $normalizeVariant = function ($v) {
-            if (empty($v)) return null;
-            if (is_string($v)) {
-                $decoded = json_decode($v, true);
-                if (is_array($decoded)) $v = $decoded;
-            }
-            if (! is_array($v) || empty($v)) return null;
-            ksort($v);
-            return $v;
-        };
-
-        $targetVariant = $normalizeVariant($variant);
+        $targetVariant = $this->normalizeVariantPayload($variant);
 
         $existing = $user->cartItems()
             ->where('product_id', $product->id)
             ->get()
-            ->first(function (CartItem $item) use ($normalizeVariant, $targetVariant) {
-                $itemV = $normalizeVariant($item->variant);
+            ->first(function (CartItem $item) use ($targetVariant) {
+                $itemV = $this->normalizeVariantPayload($item->variant);
                 if ($itemV === null && $targetVariant === null) return true;
                 if ($itemV === null || $targetVariant === null) return false;
                 return $itemV == $targetVariant;
@@ -168,17 +238,19 @@ class CartController extends Controller
             }
             $item = $user->cartItems()->create([
                 'product_id' => $product->id,
-                'variant' => $variant,
+                'variant' => $targetVariant,
                 'quantity' => $quantity,
                 'selected' => true,
             ])->load(['product.seller.sellerProfile']);
         }
 
+        $payload = $this->buildCartPayload($user);
+        $payload['id'] = $item->id;
+        $payload['cart_item_id'] = $item->id;
+        $payload['item'] = new CartItemResource($item);
+
         return response()->json([
-            'data' => [
-                'item' => new CartItemResource($item),
-                'cart_count' => $user->cartItems()->count(),
-            ],
+            'data' => $payload,
             'message' => 'Item added to cart.',
         ], 201);
     }
@@ -200,15 +272,32 @@ class CartController extends Controller
 
         if (isset($validated['quantity'])) {
             $product = $cartItem->product;
-            if ($validated['quantity'] > $product->stock) {
+            $variantDetails = $this->resolveVariantDetails($product, is_array($cartItem->variant) ? $cartItem->variant : null);
+            $availableStock = $variantDetails['stock'];
+
+            if ($validated['quantity'] > $availableStock) {
                 return response()->json([
-                    'message' => "Requested quantity exceeds available stock ({$product->stock}).",
-                    'errors' => ['stock' => ["Stock: {$product->stock}"]],
+                    'message' => "Requested quantity exceeds available stock ({$availableStock}).",
+                    'errors' => ['stock' => ["Stock: {$availableStock}"]],
                 ], 422);
             }
 
-            if ($product->max_purchase_limit !== null && $product->max_purchase_limit > 0) {
-                if ($validated['quantity'] > $product->max_purchase_limit) {
+            if ($product->max_purchase_limit !== null && $product->max_purchase_limit > 0 && $validated['quantity'] > $cartItem->quantity) {
+                $userTotalPurchased = $request->user()->orders()
+                    ->where('status', '!=', 'cancelled')
+                    ->whereHas('items', fn ($q) => $q->where('product_id', $product->id))
+                    ->with('items')
+                    ->get()
+                    ->flatMap->items
+                    ->where('product_id', $product->id)
+                    ->sum('quantity');
+
+                $otherCartQty = $request->user()->cartItems()
+                    ->where('product_id', $product->id)
+                    ->where('id', '!=', $cartItem->id)
+                    ->sum('quantity');
+
+                if (($userTotalPurchased + $otherCartQty + $validated['quantity']) > $product->max_purchase_limit) {
                     return response()->json([
                         'message' => "Exceeds per-buyer limit of {$product->max_purchase_limit}.",
                         'errors' => ['purchase_limit' => ["Limit: {$product->max_purchase_limit}"]],
@@ -219,11 +308,11 @@ class CartController extends Controller
 
         $cartItem->update($validated);
 
+        $payload = $this->buildCartPayload($request->user());
+        $payload['item'] = new CartItemResource($cartItem->fresh(['product.seller.sellerProfile']));
+
         return response()->json([
-            'data' => [
-                'item' => new CartItemResource($cartItem->fresh(['product.seller.sellerProfile'])),
-                'cart_count' => $request->user()->cartItems()->count(),
-            ],
+            'data' => $payload,
             'message' => 'Cart item updated.',
         ]);
     }
@@ -241,9 +330,7 @@ class CartController extends Controller
         $cartItem->delete();
 
         return response()->json([
-            'data' => [
-                'cart_count' => $request->user()->cartItems()->count(),
-            ],
+            'data' => $this->buildCartPayload($request->user()),
             'message' => 'Item removed from cart.',
         ]);
     }
@@ -258,7 +345,7 @@ class CartController extends Controller
         $request->user()->cartItems()->update(['selected' => $validated['selected']]);
 
         return response()->json([
-            'data' => null,
+            'data' => $this->buildCartPayload($request->user()),
             'message' => 'Selection updated.',
         ]);
     }
@@ -276,7 +363,7 @@ class CartController extends Controller
             ->update(['selected' => $validated['selected']]);
 
         return response()->json([
-            'data' => null,
+            'data' => $this->buildCartPayload($request->user()),
             'message' => 'Store selection updated.',
         ]);
     }

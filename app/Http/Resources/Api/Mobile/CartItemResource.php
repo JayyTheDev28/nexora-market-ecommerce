@@ -29,6 +29,29 @@ class CartItemResource extends JsonResource
         $rawImg = $product ? $product->getVariantImageUrl($this->variant) : null;
         $imageUrl = $product ? $toAbsoluteUrl($rawImg, $product->name) : null;
 
+        $availableStock = (int) ($product?->stock ?? 0);
+        if ($product) {
+            if ($availableStock === 0 && ! empty($product->variants_data) && is_array($product->variants_data)) {
+                $availableStock = (int) array_sum(array_map(fn ($v) => (int) ($v['stock'] ?? 0), $product->variants_data));
+            }
+            $variation = is_array($this->variant) ? ($this->variant['variation'] ?? $this->variant['name'] ?? null) : null;
+            if ($variation && ! empty($product->variants_data) && is_array($product->variants_data)) {
+                foreach ($product->variants_data as $key => $v) {
+                    if (! is_array($v)) {
+                        continue;
+                    }
+                    $vName = $v['name'] ?? (is_string($key) ? str_replace('_', ' / ', $key) : null);
+                    $vSku = $v['sku'] ?? null;
+                    if ($vName === $variation || $vSku === $variation || (string) $key === $variation) {
+                        if (isset($v['stock'])) {
+                            $availableStock = (int) $v['stock'];
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         return [
             'id' => $this->id,
             'product_id' => $this->product_id,
@@ -40,7 +63,7 @@ class CartItemResource extends JsonResource
             'selected' => (bool) $this->selected,
             'variant' => $this->variant,
             'weight' => (float) ($product?->weight ?? 1.0),
-            'stock' => (int) ($product?->stock ?? 0),
+            'stock' => $availableStock,
             'is_vacation_mode' => (bool) ($seller?->sellerProfile?->is_vacation_mode ?? false),
             'seller_id' => $product?->seller_id,
             'seller_name' => $sellerName,

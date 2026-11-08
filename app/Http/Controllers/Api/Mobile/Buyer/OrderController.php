@@ -34,24 +34,50 @@ class OrderController extends Controller
         $activeTab = $request->query('tab', 'all');
 
         $query = $user->orders()
-            ->with(['items.product', 'seller.sellerProfile', 'dispute', 'review', 'statusHistory'])
+            ->with([
+                'items.product',
+                'seller.sellerProfile',
+                'deliveryCourier.courierProfile',
+                'currentHub',
+                'originHub',
+                'destinationHub',
+                'dispute',
+                'review',
+                'statusHistory',
+            ])
             ->latest('placed_at');
+
+        $toReceiveStatuses = [
+            'ready_for_pickup',
+            'assigned',
+            'picked_up',
+            'at_hub',
+            'at_sorting_center',
+            'received_at_hub',
+            'in_transit_hub',
+            'in_transit',
+            'sorting_hub',
+            'sorted',
+            'assigned_to_rider',
+            'out_for_delivery',
+            'failed_delivery',
+            'delivery_failed',
+        ];
+
+        $returnRefundStatuses = [
+            'returned',
+            'return_to_sender',
+            'returned_to_sender',
+        ];
 
         match ($activeTab) {
             'to_pay' => $query->whereRaw('1 = 0'),
             'to_ship' => $query->whereIn('status', ['placed', 'confirmed', 'preparing']),
-            'to_receive' => $query->whereIn('status', [
-                'ready_for_pickup',
-                'picked_up',
-                'at_sorting_center',
-                'sorted',
-                'assigned_to_rider',
-                'out_for_delivery',
-            ]),
+            'to_receive' => $query->whereIn('status', $toReceiveStatuses),
             'completed' => $query->whereIn('status', ['completed', 'delivered']),
             'cancelled' => $query->where('status', 'cancelled'),
-            'return_refund' => $query->where(function ($q) {
-                $q->where('status', 'returned')
+            'return_refund' => $query->where(function ($q) use ($returnRefundStatuses) {
+                $q->whereIn('status', $returnRefundStatuses)
                   ->orWhereHas('dispute');
             }),
             default => null,
@@ -60,23 +86,24 @@ class OrderController extends Controller
         $perPage = min(50, max(1, (int) $request->query('per_page', 20)));
         $paginated = $query->paginate($perPage)->withQueryString();
 
+        foreach ($paginated->items() as $orderItem) {
+            if ($orderItem->status === 'out_for_delivery' && empty($orderItem->delivery_otp)) {
+                $orderItem->generateDeliveryOtp();
+            }
+        }
+
         // Calculate tab counts
-        $allOrders = $user->orders()->get();
+        $allOrders = $user->orders()->with('dispute:id,order_id')->get();
         $counts = [
             'all' => $allOrders->count(),
             'to_pay' => 0,
             'to_ship' => $allOrders->whereIn('status', ['placed', 'confirmed', 'preparing'])->count(),
-            'to_receive' => $allOrders->whereIn('status', [
-                'ready_for_pickup',
-                'picked_up',
-                'at_sorting_center',
-                'sorted',
-                'assigned_to_rider',
-                'out_for_delivery',
-            ])->count(),
+            'to_receive' => $allOrders->whereIn('status', $toReceiveStatuses)->count(),
             'completed' => $allOrders->whereIn('status', ['completed', 'delivered'])->count(),
             'cancelled' => $allOrders->where('status', 'cancelled')->count(),
-            'return_refund' => $allOrders->filter(fn ($o) => $o->status === 'returned' || $o->dispute !== null)->count(),
+            'return_refund' => $allOrders->filter(
+                fn ($o) => in_array($o->status, $returnRefundStatuses, true) || $o->dispute !== null
+            )->count(),
         ];
 
         return response()->json([
@@ -102,7 +129,21 @@ class OrderController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        $order->load(['items.product', 'seller.sellerProfile', 'deliveryCourier.courierProfile', 'dispute', 'review', 'statusHistory']);
+        if ($order->status === 'out_for_delivery' && empty($order->delivery_otp)) {
+            $order->generateDeliveryOtp();
+        }
+
+        $order->load([
+            'items.product',
+            'seller.sellerProfile',
+            'deliveryCourier.courierProfile',
+            'currentHub',
+            'originHub',
+            'destinationHub',
+            'dispute',
+            'review',
+            'statusHistory',
+        ]);
 
         return response()->json([
             'data' => new OrderDetailResource($order),
@@ -133,6 +174,29 @@ class OrderController extends Controller
             foreach ($order->items as $item) {
                 if ($item->product) {
                     $item->product->increment('stock', $item->quantity);
+
+                    $variation = is_array($item->variant) ? ($item->variant['variation'] ?? $item->variant['name'] ?? null) : null;
+                    if ($variation && is_array($item->product->variants_data)) {
+                        $variantsData = $item->product->variants_data;
+                        $updatedVariant = false;
+                        foreach ($variantsData as $k => $v) {
+                            if (! is_array($v)) {
+                                continue;
+                            }
+                            $vName = $v['name'] ?? (is_string($k) ? str_replace('_', ' / ', $k) : null);
+                            $vSku = $v['sku'] ?? null;
+                            if ($vName === $variation || $vSku === $variation || (string) $k === $variation) {
+                                if (isset($v['stock'])) {
+                                    $variantsData[$k]['stock'] = (int) $v['stock'] + (int) $item->quantity;
+                                    $updatedVariant = true;
+                                }
+                                break;
+                            }
+                        }
+                        if ($updatedVariant) {
+                            $item->product->update(['variants_data' => $variantsData]);
+                        }
+                    }
                 }
             }
 
@@ -151,7 +215,17 @@ class OrderController extends Controller
         });
 
         return response()->json([
-            'data' => new OrderDetailResource($order->fresh(['items.product', 'seller.sellerProfile', 'statusHistory'])),
+            'data' => new OrderDetailResource($order->fresh([
+                'items.product',
+                'seller.sellerProfile',
+                'deliveryCourier.courierProfile',
+                'currentHub',
+                'originHub',
+                'destinationHub',
+                'dispute',
+                'review',
+                'statusHistory',
+            ])),
             'message' => "Order {$order->order_number} has been cancelled and items were restored.",
         ]);
     }
@@ -188,7 +262,17 @@ class OrderController extends Controller
         });
 
         return response()->json([
-            'data' => new OrderDetailResource($order->fresh(['items.product', 'seller.sellerProfile', 'statusHistory'])),
+            'data' => new OrderDetailResource($order->fresh([
+                'items.product',
+                'seller.sellerProfile',
+                'deliveryCourier.courierProfile',
+                'currentHub',
+                'originHub',
+                'destinationHub',
+                'dispute',
+                'review',
+                'statusHistory',
+            ])),
             'message' => 'Thank you for confirming receipt! The order is now completed.',
         ]);
     }
@@ -228,7 +312,17 @@ class OrderController extends Controller
 
         return response()->json([
             'data' => [
-                'order' => new OrderDetailResource($order->fresh(['dispute', 'items.product'])),
+                'order' => new OrderDetailResource($order->fresh([
+                    'items.product',
+                    'seller.sellerProfile',
+                    'deliveryCourier.courierProfile',
+                    'currentHub',
+                    'originHub',
+                    'destinationHub',
+                    'dispute',
+                    'review',
+                    'statusHistory',
+                ])),
             ],
             'message' => 'Your return/refund request has been submitted with evidence.',
         ], 201);
@@ -291,7 +385,17 @@ class OrderController extends Controller
 
         return response()->json([
             'data' => [
-                'order' => new OrderDetailResource($order->fresh(['review', 'items.product'])),
+                'order' => new OrderDetailResource($order->fresh([
+                    'items.product',
+                    'seller.sellerProfile',
+                    'deliveryCourier.courierProfile',
+                    'currentHub',
+                    'originHub',
+                    'destinationHub',
+                    'dispute',
+                    'review',
+                    'statusHistory',
+                ])),
             ],
             'message' => $msg,
         ]);

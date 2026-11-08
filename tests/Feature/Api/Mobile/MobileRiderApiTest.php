@@ -108,7 +108,16 @@ class MobileRiderApiTest extends TestCase
         $response = $this->getJson('/api/mobile/v1/rider/profile');
         $response->assertOk()
             ->assertJsonPath('data.courier_profile.plate_number', 'MC-7777')
-            ->assertJsonPath('data.is_online', true);
+            ->assertJsonPath('data.is_online', true)
+            ->assertJsonPath('data.courier_profile.vehicle_type', 'Motorcycle')
+            ->assertJsonStructure([
+                'data' => [
+                    'rating',
+                    'reviews_count',
+                    'total_deliveries',
+                    'recent_reviews',
+                ],
+            ]);
 
         // Toggle availability to offline
         $toggleRes = $this->postJson('/api/mobile/v1/rider/availability', ['is_online' => false]);
@@ -320,6 +329,9 @@ class MobileRiderApiTest extends TestCase
         $earningsRes->assertOk();
         $this->assertEquals(80.00, (float) $earningsRes->json('data.earnings_balance'));
         $this->assertEquals(550.00, (float) $earningsRes->json('data.unremitted_cod_balance'));
+        $this->assertIsArray($earningsRes->json('data.past_7_days'));
+        $this->assertCount(7, $earningsRes->json('data.past_7_days'));
+        $this->assertIsArray($earningsRes->json('data.recent_earnings'));
 
         // Submit remittance over balance should fail
         $failRemit = $this->postJson('/api/mobile/v1/rider/remittance', [

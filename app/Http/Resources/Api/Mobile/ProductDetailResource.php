@@ -89,6 +89,12 @@ class ProductDetailResource extends JsonResource
         }
         $gallery = array_map(fn ($img) => $toAbsoluteUrl($img, $this->name), $rawGallery);
         $mainImage = !empty($gallery[0]) ? $gallery[0] : $toAbsoluteUrl(null, $this->name);
+        $sellerCity = $seller?->defaultAddress?->municipality_name ?? $seller?->address?->municipality_name;
+
+        $effectiveStock = (int) $this->stock;
+        if ($effectiveStock === 0 && ! empty($this->variants_data) && is_array($this->variants_data)) {
+            $effectiveStock = (int) array_sum(array_map(fn ($v) => (int) ($v['stock'] ?? 0), $this->variants_data));
+        }
 
         return [
             'id' => $this->id,
@@ -106,7 +112,7 @@ class ProductDetailResource extends JsonResource
                 'name' => $sellerName,
                 'store_name' => $sellerName,
                 'business_name' => $profile?->business_name ?? $sellerName,
-                'city' => 'Metro Manila',
+                'city' => $sellerCity,
                 'avatar_url' => $seller?->avatar_url,
                 'is_vacation_mode' => (bool) ($profile?->is_vacation_mode ?? false),
                 'followers_count' => StoreFollow::where('seller_id', $this->seller_id)->count(),
@@ -117,16 +123,18 @@ class ProductDetailResource extends JsonResource
             'formatted_price' => '₱' . number_format($this->effective_price, 2),
             'regular_price' => (float) $this->price,
             'compare_price' => $this->compare_price ? (float) $this->compare_price : null,
-            'stock' => (int) $this->stock,
+            'stock' => $effectiveStock,
             'is_active' => $this->status === 'active',
             'weight' => (float) ($this->weight ?? 1.0),
-            'max_purchase_limit' => $this->max_purchase_limit,
+            'max_purchase_limit' => $this->max_purchase_limit ? (int) $this->max_purchase_limit : null,
             'buyer_remaining_limit' => $buyerRemainingLimit,
             'is_flash_sale' => $isFlashSale,
+            'flash_sale_price' => $isFlashSale ? (float) $this->flash_sale_price : null,
             'flash_sale_remaining_seconds' => $flashSaleRemainingSeconds,
             'in_wishlist' => $inWishlist,
             'rating' => $this->averageRating(),
             'reviews_count' => $this->reviews()->count(),
+            'sold_count' => (int) ($this->orderItems()->whereHas('order', fn ($q) => $q->whereNotIn('status', ['cancelled', 'failed']))->sum('quantity') ?? 0),
             'gallery' => $gallery,
             'colors' => is_array($this->colors) ? array_values($this->colors) : [],
             'sizes' => is_array($this->sizes) ? array_values($this->sizes) : [],
@@ -136,7 +144,7 @@ class ProductDetailResource extends JsonResource
                 'buyer_name' => $r->buyer?->full_name ?? 'Shopper',
                 'rating' => $r->rating,
                 'comment' => $r->comment,
-                'photos' => $r->photos ?? [],
+                'photos' => array_values(array_filter(array_map(fn ($p) => $toAbsoluteUrl($p, $this->name), $r->photos ?? []))),
                 'created_at' => $r->created_at?->diffForHumans(),
             ]),
         ];
