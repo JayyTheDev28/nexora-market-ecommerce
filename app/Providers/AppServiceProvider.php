@@ -20,9 +20,12 @@ class AppServiceProvider extends ServiceProvider
      */
   public function boot(): void
     {
-        // Force HTTPS generation for all routes
+        // Force HTTPS generation for all routes in production except local dev server hosts
         if ($this->app->environment('local') === false) {
-            URL::forceScheme('https');
+            $host = request()->getHost();
+            if (!in_array($host, ['localhost', '127.0.0.1', '10.0.2.2']) && !str_starts_with($host, '192.168.') && !str_starts_with($host, '10.')) {
+                URL::forceScheme('https');
+            }
         }
     }
 }

@@ -64,7 +64,23 @@ class CatalogController extends Controller
             default => $query->latest('id'),
         };
 
-        $products = $query->get()->map(function (Product $p) {
+        $formatImageUrl = function (?string $path, string $fallbackName): string {
+            if (empty($path)) {
+                return 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($fallbackName);
+            }
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '//')) {
+                return $path;
+            }
+            if (str_starts_with($path, '/storage/')) {
+                return $path;
+            }
+            if (str_starts_with($path, 'storage/')) {
+                return '/' . $path;
+            }
+            return '/storage/' . ltrim($path, '/');
+        };
+
+        $products = $query->get()->map(function (Product $p) use ($formatImageUrl) {
             $effectivePrice = $p->effective_price;
             return [
                 'id' => $p->id,
@@ -80,7 +96,7 @@ class CatalogController extends Controller
                 'stock' => $p->stock,
                 'weight' => (float) ($p->weight ?? 1.0),
                 'rating' => $p->averageRating(),
-                'image' => $p->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($p->name),
+                'image' => $formatImageUrl($p->gallery[0] ?? null, $p->name),
                 'url' => url("/products/{$p->id}"),
             ];
         })->values()->all();

@@ -70,6 +70,7 @@
                     <template x-for="(img, i) in gallery" :key="i">
                         <img
                             :src="img"
+                            x-on:error="$el.src = 'https://placehold.co/800x800/e5eeff/0058be?text=' + encodeURIComponent(product.name)"
                             x-show="activeImage === i"
                             x-cloak
                             class="w-full h-full object-cover transition-all duration-300">
@@ -96,7 +97,7 @@
                             @click="activeImage = i"
                             class="w-16 h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 flex-shrink-0 cursor-pointer transition-all duration-200"
                             :class="activeImage === i ? 'border-primary ring-2 ring-primary/20 scale-102' : 'border-outline-variant/60 hover:border-outline opacity-80 hover:opacity-100'">
-                            <img :src="img" class="w-full h-full object-cover">
+                            <img :src="img" x-on:error="$el.src = 'https://placehold.co/200x200/e5eeff/0058be?text=' + encodeURIComponent(product.name)" class="w-full h-full object-cover">
                         </button>
                     </template>
                 </div>

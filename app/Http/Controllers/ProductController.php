@@ -69,6 +69,22 @@ class ProductController extends Controller
         $sellerFollowersCount = StoreFollow::where('seller_id', $product->seller_id)->count();
         $sellerProductsCount = Product::where('seller_id', $product->seller_id)->where('status', 'active')->count();
 
+        $formatImageUrl = function (?string $path, string $fallbackName): string {
+            if (empty($path)) {
+                return 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($fallbackName);
+            }
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '//')) {
+                return $path;
+            }
+            if (str_starts_with($path, '/storage/')) {
+                return $path;
+            }
+            if (str_starts_with($path, 'storage/')) {
+                return '/' . $path;
+            }
+            return '/storage/' . ltrim($path, '/');
+        };
+
         // Related Products
         $related = Product::where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
@@ -82,7 +98,7 @@ class ProductController extends Controller
                 'seller' => $p->seller->sellerProfile->business_name ?? $p->seller->full_name,
                 'price' => (float) $p->effective_price,
                 'comparePrice' => $p->compare_price ? (float) $p->compare_price : null,
-                'image' => $p->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($p->name),
+                'image' => $formatImageUrl($p->gallery[0] ?? null, $p->name),
                 'url' => url("/products/{$p->id}"),
             ])
             ->values()
@@ -99,8 +115,9 @@ class ProductController extends Controller
                 }
             }
         }
+        $gallery = array_values(array_map(fn ($img) => $formatImageUrl($img, $product->name), $gallery));
         if (empty($gallery)) {
-            $gallery[] = 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($product->name);
+            $gallery[] = $formatImageUrl(null, $product->name);
         }
 
         $stock = (int) $product->stock;

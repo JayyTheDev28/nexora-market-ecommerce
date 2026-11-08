@@ -22,6 +22,7 @@
         <a href="{{ $product->url ?? '#' }}" class="block w-full h-full">
             <img
                 src="{{ $product->image }}"
+                x-on:error="$el.src = 'https://placehold.co/600x600/e5eeff/0058be?text=' + encodeURIComponent('{{ addslashes($product->name ?? 'Product') }}')"
                 alt="{{ $product->alt ?? $product->name }}"
                 loading="lazy"
                 class="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300 ease-out">

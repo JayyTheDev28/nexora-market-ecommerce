@@ -120,6 +120,19 @@ class HomeController extends Controller
      */
     private function toCard(Product $p): array
     {
+        $rawImage = $p->gallery[0] ?? null;
+        if (empty($rawImage)) {
+            $image = 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($p->name);
+        } elseif (str_starts_with($rawImage, 'http://') || str_starts_with($rawImage, 'https://') || str_starts_with($rawImage, '//')) {
+            $image = $rawImage;
+        } elseif (str_starts_with($rawImage, '/storage/')) {
+            $image = $rawImage;
+        } elseif (str_starts_with($rawImage, 'storage/')) {
+            $image = '/' . $rawImage;
+        } else {
+            $image = '/storage/' . ltrim($rawImage, '/');
+        }
+
         return [
             'id' => $p->id,
             'seller' => $p->seller->sellerProfile->business_name ?? $p->seller->full_name,
@@ -130,7 +143,7 @@ class HomeController extends Controller
             'rating' => null,
             'reviewCount' => null,
             'badge' => null,
-            'image' => $p->gallery[0] ?? 'https://placehold.co/600x600/e5eeff/0058be?text=' . urlencode($p->name),
+            'image' => $image,
             'url' => url("/products/{$p->id}"),
         ];
     }
