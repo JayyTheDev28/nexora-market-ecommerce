@@ -333,7 +333,7 @@ class RiderController extends Controller
                 }
 
                 $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
-                $this->payoutService->creditPickupPay($rider, $order);
+                $earning = $this->payoutService->creditPickupPay($rider, $order);
 
                 return response()->json([
                     'data' => [
@@ -341,9 +341,9 @@ class RiderController extends Controller
                         'order_number' => $order->order_number,
                         'tracking_number' => $order->tracking_number,
                         'order_status' => 'picked_up',
-                        'earned_pay' => 30.00,
+                        'earned_pay' => (float) $earning->amount,
                     ],
-                    'message' => "Order {$order->order_number} marked as Picked Up. ₱30.00 pay credited.",
+                    'message' => "Order {$order->order_number} marked as Picked Up. ₱" . number_format((float) $earning->amount, 2) . ' pay credited.',
                 ]);
             });
         });
@@ -494,7 +494,7 @@ class RiderController extends Controller
 
             $podPath = $photoFile->store("couriers/{$rider->id}/pod", 'public');
 
-            ProofOfDelivery::create([
+            $pod = ProofOfDelivery::create([
                 'order_id' => $order->id,
                 'courier_id' => $rider->id,
                 'photo_path' => $podPath,
@@ -504,20 +504,21 @@ class RiderController extends Controller
             ]);
 
             $this->stateMachine->transition($order, 'delivered', $rider, 'Delivered with verified OTP & POD.');
-            $this->payoutService->creditDeliveryPay($rider, $order);
-            $this->payoutService->recordCodCollection($rider, $order);
+            $deliveryEarning = $this->payoutService->creditDeliveryPay($rider, $order);
+            $this->payoutService->recordCodCollection($rider, $order, $pod);
 
             $codCollected = strtolower($order->payment_method) === 'cod' ? (float) $order->total : 0.00;
+            $earnedPay = (float) $deliveryEarning->amount;
 
             return response()->json([
                 'data' => [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'order_status' => 'delivered',
-                    'earned_pay' => 50.00,
+                    'earned_pay' => $earnedPay,
                     'cod_collected' => $codCollected,
                 ],
-                'message' => "Order {$order->order_number} marked as Delivered! ₱50.00 pay credited.",
+                'message' => "Order {$order->order_number} marked as Delivered! ₱" . number_format($earnedPay, 2) . ' pay credited.',
             ]);
         });
     }
@@ -586,6 +587,8 @@ class RiderController extends Controller
                 'changed_at' => now(),
             ]);
 
+            $this->payoutService->creditFailedAttemptEarning($rider, $order, $attemptCount);
+
             return response()->json([
                 'data' => [
                     'order_id' => $order->id,
@@ -605,68 +608,106 @@ class RiderController extends Controller
     {
         /** @var User $rider */
         $rider = $request->user();
-        $profile = $rider->courierProfile;
+        $profile = $rider->courierProfile()->first();
+        $overview = app(\App\Services\CourierPayoutService::class)->getCourierEarningsOverview($rider);
+        $codSummary = app(\App\Services\CodCollectionService::class)->getRiderCodWalletSummary($rider);
 
-        $todayPickups = RiderEarning::where('courier_id', $rider->id)->where('type', 'pickup')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayDeliveries = RiderEarning::where('courier_id', $rider->id)->where('type', 'delivery')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayPay = (float) RiderEarning::where('courier_id', $rider->id)->where('earned_at', '>=', now()->startOfDay())->sum('amount');
+        return response()->json([
+            'data' => array_merge($overview, [
+                'unremitted_cod_balance' => (float) ($profile?->unremitted_cod_balance ?? 0),
+                'cod_wallet' => $codSummary,
+            ]),
+            'message' => 'Earnings retrieved successfully.',
+        ]);
+    }
 
-        $weeklyPay = (float) RiderEarning::where('courier_id', $rider->id)->where('earned_at', '>=', now()->startOfWeek())->sum('amount');
-        $totalEarned = (float) RiderEarning::where('courier_id', $rider->id)->sum('amount');
-
-        // Past 7 days daily breakdown for weekly performance chart
-        $past7Days = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $dayDate = now()->subDays($i);
-            $dayStart = $dayDate->copy()->startOfDay();
-            $dayEnd = $dayDate->copy()->endOfDay();
-            $dayEarnings = RiderEarning::where('courier_id', $rider->id)
-                ->whereBetween('earned_at', [$dayStart, $dayEnd]);
-            $past7Days[] = [
-                'date' => $dayDate->format('Y-m-d'),
-                'day' => $dayDate->format('D'),
-                'amount' => (float) $dayEarnings->sum('amount'),
-                'trips' => (int) $dayEarnings->count(),
-            ];
-        }
-
-        $recentEarnings = RiderEarning::where('courier_id', $rider->id)
-            ->with('order')
-            ->orderBy('earned_at', 'desc')
-            ->limit(50)
-            ->get()
-            ->map(function ($e) {
-                $orderNum = $e->order?->order_number ?? '';
-                $fallbackDesc = $e->type === 'pickup'
-                    ? ($orderNum ? "Pickup Pay ({$orderNum})" : 'Pickup Pay')
-                    : ($orderNum ? "Delivery Pay ({$orderNum})" : 'Delivery Pay');
-
-                return [
-                    'id' => $e->id,
-                    'type' => $e->type,
-                    'amount' => (float) $e->amount,
-                    'description' => $e->description ?: $fallbackDesc,
-                    'order_id' => $e->order_id,
-                    'order_number' => $orderNum,
-                    'earned_at' => $e->earned_at?->toIso8601String(),
-                ];
-            });
+    /**
+     * GET /api/mobile/v1/rider/payouts
+     */
+    public function payouts(Request $request): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $overview = app(\App\Services\CourierPayoutService::class)->getCourierEarningsOverview($rider);
 
         return response()->json([
             'data' => [
-                'earnings_balance' => (float) ($profile?->earnings_balance ?? 0),
-                'unremitted_cod_balance' => (float) ($profile?->unremitted_cod_balance ?? 0),
-                'total_earned_all_time' => $totalEarned,
-                'today_summary' => [
-                    'pickups' => $todayPickups,
-                    'deliveries' => $todayDeliveries,
-                    'total_pay' => $todayPay,
-                ],
-                'weekly_total_pay' => (float) $weeklyPay,
-                'past_7_days' => $past7Days,
-                'recent_earnings' => $recentEarnings,
+                'earnings_balance' => $overview['earnings_balance'],
+                'available_for_payout' => $overview['available_for_payout'],
+                'pending_payout_amount' => $overview['pending_payout_amount'],
+                'total_paid_out' => $overview['total_paid_out'],
+                'payouts' => $overview['recent_payouts'],
             ],
-            'message' => 'Earnings retrieved successfully.',
+            'message' => 'Rider payouts retrieved successfully.',
+        ]);
+    }
+
+    /**
+     * POST /api/mobile/v1/rider/payouts
+     */
+    public function requestPayout(Request $request): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'payout_method' => ['required', 'string', 'in:gcash,maya,bank_transfer,physical_cash'],
+            'account_name' => ['required', 'string', 'max:120'],
+            'account_number' => ['required', 'string', 'max:120'],
+            'courier_notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
+        $payout = app(\App\Services\CourierPayoutService::class)->requestPayout($rider, array_merge($validated, [
+            'idempotency_key' => $key,
+        ]));
+
+        return response()->json([
+            'data' => [
+                'id' => $payout->id,
+                'payout_number' => $payout->payout_number,
+                'amount' => (float) $payout->amount,
+                'payout_method' => $payout->payout_method,
+                'status' => $payout->status,
+                'requested_at' => $payout->requested_at?->toIso8601String(),
+            ],
+            'message' => "Payout request #{$payout->payout_number} submitted for Logistics verification.",
+        ], 201);
+    }
+
+    /**
+     * GET /api/mobile/v1/rider/cod-collections
+     */
+    public function codSummary(Request $request): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $summary = app(\App\Services\CodCollectionService::class)->getRiderCodWalletSummary($rider);
+        $remittances = \App\Models\CodRemittance::where('courier_id', $rider->id)
+            ->with(['allocations.order:id,order_number,tracking_number'])
+            ->latest('remitted_at')
+            ->limit(25)
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->id,
+                'remittance_number' => $r->remittance_number,
+                'claimed_amount' => (float) ($r->claimed_amount ?? $r->amount),
+                'expected_amount' => (float) $r->expected_amount,
+                'actual_received_amount' => $r->actual_received_amount !== null ? (float) $r->actual_received_amount : null,
+                'shortage_amount' => (float) $r->shortage_amount,
+                'overpayment_amount' => (float) $r->overpayment_amount,
+                'payment_method' => $r->payment_method ?? 'physical_cash',
+                'external_reference' => $r->external_reference,
+                'status' => $r->status,
+                'discrepancy_reason' => $r->discrepancy_reason,
+                'remitted_at' => $r->remitted_at?->toIso8601String(),
+                'reviewed_at' => $r->reviewed_at?->toIso8601String(),
+                'order_numbers' => $r->allocations->map(fn ($a) => $a->order?->order_number)->filter()->values(),
+            ]);
+
+        return response()->json([
+            'data' => array_merge($summary, ['recent_remittances' => $remittances]),
+            'message' => 'COD accountability summary retrieved.',
         ]);
     }
 
@@ -677,7 +718,7 @@ class RiderController extends Controller
     {
         /** @var User $rider */
         $rider = $request->user();
-        $profile = $rider->courierProfile;
+        $profile = $rider->courierProfile()->first();
         $unremitted = (float) ($profile?->unremitted_cod_balance ?? 0);
 
         if ($unremitted <= 0) {
@@ -688,27 +729,46 @@ class RiderController extends Controller
         }
 
         $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1', "max:{$unremitted}"],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'payment_method' => ['nullable', 'string', 'in:physical_cash,gcash,maya,bank_transfer'],
+            'external_reference' => ['nullable', 'string', 'max:120'],
+            'transfer_date' => ['nullable', 'date'],
+            'proof_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'order_ids' => ['nullable', 'array'],
+            'order_ids.*' => ['integer'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
         $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
+        $proofFile = $request->file('proof_file');
 
-        return IdempotencyService::run($key, $rider->id, "mobile_remittance_{$rider->id}_" . date('Ymd'), function () use ($rider, $validated) {
+        return IdempotencyService::run($key, $rider->id, "mobile_remittance_{$rider->id}_" . date('YmdHis'), function () use ($rider, $validated, $proofFile, $key) {
             $remittance = $this->payoutService->submitRemittance(
                 $rider,
                 (float) $validated['amount'],
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                [
+                    'payment_method' => $validated['payment_method'] ?? 'physical_cash',
+                    'external_reference' => $validated['external_reference'] ?? null,
+                    'transfer_date' => $validated['transfer_date'] ?? null,
+                    'order_ids' => $validated['order_ids'] ?? null,
+                    'idempotency_key' => $key,
+                ],
+                $proofFile
             );
 
             return response()->json([
                 'data' => [
+                    'id' => $remittance->id,
                     'remittance_number' => $remittance->remittance_number,
-                    'amount' => (float) $remittance->amount,
+                    'amount' => (float) ($remittance->claimed_amount ?? $remittance->amount),
+                    'expected_amount' => (float) $remittance->expected_amount,
+                    'payment_method' => $remittance->payment_method,
+                    'external_reference' => $remittance->external_reference,
                     'status' => $remittance->status,
-                    'submitted_at' => $remittance->submitted_at?->toIso8601String(),
+                    'submitted_at' => $remittance->remitted_at?->toIso8601String(),
                 ],
-                'message' => "COD Remittance #{$remittance->remittance_number} submitted.",
+                'message' => "COD Remittance #{$remittance->remittance_number} submitted for Logistics verification.",
             ]);
         });
     }

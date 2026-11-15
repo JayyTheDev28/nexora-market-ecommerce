@@ -277,8 +277,9 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::get('/deliveries/{order}', [Logistics\MonitoringController::class, 'show'])->name('deliveries.show');
     Route::post('/deliveries/{order}/resolve', [Logistics\MonitoringController::class, 'resolveException'])->name('deliveries.resolve');
 
-    // Reports
+    // Reports & CSV Exports
     Route::get('/reports', [Logistics\ReportController::class, 'index'])->name('reports.index');
+    Route::get('/reports/export', [Logistics\ReportController::class, 'export'])->name('reports.export');
 
     // COD Remittances Reconciliation (Riders -> Logistics)
     Route::get('/remittances', [Logistics\RemittanceController::class, 'index'])->name('remittances.index');
@@ -288,6 +289,27 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::get('/admin-remittances', [Logistics\AdminRemittanceController::class, 'index'])->name('admin-remittances.index');
     Route::post('/admin-remittances', [Logistics\AdminRemittanceController::class, 'store'])->name('admin-remittances.store');
     Route::get('/admin-remittances/{remittance}', [Logistics\AdminRemittanceController::class, 'show'])->name('admin-remittances.show');
+
+    // Courier Compensation Policies & Payouts
+    Route::get('/compensation', [Logistics\CompensationController::class, 'index'])->name('compensation.index');
+    Route::post('/compensation', [Logistics\CompensationController::class, 'store'])->name('compensation.store');
+    Route::post('/compensation/{policy}/activate', [Logistics\CompensationController::class, 'activate'])->name('compensation.activate');
+
+    Route::get('/payouts', [Logistics\CourierPayoutController::class, 'index'])->name('payouts.index');
+    Route::post('/payouts/{payout}/approve', [Logistics\CourierPayoutController::class, 'approve'])->name('payouts.approve');
+    Route::post('/payouts/{payout}/mark-paid', [Logistics\CourierPayoutController::class, 'markPaid'])->name('payouts.mark-paid');
+    Route::post('/payouts/{payout}/reject', [Logistics\CourierPayoutController::class, 'reject'])->name('payouts.reject');
+
+    // Shipping Rate Policies, Inter-Company Revenue Split & Operating Expenses
+    Route::get('/shipping-rates', [Logistics\ShippingRateController::class, 'index'])->name('shipping-rates.index');
+    Route::post('/shipping-rates', [Logistics\ShippingRateController::class, 'store'])->name('shipping-rates.store');
+    Route::post('/shipping-rates/{policy}/activate', [Logistics\ShippingRateController::class, 'activate'])->name('shipping-rates.activate');
+    Route::get('/inter-company-settlements', [Logistics\ShippingRateController::class, 'interCompanyIndex'])->name('inter-company.index');
+    Route::post('/inter-company-settlements/{allocation}/settle', [Logistics\ShippingRateController::class, 'settleAllocation'])->name('inter-company.settle');
+
+    Route::get('/expenses', [Logistics\ExpenseController::class, 'index'])->name('expenses.index');
+    Route::post('/expenses', [Logistics\ExpenseController::class, 'store'])->name('expenses.store');
+    Route::post('/expenses/{expense}/void', [Logistics\ExpenseController::class, 'void'])->name('expenses.void');
 
     Route::post('/riders/{rider}/vehicle-verification', [Logistics\RiderController::class, 'verifyVehicle'])->name('riders.verify-vehicle');
     Route::post('/orders/{order}/override-status', [Logistics\RiderController::class, 'overrideStatus'])->name('orders.override-status');
@@ -331,8 +353,14 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::get('/logistics-remittances', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'index'])->name('logistics-remittances.index');
     Route::get('/logistics-remittances/{remittance}', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'show'])->name('logistics-remittances.show');
     Route::post('/logistics-remittances/{remittance}/verify', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'verify'])->name('logistics-remittances.verify');
+    Route::post('/logistics-remittances/{remittance}/dispute', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'dispute'])->name('logistics-remittances.dispute');
     Route::post('/logistics-remittances/{remittance}/reject', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'reject'])->name('logistics-remittances.reject');
     Route::post('/logistics-remittances/{remittance}/under-review', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'underReview'])->name('logistics-remittances.under-review');
+
+    // Shipping Rate & Inter-Company Policy Governance
+    Route::get('/shipping-policies', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'index'])->name('shipping-policies.index');
+    Route::post('/shipping-policies/{policy}/approve', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'approve'])->name('shipping-policies.approve');
+    Route::post('/shipping-policies/{policy}/reject', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'reject'])->name('shipping-policies.reject');
 
     // Seller Payout Management (Section 7)
     Route::get('/seller-payouts', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'index'])->name('seller-payouts.index');

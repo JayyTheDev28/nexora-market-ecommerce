@@ -33,31 +33,39 @@ class CodFinancialService
      */
     public function getLogisticsCodSummary(User $logistics): array
     {
-        $logisticsId = $logistics->id;
+        $logisticsId = $logistics->logisticsCompanyId();
 
-        // Base query for delivered COD orders handled by this logistics facility
-        $deliveredCodOrdersQuery = Order::where('payment_method', 'cod')
+        // Collecting logistics company is delivery_logistics_id (or sorting_center_id if no separate delivery company)
+        $deliveredCodOrders = Order::where('payment_method', 'cod')
             ->whereIn('status', ['delivered', 'completed'])
             ->where(function ($q) use ($logisticsId) {
-                $q->where('sorting_center_id', $logisticsId)
-                  ->orWhere('delivery_logistics_id', $logisticsId);
-            });
+                $q->where('delivery_logistics_id', $logisticsId)
+                    ->orWhere(function ($sub) use ($logisticsId) {
+                        $sub->whereNull('delivery_logistics_id')
+                            ->where('sorting_center_id', $logisticsId);
+                    });
+            })
+            ->with(['codCollection'])
+            ->get();
 
-        $totalCodReceived = (float) (clone $deliveredCodOrdersQuery)->sum('total');
-        $shippingRetained = (float) (clone $deliveredCodOrdersQuery)->sum('shipping_fee');
-        $merchandisePayable = max(0.00, $totalCodReceived - $shippingRetained);
+        $totalCodReceived = round((float) $deliveredCodOrders->sum(fn ($o) => (float) $o->total), 2);
+        $shippingRetained = round((float) $deliveredCodOrders->sum(fn ($o) => (float) $o->shipping_fee), 2);
+        $merchandisePayable = round((float) $deliveredCodOrders->sum(fn ($o) => $o->merchandiseAmount()), 2);
 
-        // Eligible orders for new remittance: not yet in any active/verified remittance batch
+        $awaitingRiderOrders = $deliveredCodOrders->filter(fn ($o) => ! $this->hasVerifiedRiderCodCash($o, $logisticsId));
+        $awaitingRiderCodAmount = round((float) $awaitingRiderOrders->sum(fn ($o) => (float) $o->total), 2);
+
+        // Eligible orders for new remittance: Rider cash verified AND not yet in any active/verified Admin remittance batch
         $eligibleOrders = $this->getEligibleOrdersForRemittance($logistics);
-        $availableCodTotal = (float) $eligibleOrders->sum('total');
-        $availableShippingTotal = (float) $eligibleOrders->sum('shipping_fee');
-        $availableMerchandiseAmount = max(0.00, $availableCodTotal - $availableShippingTotal);
+        $availableCodTotal = round((float) $eligibleOrders->sum(fn ($o) => (float) $o->total), 2);
+        $availableShippingTotal = round((float) $eligibleOrders->sum(fn ($o) => (float) $o->shipping_fee), 2);
+        $availableMerchandiseAmount = round((float) $eligibleOrders->sum(fn ($o) => $o->merchandiseAmount()), 2);
 
         // Remittance batches
         $remittancesQuery = LogisticsAdminRemittance::where('logistics_id', $logisticsId);
 
-        $pendingRemittancesCount = (clone $remittancesQuery)->whereIn('status', ['submitted', 'under_review'])->count();
-        $pendingMerchandiseAmount = (float) (clone $remittancesQuery)->whereIn('status', ['submitted', 'under_review'])->sum('merchandise_amount');
+        $pendingRemittancesCount = (clone $remittancesQuery)->whereIn('status', ['submitted', 'under_review', 'disputed'])->count();
+        $pendingMerchandiseAmount = (float) (clone $remittancesQuery)->whereIn('status', ['submitted', 'under_review', 'disputed'])->sum('merchandise_amount');
 
         $verifiedRemittancesCount = (clone $remittancesQuery)->where('status', 'verified')->count();
         $verifiedMerchandiseAmount = (float) (clone $remittancesQuery)->where('status', 'verified')->sum('merchandise_amount');
@@ -72,7 +80,10 @@ class CodFinancialService
             'merchandisePayable' => $merchandisePayable,
             'availableMerchandiseAmount' => $availableMerchandiseAmount,
             'availableShippingTotal' => $availableShippingTotal,
+            'availableCodTotal' => $availableCodTotal,
             'availableOrdersCount' => $eligibleOrders->count(),
+            'awaitingRiderCodAmount' => $awaitingRiderCodAmount,
+            'awaitingRiderOrdersCount' => $awaitingRiderOrders->count(),
             'pendingRemittancesCount' => $pendingRemittancesCount,
             'pendingMerchandiseAmount' => $pendingMerchandiseAmount,
             'verifiedRemittancesCount' => $verifiedRemittancesCount,
@@ -84,30 +95,64 @@ class CodFinancialService
     }
 
     /**
+     * Determine whether Rider COD cash for an order has been physically/externally verified by Logistics.
+     */
+    public function hasVerifiedRiderCodCash(Order $order, int $logisticsId): bool
+    {
+        if (strtolower((string) $order->payment_method) !== 'cod') {
+            return false;
+        }
+
+        $collection = $order->codCollection;
+        if ($collection) {
+            return $collection->isFullyVerifiedForAdminRemittance()
+                && ((int) ($collection->collecting_logistics_id ?: $logisticsId) === $logisticsId);
+        }
+
+        // Legacy fallback ONLY when no CodCollection row exists yet: require an approved/verified CodRemittance
+        $query = \App\Models\CodRemittance::where('sorting_center_id', $logisticsId)
+            ->whereIn('status', \App\Models\CodRemittance::VERIFIED_STATUSES);
+
+        if ($order->delivery_courier_id) {
+            $query->where('courier_id', $order->delivery_courier_id);
+        }
+
+        return $query->exists();
+    }
+
+    /**
      * Get orders eligible for logistics-to-admin remittance.
-     * Delivered, COD, belonging to this logistics company, and not in any non-rejected remittance.
+     * Delivered, COD, belonging to this collecting logistics company,
+     * Rider cash verified, and not in any non-rejected remittance.
      */
     public function getEligibleOrdersForRemittance(User $logistics, ?int $limit = null): Collection
     {
-        $logisticsId = $logistics->id;
+        $logisticsId = $logistics->logisticsCompanyId();
 
         $query = Order::where('payment_method', 'cod')
             ->whereIn('status', ['delivered', 'completed'])
             ->where(function ($q) use ($logisticsId) {
-                $q->where('sorting_center_id', $logisticsId)
-                  ->orWhere('delivery_logistics_id', $logisticsId);
+                $q->where('delivery_logistics_id', $logisticsId)
+                    ->orWhere(function ($sub) use ($logisticsId) {
+                        $sub->whereNull('delivery_logistics_id')
+                            ->where('sorting_center_id', $logisticsId);
+                    });
             })
             ->whereDoesntHave('remittanceItem.remittance', function ($q) {
                 $q->where('status', '!=', 'rejected');
             })
-            ->with(['buyer', 'seller.sellerProfile', 'items.product'])
+            ->with(['buyer', 'seller.sellerProfile', 'items.product', 'codCollection'])
             ->latest('delivered_at');
 
+        $orders = $query->get()
+            ->filter(fn (Order $order) => $this->hasVerifiedRiderCodCash($order, $logisticsId))
+            ->values();
+
         if ($limit) {
-            $query->limit($limit);
+            return $orders->take($limit);
         }
 
-        return $query->get();
+        return $orders;
     }
 
     /**
@@ -126,10 +171,11 @@ class CodFinancialService
         }
 
         return DB::transaction(function () use ($logistics, $orderIds, $data, $proofFile) {
-            $logisticsId = $logistics->id;
+            $logisticsId = $logistics->logisticsCompanyId();
 
             // Row-lock selected orders to prevent concurrent multi-batch remittance
             $orders = Order::whereIn('id', $orderIds)
+                ->with('codCollection')
                 ->lockForUpdate()
                 ->get();
 
@@ -142,6 +188,7 @@ class CodFinancialService
             // Verify each order eligibility
             $totalCod = 0.00;
             $totalShipping = 0.00;
+            $totalSubsidy = 0.00;
             $totalMerchandise = 0.00;
 
             foreach ($orders as $order) {
@@ -153,18 +200,24 @@ class CodFinancialService
                 }
 
                 // Must be delivered or completed
-                if (!in_array($order->status, ['delivered', 'completed'], true)) {
+                if (! in_array($order->status, ['delivered', 'completed'], true)) {
                     throw ValidationException::withMessages([
                         'order_ids' => "Order #{$order->order_number} has not been delivered yet.",
                     ]);
                 }
 
-                // Must belong to this logistics provider
-                $isCustodian = (int) $order->sorting_center_id === (int) $logisticsId ||
-                               (int) $order->delivery_logistics_id === (int) $logisticsId;
-                if (! $isCustodian) {
+                // Must belong to this collecting logistics provider
+                $custodianId = (int) ($order->delivery_logistics_id ?: $order->sorting_center_id);
+                if ($custodianId !== $logisticsId) {
                     throw ValidationException::withMessages([
-                        'order_ids' => "Unauthorized: Order #{$order->order_number} is assigned to another carrier.",
+                        'order_ids' => "Unauthorized: Order #{$order->order_number} is assigned to another collecting carrier.",
+                    ]);
+                }
+
+                // Must have Rider COD cash verified first
+                if (! $this->hasVerifiedRiderCodCash($order, $logisticsId)) {
+                    throw ValidationException::withMessages([
+                        'order_ids' => "Order #{$order->order_number} cannot be remitted yet: Rider COD cash has not been fully verified by Logistics.",
                     ]);
                 }
 
@@ -182,11 +235,13 @@ class CodFinancialService
                 }
 
                 $shipping = (float) $order->shipping_fee;
-                $merchandise = max(0.00, (float) $order->subtotal - (float) $order->discount);
+                $merchandise = $order->merchandiseAmount();
+                $subsidy = (float) ($order->platform_shipping_subsidy ?? $order->shipping_voucher_discount ?? 0);
                 $cod = (float) $order->total;
 
                 $totalCod += $cod;
                 $totalShipping += $shipping;
+                $totalSubsidy += $subsidy;
                 $totalMerchandise += $merchandise;
             }
 
@@ -204,6 +259,7 @@ class CodFinancialService
                 'reference_number' => $refNumber,
                 'total_cod_amount' => round($totalCod, 2),
                 'shipping_retained' => round($totalShipping, 2),
+                'shipping_subsidy_total' => round($totalSubsidy, 2),
                 'merchandise_amount' => round($totalMerchandise, 2),
                 'transfer_method' => $data['transfer_method'] ?? 'bank_transfer',
                 'transfer_reference' => trim((string) ($data['transfer_reference'] ?? '')),
@@ -212,18 +268,31 @@ class CodFinancialService
                 'status' => 'submitted',
             ]);
 
-            // Create remittance items
+            // Create itemized remittance rows preserving discount & verified COD links
             foreach ($orders as $order) {
                 $shipping = (float) $order->shipping_fee;
-                $merchandise = max(0.00, (float) $order->subtotal - (float) $order->discount);
+                $merchandise = $order->merchandiseAmount();
                 $cod = (float) $order->total;
+                $collection = $order->codCollection;
+                $verifiedRemitId = null;
+                if ($collection) {
+                    $verifiedRemitId = \App\Models\CodRemittanceAllocation::where('cod_collection_id', $collection->id)
+                        ->whereIn('status', ['verified', 'partially_verified'])
+                        ->latest('id')
+                        ->value('cod_remittance_id');
+                }
 
                 LogisticsRemittanceItem::create([
                     'logistics_admin_remittance_id' => $remittance->id,
                     'order_id' => $order->id,
+                    'cod_remittance_id' => $verifiedRemitId,
+                    'cod_collection_id' => $collection?->id,
                     'total_cod_amount' => round($cod, 2),
                     'shipping_component' => round($shipping, 2),
                     'merchandise_component' => round($merchandise, 2),
+                    'seller_discount_amount' => round((float) ($order->store_voucher_discount ?? 0), 2),
+                    'platform_discount_amount' => round((float) ($order->platform_voucher_discount ?? 0), 2),
+                    'platform_shipping_subsidy' => round((float) ($order->platform_shipping_subsidy ?? $order->shipping_voucher_discount ?? 0), 2),
                 ]);
             }
 
@@ -253,9 +322,11 @@ class CodFinancialService
     public function verifyLogisticsAdminRemittance(
         LogisticsAdminRemittance $remittance,
         User $admin,
-        ?string $adminNotes = null
+        ?string $adminNotes = null,
+        ?float $actualReceivedAmount = null,
+        ?string $verifiedBankReference = null
     ): LogisticsAdminRemittance {
-        return DB::transaction(function () use ($remittance, $admin, $adminNotes) {
+        return DB::transaction(function () use ($remittance, $admin, $adminNotes, $actualReceivedAmount, $verifiedBankReference) {
             $lockedRemittance = LogisticsAdminRemittance::where('id', $remittance->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -268,10 +339,25 @@ class CodFinancialService
                 throw new \DomainException("Cannot verify a rejected remittance.");
             }
 
+            $expectedCents = (int) round((float) $lockedRemittance->merchandise_amount * 100);
+            $actualCents = $actualReceivedAmount !== null
+                ? (int) round($actualReceivedAmount * 100)
+                : $expectedCents;
+
+            if ($actualCents < $expectedCents) {
+                throw new \DomainException(
+                    'Actual received funds (₱' . number_format($actualCents / 100, 2) . ') are less than expected merchandise proceeds (₱' . number_format($expectedCents / 100, 2) . '). Use Flag / Dispute instead of releasing seller payouts for unreceived cash.'
+                );
+            }
+
+            $variance = round(($actualCents - $expectedCents) / 100, 2);
             $oldStatus = $lockedRemittance->status;
 
             $lockedRemittance->update([
                 'status' => 'verified',
+                'actual_received_amount' => round($actualCents / 100, 2),
+                'variance_amount' => $variance,
+                'verified_bank_reference' => $verifiedBankReference ?: $lockedRemittance->verified_bank_reference,
                 'reviewed_by' => $admin->id,
                 'reviewed_at' => now(),
                 'notes' => $adminNotes
@@ -371,6 +457,55 @@ class CodFinancialService
                 oldValues: ['status' => $oldStatus],
                 newValues: ['status' => 'rejected', 'rejection_reason' => $reason],
                 reason: "Administrator rejected remittance: {$reason}",
+                operatorId: $admin->id
+            );
+
+            return $lockedRemittance;
+        });
+    }
+
+    /**
+     * Admin flags/disputes a submitted logistics remittance due to amount mismatch or proof discrepancy.
+     */
+    public function disputeLogisticsAdminRemittance(
+        LogisticsAdminRemittance $remittance,
+        User $admin,
+        string $reason,
+        ?float $actualReceivedAmount = null
+    ): LogisticsAdminRemittance {
+        return DB::transaction(function () use ($remittance, $admin, $reason, $actualReceivedAmount) {
+            $lockedRemittance = LogisticsAdminRemittance::where('id', $remittance->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedRemittance->status === 'verified') {
+                throw new \DomainException("Cannot dispute an already verified remittance.");
+            }
+
+            $oldStatus = $lockedRemittance->status;
+            $expected = (float) $lockedRemittance->merchandise_amount;
+            $variance = $actualReceivedAmount !== null ? round($actualReceivedAmount - $expected, 2) : 0.00;
+
+            $lockedRemittance->update([
+                'status' => 'disputed',
+                'actual_received_amount' => $actualReceivedAmount !== null ? round($actualReceivedAmount, 2) : $lockedRemittance->actual_received_amount,
+                'variance_amount' => $variance,
+                'reviewed_by' => $admin->id,
+                'reviewed_at' => now(),
+                'discrepancy_notes' => $reason,
+            ]);
+
+            AuditLog::log(
+                action: 'logistics_remittance_disputed',
+                auditable: $lockedRemittance,
+                oldValues: ['status' => $oldStatus],
+                newValues: [
+                    'status' => 'disputed',
+                    'actual_received_amount' => $lockedRemittance->actual_received_amount,
+                    'variance_amount' => $variance,
+                    'discrepancy_notes' => $reason,
+                ],
+                reason: "Administrator flagged discrepancy on remittance: {$reason}",
                 operatorId: $admin->id
             );
 

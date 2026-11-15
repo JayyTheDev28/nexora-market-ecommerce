@@ -46,11 +46,21 @@
             ],
         ],
         [
-            'title' => 'FINANCE & TOOLS',
+            'title' => 'FINANCIAL MANAGEMENT',
             'items' => [
-                'remittances' => ['label' => 'Rider Remittances', 'icon' => 'payments', 'url' => route('logistics.remittances.index'), 'badge' => null],
+                'remittances' => ['label' => 'Rider COD Remittances', 'icon' => 'payments', 'url' => route('logistics.remittances.index'), 'badge' => null],
                 'admin-remittances' => ['label' => 'Remit to Admin', 'icon' => 'account_balance', 'url' => route('logistics.admin-remittances.index'), 'badge' => null],
-                'reports' => ['label' => 'Activity Log', 'icon' => 'bar_chart', 'url' => route('logistics.reports.index'), 'badge' => null],
+                'payouts' => ['label' => 'Courier Payouts', 'icon' => 'request_quote', 'url' => route('logistics.payouts.index'), 'badge' => null],
+                'compensation' => ['label' => 'Compensation Policies', 'icon' => 'tune', 'url' => route('logistics.compensation.index'), 'badge' => null],
+                'shipping-rates' => ['label' => 'Shipping Rates', 'icon' => 'sell', 'url' => route('logistics.shipping-rates.index'), 'badge' => null],
+                'inter-company' => ['label' => 'Inter-Company Split', 'icon' => 'compare_arrows', 'url' => route('logistics.inter-company.index'), 'badge' => null],
+                'expenses' => ['label' => 'Operating Expenses', 'icon' => 'receipt_long', 'url' => route('logistics.expenses.index'), 'badge' => null],
+                'reports' => ['label' => 'Financial Reports', 'icon' => 'bar_chart', 'url' => route('logistics.reports.index'), 'badge' => null],
+            ],
+        ],
+        [
+            'title' => 'SETTINGS',
+            'items' => [
                 'account' => ['label' => 'Facility Settings', 'icon' => 'settings', 'url' => route('logistics.account.show'), 'badge' => null],
             ],
         ],

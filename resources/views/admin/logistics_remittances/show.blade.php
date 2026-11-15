@@ -368,6 +368,16 @@
 
             <form method="POST" action="{{ route('admin.logistics-remittances.verify', $remittance) }}" class="space-y-4">
                 @csrf
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-on-surface-variant">Actual Received Amount (₱)</label>
+                        <input type="number" step="0.01" min="0" name="actual_received_amount" value="{{ number_format((float) $remittance->merchandise_amount, 2, '.', '') }}" class="rounded-xl border border-outline-variant p-2.5 text-xs font-mono text-on-surface bg-surface">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-on-surface-variant">Bank / Statement Ref</label>
+                        <input type="text" name="verified_bank_reference" placeholder="e.g. UB-CR-881290" class="rounded-xl border border-outline-variant p-2.5 text-xs font-mono text-on-surface bg-surface">
+                    </div>
+                </div>
                 <div class="flex flex-col gap-1">
                     <label class="text-xs font-semibold text-on-surface-variant">Admin Audit Note (Optional)</label>
                     <textarea name="admin_notes" rows="2" placeholder="e.g. Verified on UnionBank business portal statement" class="rounded-xl border border-outline-variant p-3 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"></textarea>

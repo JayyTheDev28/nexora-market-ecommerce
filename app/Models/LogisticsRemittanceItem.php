@@ -11,9 +11,13 @@ class LogisticsRemittanceItem extends Model
         'logistics_admin_remittance_id',
         'order_id',
         'cod_remittance_id',
+        'cod_collection_id',
         'total_cod_amount',
         'shipping_component',
         'merchandise_component',
+        'seller_discount_amount',
+        'platform_discount_amount',
+        'platform_shipping_subsidy',
     ];
 
     protected function casts(): array
@@ -22,7 +26,15 @@ class LogisticsRemittanceItem extends Model
             'total_cod_amount' => 'decimal:2',
             'shipping_component' => 'decimal:2',
             'merchandise_component' => 'decimal:2',
+            'seller_discount_amount' => 'decimal:2',
+            'platform_discount_amount' => 'decimal:2',
+            'platform_shipping_subsidy' => 'decimal:2',
         ];
+    }
+
+    public function codCollection(): BelongsTo
+    {
+        return $this->belongsTo(CodCollection::class, 'cod_collection_id');
     }
 
     public function remittance(): BelongsTo

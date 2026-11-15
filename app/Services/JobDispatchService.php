@@ -87,7 +87,11 @@ class JobDispatchService
             ? "{$order->address->street}, {$order->address->city}, {$order->address->province}"
             : 'Buyer Delivery Address';
 
-        $expectedPay = $type === 'pickup' ? 30.00 : 50.00;
+        $policy = app(CompensationPolicyService::class)->getActivePolicy(
+            \App\Models\CompensationPolicy::ROLE_RIDER,
+            $companyId ? (int) $companyId : null
+        );
+        $expectedPay = $type === 'pickup' ? (float) $policy->pickup_rate : (float) $policy->delivery_rate;
         $codAmount = ($order->payment_method === 'cod') ? (float) $order->total : 0.00;
 
         return JobOffer::create([

@@ -538,25 +538,40 @@ class DashboardController extends Controller implements HasMiddleware
     public function submitRemittance(Request $request): RedirectResponse|JsonResponse
     {
         $rider = $request->user();
-        $profile = $rider->courierProfile;
+        $profile = $rider->courierProfile()->first();
         abort_unless($profile, 400);
 
         $unremitted = (float) $profile->unremitted_cod_balance;
         abort_unless($unremitted > 0, 422, 'You have no unremitted COD balance to submit.');
 
         $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1', "max:{$unremitted}"],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'payment_method' => ['nullable', 'string', 'in:physical_cash,gcash,maya,bank_transfer'],
+            'external_reference' => ['nullable', 'string', 'max:120'],
+            'transfer_date' => ['nullable', 'date'],
+            'proof_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'order_ids' => ['nullable', 'array'],
+            'order_ids.*' => ['integer'],
             'notes' => ['nullable', 'string', 'max:500'],
             'idempotency_key' => ['nullable', 'string'],
         ]);
 
         $idempotencyKey = $validated['idempotency_key'] ?? $request->header('Idempotency-Key');
+        $proofFile = $request->file('proof_file');
 
-        return IdempotencyService::run($idempotencyKey, $rider->id, "cod_remittance_{$rider->id}_" . date('Ymd'), function () use ($request, $rider, $validated) {
+        return IdempotencyService::run($idempotencyKey, $rider->id, "cod_remittance_{$rider->id}_" . date('YmdHis'), function () use ($request, $rider, $validated, $proofFile, $idempotencyKey) {
             $remittance = $this->payoutService->submitRemittance(
                 $rider,
                 (float) $validated['amount'],
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                [
+                    'payment_method' => $validated['payment_method'] ?? 'physical_cash',
+                    'external_reference' => $validated['external_reference'] ?? null,
+                    'transfer_date' => $validated['transfer_date'] ?? null,
+                    'order_ids' => $validated['order_ids'] ?? null,
+                    'idempotency_key' => $idempotencyKey,
+                ],
+                $proofFile
             );
 
             $msg = "COD Remittance request #{$remittance->remittance_number} submitted (₱" . number_format($remittance->amount, 2) . ") for Logistics verification.";

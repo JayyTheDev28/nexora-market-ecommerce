@@ -81,7 +81,7 @@ class RiderManagementAndActivationTest extends TestCase
         $this->actingAs($logistics)
             ->get(route('logistics.riders.create'))
             ->assertOk()
-            ->assertSee('Add New Courier Rider');
+            ->assertSee('Add New Delivery Rider');
     }
 
     public function test_public_self_service_registration_is_blocked_for_couriers(): void
@@ -307,7 +307,7 @@ class RiderManagementAndActivationTest extends TestCase
 
         $oldToken = 'old-activation-token';
         $rider = User::factory()->create([
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'pending_activation',
             'activation_token' => $oldToken,
@@ -334,7 +334,7 @@ class RiderManagementAndActivationTest extends TestCase
     public function test_rider_can_access_rider_dashboard_and_is_blocked_from_other_roles(): void
     {
         $rider = User::factory()->create([
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'active',
             'email_verified_at' => now(),

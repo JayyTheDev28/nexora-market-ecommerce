@@ -371,11 +371,14 @@ class RiderApiController extends Controller
         $rider = $request->user();
         abort_unless($rider && $rider->isRider(), 403);
 
-        $profile = $rider->courierProfile;
+        $profile = $rider->courierProfile()->first();
 
         $todayPickups = RiderEarning::where('courier_id', $rider->id)->where('type', 'pickup')->where('earned_at', '>=', now()->startOfDay())->count();
         $todayDeliveries = RiderEarning::where('courier_id', $rider->id)->where('type', 'delivery')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayPay = ($todayPickups * 30.00) + ($todayDeliveries * 50.00);
+        $todayPay = (float) RiderEarning::where('courier_id', $rider->id)
+            ->where('status', '!=', 'reversed')
+            ->where('earned_at', '>=', now()->startOfDay())
+            ->sum('amount');
 
         $weeklyPay = RiderEarning::where('courier_id', $rider->id)->where('earned_at', '>=', now()->startOfWeek())->sum('amount');
 
@@ -399,7 +402,7 @@ class RiderApiController extends Controller
         $rider = $request->user();
         abort_unless($rider && $rider->isRider(), 403);
 
-        $profile = $rider->courierProfile;
+        $profile = $rider->courierProfile()->first();
         $unremitted = (float) ($profile?->unremitted_cod_balance ?? 0);
 
         if ($unremitted <= 0) {

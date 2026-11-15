@@ -2,202 +2,210 @@
 
 namespace App\Services;
 
-use App\Models\AuditLog;
-use App\Models\CodLedgerEntry;
+use App\Models\CodCollection;
 use App\Models\CodRemittance;
+use App\Models\CourierProfile;
 use App\Models\Order;
+use App\Models\ProofOfDelivery;
 use App\Models\RiderEarning;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class RiderPayoutService
 {
+    public function __construct(
+        protected CompensationPolicyService $policyService,
+        protected CodCollectionService $codCollectionService,
+    ) {}
+
     /**
-     * Credit ₱30.00 for completed pickup from seller.
+     * Legacy parameter order preserved: creditPickupPay(User $courier, Order $order).
      */
-    public function creditPickupPay(User $courier, Order $order): ?RiderEarning
+    public function creditPickupPay(User $courier, Order $order, ?float $overrideAmount = null): RiderEarning
     {
-        return DB::transaction(function () use ($courier, $order) {
-            // Guard against duplicate pay
-            $existing = RiderEarning::where('courier_id', $courier->id)
-                ->where('order_id', $order->id)
+        return DB::transaction(function () use ($order, $courier, $overrideAmount) {
+            $earningKey = "order_{$order->id}_pickup_{$courier->id}";
+
+            $existing = RiderEarning::where('order_id', $order->id)
                 ->where('type', 'pickup')
+                ->where('courier_id', $courier->id)
+                ->lockForUpdate()
                 ->first();
 
             if ($existing) {
                 return $existing;
             }
 
+            $rateInfo = $this->policyService->resolveRiderJobRate($order, $courier, 'pickup', $overrideAmount);
+
             $earning = RiderEarning::create([
                 'courier_id' => $courier->id,
+                'logistics_company_id' => $rateInfo['company_id'],
                 'order_id' => $order->id,
+                'policy_id' => $rateInfo['policy']->id,
+                'earning_key' => $earningKey,
                 'type' => 'pickup',
-                'amount' => 30.00,
-                'description' => "Pickup completed for order {$order->order_number}",
+                'amount' => $rateInfo['amount'],
+                'status' => RiderEarning::STATUS_EARNED,
+                'description' => "Pickup fee for order #{$order->order_number}",
+                'rate_snapshot' => $rateInfo['snapshot'],
                 'earned_at' => now(),
             ]);
 
-            if ($courier->courierProfile) {
-                $courier->courierProfile->increment('earnings_balance', 30.00);
-            }
+            $this->incrementEarningsBalance($courier->id, $rateInfo['amount']);
 
             return $earning;
         });
     }
 
-    /**
-     * Credit ₱50.00 for successful delivery to buyer.
-     */
-    public function creditDeliveryPay(User $courier, Order $order): ?RiderEarning
+    public function creditPickupEarning(Order $order, User $courier, ?float $overrideAmount = null): RiderEarning
     {
-        return DB::transaction(function () use ($courier, $order) {
-            // Guard against duplicate pay
-            $existing = RiderEarning::where('courier_id', $courier->id)
-                ->where('order_id', $order->id)
+        return $this->creditPickupPay($courier, $order, $overrideAmount);
+    }
+
+    /**
+     * Legacy parameter order preserved: creditDeliveryPay(User $courier, Order $order).
+     */
+    public function creditDeliveryPay(User $courier, Order $order, ?float $overrideAmount = null): RiderEarning
+    {
+        return DB::transaction(function () use ($order, $courier, $overrideAmount) {
+            $earningKey = "order_{$order->id}_delivery_{$courier->id}";
+
+            $existing = RiderEarning::where('order_id', $order->id)
                 ->where('type', 'delivery')
+                ->where('courier_id', $courier->id)
+                ->lockForUpdate()
                 ->first();
 
+            if ($existing) {
+                return $existing;
+            }
+
+            $rateInfo = $this->policyService->resolveRiderJobRate($order, $courier, 'delivery', $overrideAmount);
+
+            $earning = RiderEarning::create([
+                'courier_id' => $courier->id,
+                'logistics_company_id' => $rateInfo['company_id'],
+                'order_id' => $order->id,
+                'policy_id' => $rateInfo['policy']->id,
+                'earning_key' => $earningKey,
+                'type' => 'delivery',
+                'amount' => $rateInfo['amount'],
+                'status' => RiderEarning::STATUS_EARNED,
+                'description' => "Delivery fee for order #{$order->order_number}",
+                'rate_snapshot' => $rateInfo['snapshot'],
+                'earned_at' => now(),
+            ]);
+
+            $this->incrementEarningsBalance($courier->id, $rateInfo['amount']);
+
+            return $earning;
+        });
+    }
+
+    public function creditDeliveryEarning(Order $order, User $courier, ?float $overrideAmount = null): RiderEarning
+    {
+        return $this->creditDeliveryPay($courier, $order, $overrideAmount);
+    }
+
+    /**
+     * Credit optional failed delivery attempt compensation when active policy configures failed_attempt_rate > 0.
+     */
+    public function creditFailedAttemptEarning(User $courier, Order $order, int $attemptNumber): ?RiderEarning
+    {
+        return DB::transaction(function () use ($order, $courier, $attemptNumber) {
+            $rateInfo = $this->policyService->resolveRiderJobRate($order, $courier, 'failed_delivery');
+            if ($rateInfo['amount'] <= 0) {
+                return null;
+            }
+
+            $earningKey = "order_{$order->id}_failed_attempt_{$attemptNumber}_{$courier->id}";
+            $existing = RiderEarning::where('earning_key', $earningKey)->lockForUpdate()->first();
             if ($existing) {
                 return $existing;
             }
 
             $earning = RiderEarning::create([
                 'courier_id' => $courier->id,
+                'logistics_company_id' => $rateInfo['company_id'],
                 'order_id' => $order->id,
-                'type' => 'delivery',
-                'amount' => 50.00,
-                'description' => "Delivery completed for order {$order->order_number}",
+                'policy_id' => $rateInfo['policy']->id,
+                'earning_key' => $earningKey,
+                'type' => 'failed_delivery',
+                'amount' => $rateInfo['amount'],
+                'status' => RiderEarning::STATUS_EARNED,
+                'description' => "Failed delivery attempt #{$attemptNumber} allowance for order #{$order->order_number}",
+                'rate_snapshot' => $rateInfo['snapshot'],
                 'earned_at' => now(),
             ]);
 
-            if ($courier->courierProfile) {
-                $courier->courierProfile->increment('earnings_balance', 50.00);
-            }
+            $this->incrementEarningsBalance($courier->id, $rateInfo['amount']);
 
             return $earning;
         });
     }
 
     /**
-     * Record COD collection on successful delivery: adds order total to unremitted COD balance.
+     * Legacy parameter order preserved: recordCodCollection(User $courier, Order $order).
      */
-    public function recordCodCollection(User $courier, Order $order): ?CodLedgerEntry
-    {
-        if (strtolower($order->payment_method) !== 'cod') {
-            return null;
-        }
-
-        return DB::transaction(function () use ($courier, $order) {
-            // Guard against duplicate COD collection
-            $existing = CodLedgerEntry::where('courier_id', $courier->id)
-                ->where('order_id', $order->id)
-                ->where('type', 'collected')
-                ->first();
-
-            if ($existing) {
-                return $existing;
-            }
-
-            $profile = $courier->courierProfile;
-            $newBalance = ($profile ? (float) $profile->unremitted_cod_balance : 0.0) + (float) $order->total;
-
-            if ($profile) {
-                $profile->update(['unremitted_cod_balance' => $newBalance]);
-            }
-
-            return CodLedgerEntry::create([
-                'courier_id' => $courier->id,
-                'order_id' => $order->id,
-                'type' => 'collected',
-                'amount' => (float) $order->total,
-                'balance_after' => $newBalance,
-                'description' => "COD collected for order {$order->order_number}",
-            ]);
-        });
+    public function recordCodCollection(
+        User $courier,
+        Order $order,
+        ?ProofOfDelivery $pod = null,
+        ?float $collectedAmount = null,
+        ?string $idempotencyKey = null
+    ): ?CodCollection {
+        return $this->codCollectionService->recordCollectionOnDelivery($order, $courier, $pod, $collectedAmount, $idempotencyKey);
     }
 
     /**
-     * Submit EOD COD Remittance request to Logistics.
+     * Legacy parameter order preserved: submitRemittance(User $courier, float $amount, ?string $notes = null).
      */
-    public function submitRemittance(User $courier, float $amount, ?string $notes = null): CodRemittance
-    {
-        $profile = $courier->courierProfile;
-        $expectedAmount = $profile ? (float) $profile->unremitted_cod_balance : 0.00;
-        $sortingCenterId = $profile?->sorting_center_id ?? $courier->id;
-
-        $remittanceNumber = 'REM-' . date('Ymd') . '-' . Str::upper(Str::random(5));
-
-        return CodRemittance::create([
-            'remittance_number' => $remittanceNumber,
-            'courier_id' => $courier->id,
-            'sorting_center_id' => $sortingCenterId,
-            'amount' => $amount,
-            'expected_amount' => $expectedAmount,
-            'status' => 'pending',
-            'rider_notes' => $notes,
-            'remitted_at' => now(),
-        ]);
+    public function submitRemittance(
+        User $courier,
+        float $amount,
+        ?string $notes = null,
+        array $options = [],
+        ?UploadedFile $proofFile = null
+    ): CodRemittance {
+        return $this->codCollectionService->submitRemittance(
+            $courier,
+            array_merge($options, [
+                'amount' => $amount,
+                'notes' => $notes,
+            ]),
+            $proofFile
+        );
     }
 
     /**
-     * Review / Approve / Flag COD Remittance by Logistics Operator.
+     * Legacy parameter order preserved: reviewRemittance(CodRemittance $remittance, User $operator, string $decision, ?string $operatorNotes = null).
      */
     public function reviewRemittance(
         CodRemittance $remittance,
         User $operator,
         string $decision,
         ?string $operatorNotes = null,
-        ?string $reason = null
+        array $options = []
     ): CodRemittance {
-        return DB::transaction(function () use ($remittance, $operator, $decision, $operatorNotes, $reason) {
-            $oldStatus = $remittance->status;
-            $courier = $remittance->courier;
-            $profile = $courier->courierProfile;
+        return $this->codCollectionService->reviewRemittance(
+            $remittance,
+            $decision,
+            $operator,
+            array_merge($options, ['operator_notes' => $operatorNotes])
+        );
+    }
 
-            $status = match ($decision) {
-                'approve' => 'approved',
-                'flag', 'flag_discrepancy' => 'discrepancy_flagged',
-                'reject' => 'rejected',
-                default => 'pending',
-            };
+    protected function incrementEarningsBalance(int $courierId, float $amount): void
+    {
+        $profile = CourierProfile::where('user_id', $courierId)->lockForUpdate()->first();
+        if (! $profile) {
+            return;
+        }
 
-            if ($status === 'approved') {
-                $currentBalance = $profile ? (float) $profile->unremitted_cod_balance : 0.00;
-                $newBalance = max(0.00, $currentBalance - (float) $remittance->amount);
-
-                if ($profile) {
-                    $profile->update(['unremitted_cod_balance' => $newBalance]);
-                }
-
-                CodLedgerEntry::create([
-                    'courier_id' => $courier->id,
-                    'order_id' => null,
-                    'type' => 'remitted',
-                    'amount' => (float) $remittance->amount,
-                    'balance_after' => $newBalance,
-                    'description' => "COD Remittance approved: {$remittance->remittance_number}",
-                ]);
-            }
-
-            $remittance->update([
-                'status' => $status,
-                'operator_notes' => $operatorNotes,
-                'reviewed_by' => $operator->id,
-                'reviewed_at' => now(),
-            ]);
-
-            // Audit Trail
-            AuditLog::log(
-                action: 'cod_remittance_' . $status,
-                auditable: $remittance,
-                oldValues: ['status' => $oldStatus],
-                newValues: ['status' => $status, 'amount' => $remittance->amount],
-                reason: $reason ?? $operatorNotes ?? 'Logistics remittance reconciliation review',
-                operatorId: $operator->id
-            );
-
-            return $remittance;
-        });
+        $currentCents = (int) round((float) $profile->earnings_balance * 100);
+        $deltaCents = (int) round($amount * 100);
+        $profile->update(['earnings_balance' => round(($currentCents + $deltaCents) / 100, 2)]);
     }
 }

@@ -720,18 +720,53 @@ class SellerModuleIntegrationTest extends TestCase
             'status' => 'active',
         ]);
 
-        // Create completed order with 1000 subtotal (Net 90% is 900)
+        $logistics = User::factory()->create([
+            'role' => 'logistics',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        $rider = User::factory()->create([
+            'role' => 'rider',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        \App\Models\CourierProfile::create([
+            'user_id' => $rider->id,
+            'sorting_center_id' => $logistics->id,
+            'logistics_company_id' => $logistics->id,
+            'vehicle_type' => 'Motorcycle',
+            'plate_number' => 'MC-SEL-01',
+            'license_number' => 'N01-23-777888',
+            'license_expiry_date' => now()->addYear(),
+            'is_online' => true,
+        ]);
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+
+        // 1. COD order out for delivery with ₱1000 merchandise + ₱100 shipping = ₱1100 COD total
         $order = Order::create([
             'order_number' => 'NEX-ORD-PAYOUT-01',
             'buyer_id' => $this->buyer->id,
             'seller_id' => $this->seller->id,
             'address_id' => $this->address->id,
+            'sorting_center_id' => $logistics->id,
+            'delivery_logistics_id' => $logistics->id,
+            'delivery_courier_id' => $rider->id,
             'subtotal' => 1000,
+            'gross_merchandise_subtotal' => 1000,
             'shipping_fee' => 100,
+            'base_shipping_fee' => 100,
             'total' => 1100,
             'payment_method' => 'cod',
-            'status' => 'completed',
+            'status' => 'out_for_delivery',
         ]);
+        $otp = $order->generateDeliveryOtp();
 
         OrderItem::create([
             'order_id' => $order->id,
@@ -741,10 +776,55 @@ class SellerModuleIntegrationTest extends TestCase
             'quantity' => 1,
         ]);
 
+        // 2. Rider delivers COD order -> CodCollection recorded
+        $this->actingAs($rider)->post(route('courier.deliveries.complete', $order), [
+            'delivery_otp' => $otp,
+            'pod_image' => UploadedFile::fake()->create('pod.jpg', 100, 'image/jpeg'),
+        ])->assertRedirect();
+
+        $order->update(['status' => 'completed', 'completed_at' => now()]);
+
+        // Seller cannot withdraw funds before Logistics -> Admin verified remittance
+        $this->actingAs($this->seller)->post(route('seller.payouts.request'), [
+            'amount' => 700,
+            'payout_method' => 'gcash',
+            'account_name' => 'Artisan Workshop',
+            'account_number' => '09171234567',
+        ])->assertSessionHasErrors('amount');
+
+        // 3. Rider submits COD remittance (₱1100) and Logistics verifies full cash receipt
+        $this->actingAs($rider)->post(route('courier.remittance.submit'), [
+            'amount' => 1100.00,
+            'payment_method' => 'physical_cash',
+            'order_ids' => [$order->id],
+        ])->assertRedirect();
+
+        $riderRemit = \App\Models\CodRemittance::where('courier_id', $rider->id)->firstOrFail();
+        $this->actingAs($logistics)->post(route('logistics.remittances.review', $riderRemit), [
+            'decision' => 'verify_full',
+            'actual_received_amount' => 1100.00,
+            'verification_reference' => 'CASH-SEL-01',
+        ])->assertRedirect();
+
+        // 4. Logistics submits merchandise proceeds (₱1000) to Admin & Admin verifies actual receipt
+        $this->actingAs($logistics)->post(route('logistics.admin-remittances.store'), [
+            'order_ids' => [$order->id],
+            'transfer_method' => 'bank_transfer',
+            'transfer_reference' => 'BPI-SELLER-PAYOUT-01',
+            'proof_file' => UploadedFile::fake()->create('bank_slip.pdf', 100, 'application/pdf'),
+        ])->assertRedirect();
+
+        $adminRemit = \App\Models\LogisticsAdminRemittance::firstOrFail();
+        $this->actingAs($admin)->post(route('admin.logistics-remittances.verify', $adminRemit), [
+            'actual_received_amount' => 1000.00,
+            'verified_bank_reference' => 'BPI-VER-SEL-01',
+        ])->assertRedirect();
+
+        // 5. Verified SellerSettlementAllocation (1000 - 10% ₱100 commission = ₱900 payable) is now available
         $reportView = $this->actingAs($this->seller)->get(route('seller.reports.index'));
         $reportView->assertStatus(200);
         $reportView->assertSee('Finances & Payouts');
-        $reportView->assertSee('900.00'); // Available balance: 1000 * 0.90
+        $reportView->assertSee('900.00');
 
         // Payout request exceeding available balance should fail
         $excessiveResponse = $this->actingAs($this->seller)->post(route('seller.payouts.request'), [

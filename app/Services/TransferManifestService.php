@@ -695,6 +695,8 @@ class TransferManifestService
                     'completed_at' => now(),
                 ]);
 
+                app(CompensationPolicyService::class)->creditTransferCourierForManifest($manifest->fresh(), false);
+
                 AuditLog::log(
                     'transfer_manifest_completed',
                     $manifest,
@@ -722,6 +724,8 @@ class TransferManifestService
                 }
             } elseif ($counts['missing'] > 0 || $counts['damaged'] > 0 || $counts['discrepancy'] > 0) {
                 $manifest->update(['status' => TransferManifest::STATUS_EXCEPTION]);
+
+                app(CompensationPolicyService::class)->creditTransferCourierForManifest($manifest->fresh(), true);
 
                 $this->notifyUser(
                     $manifest->senderLogistics,

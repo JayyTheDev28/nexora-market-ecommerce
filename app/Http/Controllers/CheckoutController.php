@@ -345,6 +345,8 @@ class CheckoutController extends Controller
             $totalPlatformDiscount = $platformVoucher ? $platformVoucher->calculateDiscount($totalCartSubtotal) : 0.00;
             $platformDiscountRemaining = $totalPlatformDiscount;
 
+            $shippingPricing = app(\App\Services\ShippingPricingService::class);
+
             // Distribute shipping discount
             $totalShippingDiscount = 0.00;
             if ($shippingVoucher) {
@@ -352,8 +354,8 @@ class CheckoutController extends Controller
                 $totalBaseShipping = 0;
                 foreach ($grouped as $storeItems) {
                     $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                    $billedWeight = max(1, (int) ceil($rawWeight));
-                    $totalBaseShipping += (50.00 + (20.00 * ($billedWeight - 1)));
+                    $calc = $shippingPricing->calculateForWeight($rawWeight);
+                    $totalBaseShipping += $calc['shipping_fee'];
                 }
                 $totalShippingDiscount = $shippingVoucher->calculateDiscount($totalBaseShipping);
             }
@@ -366,9 +368,9 @@ class CheckoutController extends Controller
 
                 $storeSubtotal = $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
                 $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                $billedWeight = max(1, (int) ceil($rawWeight)); // ceil(weight) per store
-
-                $storeShippingFee = 50.00 + (20.00 * ($billedWeight - 1));
+                $shippingCalc = $shippingPricing->calculateForWeight($rawWeight);
+                $billedWeight = $shippingCalc['billed_weight_kg'];
+                $storeShippingFee = $shippingCalc['shipping_fee'];
 
                 // Store voucher applies only if matched with this seller
                 $storeDiscount = 0.00;
@@ -425,10 +427,17 @@ class CheckoutController extends Controller
                     'payment_status' => $paymentStatus,
                     'payment_expires_at' => $paymentExpiresAt,
                     'subtotal' => $storeSubtotal,
+                    'gross_merchandise_subtotal' => round($storeSubtotal, 2),
                     'discount' => $storeTotalDiscount,
+                    'store_voucher_discount' => round($storeDiscount, 2),
+                    'platform_voucher_discount' => round($storePlatformDiscount, 2),
+                    'shipping_voucher_discount' => round($storeShippingDiscount, 2),
+                    'platform_shipping_subsidy' => round($storeShippingDiscount, 2),
                     'shipping_fee' => $effectiveShippingFee,
+                    'base_shipping_fee' => round($storeShippingFee, 2),
                     'shipping_weight' => $billedWeight,
                     'shipping_voucher_id' => $shippingVoucher?->id,
+                    'shipping_rate_policy_id' => $shippingCalc['policy']->id,
                     'store_voucher_id' => $appliedStoreVoucherId,
                     'platform_voucher_id' => $platformVoucher?->id,
                     'total' => $storeTotal,

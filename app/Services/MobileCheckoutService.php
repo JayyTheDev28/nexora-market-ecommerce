@@ -454,14 +454,16 @@ class MobileCheckoutService
             $totalPlatformDiscount = $platformVoucher ? $platformVoucher->calculateDiscount($totalCartSubtotal) : 0.00;
             $platformDiscountRemaining = $totalPlatformDiscount;
 
+            $shippingPricing = app(ShippingPricingService::class);
+
             // Proportionate shipping discount
             $totalShippingDiscount = 0.00;
             if ($shippingVoucher) {
                 $totalBaseShipping = 0;
                 foreach ($grouped as $storeItems) {
                     $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                    $billedWeight = max(1, (int) ceil($rawWeight));
-                    $totalBaseShipping += (50.00 + (20.00 * ($billedWeight - 1)));
+                    $calc = $shippingPricing->calculateForWeight($rawWeight);
+                    $totalBaseShipping += $calc['shipping_fee'];
                 }
                 $totalShippingDiscount = $shippingVoucher->calculateDiscount($totalBaseShipping);
             }
@@ -474,10 +476,11 @@ class MobileCheckoutService
 
                 $storeSubtotal = $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
                 $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                $billedWeight = max(1, (int) ceil($rawWeight));
+                $shippingCalc = $shippingPricing->calculateForWeight($rawWeight);
+                $billedWeight = $shippingCalc['billed_weight_kg'];
 
-                // Rule 12: Shipping calculation
-                $storeShippingFee = 50.00 + (20.00 * ($billedWeight - 1));
+                // Rule 12: Shipping calculation from active policy
+                $storeShippingFee = $shippingCalc['shipping_fee'];
 
                 // Rule 15: Store voucher discount
                 $storeDiscount = 0.00;
@@ -530,10 +533,17 @@ class MobileCheckoutService
                     'payment_status' => 'unpaid',
                     'payment_expires_at' => null,
                     'subtotal' => $storeSubtotal,
+                    'gross_merchandise_subtotal' => round($storeSubtotal, 2),
                     'discount' => $storeTotalDiscount,
+                    'store_voucher_discount' => round($storeDiscount, 2),
+                    'platform_voucher_discount' => round($storePlatformDiscount, 2),
+                    'shipping_voucher_discount' => round($storeShippingDiscount, 2),
+                    'platform_shipping_subsidy' => round($storeShippingDiscount, 2),
                     'shipping_fee' => $effectiveShippingFee,
+                    'base_shipping_fee' => round($storeShippingFee, 2),
                     'shipping_weight' => $billedWeight,
                     'shipping_voucher_id' => $shippingVoucher?->id,
+                    'shipping_rate_policy_id' => $shippingCalc['policy']->id,
                     'store_voucher_id' => $appliedStoreVoucherId,
                     'platform_voucher_id' => $platformVoucher?->id,
                     'total' => $storeTotal,

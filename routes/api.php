@@ -153,6 +153,9 @@ Route::prefix('mobile/v1')->group(function () {
         Route::post('/deliveries/{order}/deliver', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'completeDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.deliver');
         Route::post('/deliveries/{order}/fail', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'failDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.fail');
         Route::get('/earnings', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'earnings'])->name('api.mobile.rider.earnings');
+        Route::get('/payouts', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'payouts'])->name('api.mobile.rider.payouts.index');
+        Route::post('/payouts', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'requestPayout'])->name('api.mobile.rider.payouts.store');
+        Route::get('/cod-collections', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'codSummary'])->name('api.mobile.rider.cod-collections');
         Route::post('/remittance', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'submitRemittance'])->name('api.mobile.rider.remittance');
         Route::post('/remittance/remit', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'submitRemittance'])->name('api.mobile.rider.remittance.remit');
     });
@@ -161,6 +164,9 @@ Route::prefix('mobile/v1')->group(function () {
     Route::middleware(['auth:sanctum', 'role:courier'])->prefix('transfer-courier')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'dashboard'])->name('api.mobile.transfer-courier.dashboard');
         Route::get('/profile', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'profile'])->name('api.mobile.transfer-courier.profile');
+        Route::get('/earnings', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'earnings'])->name('api.mobile.transfer-courier.earnings');
+        Route::get('/payouts', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'payouts'])->name('api.mobile.transfer-courier.payouts.index');
+        Route::post('/payouts', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'requestPayout'])->name('api.mobile.transfer-courier.payouts.store');
         Route::get('/inventory', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'inventory'])->name('api.mobile.transfer-courier.inventory');
         Route::get('/manifests', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'manifests'])->name('api.mobile.transfer-courier.manifests.index');
         Route::get('/manifests/{id}', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'showManifest'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.show');

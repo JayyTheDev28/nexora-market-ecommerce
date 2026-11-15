@@ -41,7 +41,7 @@ class MobileRiderApiTest extends TestCase
         ]);
 
         $this->courier = User::factory()->create([
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'active',
             'password' => Hash::make('Password123!@#'),
@@ -50,6 +50,7 @@ class MobileRiderApiTest extends TestCase
         $this->courierProfile = CourierProfile::create([
             'user_id' => $this->courier->id,
             'sorting_center_id' => $this->sortingCenter->id,
+            'logistics_company_id' => $this->sortingCenter->id,
             'is_online' => true,
             'earnings_balance' => 0.00,
             'unremitted_cod_balance' => 0.00,
@@ -346,8 +347,19 @@ class MobileRiderApiTest extends TestCase
                 'notes' => 'EOD remittance from mobile app',
             ]);
         $remitRes->assertOk()
-            ->assertJsonPath('data.status', 'pending');
+            ->assertJsonPath('data.status', 'submitted');
         $this->assertEquals(550.00, (float) $remitRes->json('data.amount'));
         $this->assertNotEmpty($remitRes->json('data.remittance_number'));
+
+        // Transfer Courier (role = courier) is strictly forbidden from Rider-only mobile endpoints
+        $transferCourier = User::factory()->create([
+            'role' => 'courier',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+        ]);
+        Sanctum::actingAs($transferCourier);
+        $this->getJson('/api/mobile/v1/rider/profile')->assertStatus(403);
+        $this->getJson('/api/mobile/v1/rider/cod-collections')->assertStatus(403);
+        $this->postJson('/api/mobile/v1/rider/remittance', ['amount' => 100])->assertStatus(403);
     }
 }

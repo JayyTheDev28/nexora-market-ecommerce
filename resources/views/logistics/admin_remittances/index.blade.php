@@ -102,7 +102,7 @@
                     </div>
 
                     {{-- Additional Secondary Stats Row --}}
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-outline-variant/30 text-xs text-on-surface-variant">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 pt-3 border-t border-outline-variant/30 text-xs text-on-surface-variant">
                         <div>
                             <span>Pending Admin Verification:</span>
                             <strong class="text-amber-800 ml-1">₱{{ number_format($summary['pendingMerchandiseAmount'], 2) }}</strong>
@@ -113,10 +113,25 @@
                             <strong class="text-on-surface ml-1">₱{{ number_format($summary['merchandisePayable'], 2) }}</strong>
                         </div>
                         <div>
+                            <span>Awaiting Rider Cash Check:</span>
+                            <strong class="{{ ($summary['awaitingRiderOrdersCount'] ?? 0) > 0 ? 'text-amber-800' : 'text-emerald-800' }} ml-1">
+                                ₱{{ number_format($summary['awaitingRiderCodAmount'] ?? 0, 2) }} ({{ $summary['awaitingRiderOrdersCount'] ?? 0 }})
+                            </strong>
+                        </div>
+                        <div>
                             <span>Rejected Batches:</span>
                             <strong class="{{ $summary['rejectedRemittancesCount'] > 0 ? 'text-rose-600' : 'text-on-surface' }} ml-1">{{ $summary['rejectedRemittancesCount'] }}</strong>
                         </div>
                     </div>
+
+                    @if(($summary['awaitingRiderOrdersCount'] ?? 0) > 0)
+                        <div class="mt-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3 text-xs text-amber-900 flex items-center justify-between gap-3">
+                            <span>
+                                <strong>{{ $summary['awaitingRiderOrdersCount'] }} delivered COD order(s)</strong> (₱{{ number_format($summary['awaitingRiderCodAmount'], 2) }}) cannot be added to an Admin remittance batch until the rider's COD remittance is verified in full.
+                            </span>
+                            <a href="{{ route('logistics.remittances.index') }}" class="font-bold text-primary hover:underline shrink-0">Verify Rider COD →</a>
+                        </div>
+                    @endif
                 </div>
 
                 {{-- Remittance History Table --}}
@@ -415,7 +430,9 @@
             seller_name: o.seller ? (o.seller.seller_profile ? o.seller.seller_profile.business_name : (o.seller.first_name + ' ' + o.seller.last_name)) : 'Seller',
             total: parseFloat(o.total || 0),
             shipping_fee: parseFloat(o.shipping_fee || 0),
-            merchandise: Math.max(0, parseFloat(o.subtotal || 0) - parseFloat(o.discount || 0)),
+            merchandise: o.gross_merchandise_subtotal != null
+                ? Math.max(0, parseFloat(o.gross_merchandise_subtotal) - parseFloat(o.store_voucher_discount || 0) - parseFloat(o.platform_voucher_discount || 0))
+                : Math.max(0, parseFloat(o.total || 0) - parseFloat(o.shipping_fee || 0)),
         }));
 
         return {

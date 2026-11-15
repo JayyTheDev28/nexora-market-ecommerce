@@ -19,10 +19,17 @@ class Order extends Model
         'payment_status',
         'payment_expires_at',
         'subtotal',
+        'gross_merchandise_subtotal',
         'discount',
+        'store_voucher_discount',
+        'platform_voucher_discount',
+        'shipping_voucher_discount',
+        'platform_shipping_subsidy',
         'shipping_fee',
+        'base_shipping_fee',
         'shipping_weight',
         'shipping_voucher_id',
+        'shipping_rate_policy_id',
         'store_voucher_id',
         'platform_voucher_id',
         'total',
@@ -55,8 +62,14 @@ class Order extends Model
         return [
             'address_snapshot' => 'array',
             'subtotal' => 'decimal:2',
+            'gross_merchandise_subtotal' => 'decimal:2',
             'discount' => 'decimal:2',
+            'store_voucher_discount' => 'decimal:2',
+            'platform_voucher_discount' => 'decimal:2',
+            'shipping_voucher_discount' => 'decimal:2',
+            'platform_shipping_subsidy' => 'decimal:2',
             'shipping_fee' => 'decimal:2',
+            'base_shipping_fee' => 'decimal:2',
             'shipping_weight' => 'decimal:2',
             'total' => 'decimal:2',
             'placed_at' => 'datetime',
@@ -301,9 +314,37 @@ class Order extends Model
         return $this->hasOne(SellerSettlementAllocation::class, 'order_id');
     }
 
+    public function codCollection()
+    {
+        return $this->hasOne(CodCollection::class, 'order_id');
+    }
+
+    public function interCompanyShippingAllocation()
+    {
+        return $this->hasOne(InterCompanyShippingAllocation::class, 'order_id');
+    }
+
     public function merchandiseAmount(): float
     {
-        return max(0.00, (float) $this->subtotal - (float) $this->discount);
+        if ($this->gross_merchandise_subtotal !== null) {
+            return max(
+                0.00,
+                round(
+                    (float) $this->gross_merchandise_subtotal
+                    - (float) ($this->store_voucher_discount ?? 0)
+                    - (float) ($this->platform_voucher_discount ?? 0),
+                    2
+                )
+            );
+        }
+
+        // Legacy fallback: COD total collected minus buyer-paid shipping fee preserves true merchandise
+        // even when a shipping voucher was included inside orders.discount.
+        if ($this->total !== null && (float) $this->total >= (float) $this->shipping_fee) {
+            return max(0.00, round((float) $this->total - (float) $this->shipping_fee, 2));
+        }
+
+        return max(0.00, round((float) $this->subtotal - (float) $this->discount, 2));
     }
 
     public function shippingFeeAmount(): float

@@ -49,9 +49,9 @@ class RiderOperationsAndDispatchTest extends TestCase
             'business_name' => 'Nexora Test Sorting Center',
         ]);
 
-        // 2. Courier
+        // 2. Delivery Rider
         $this->courier = User::factory()->create([
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'active',
             'password' => Hash::make('Password123!@#'),
@@ -59,6 +59,7 @@ class RiderOperationsAndDispatchTest extends TestCase
         $this->courierProfile = CourierProfile::create([
             'user_id' => $this->courier->id,
             'sorting_center_id' => $this->sortingCenter->id,
+            'logistics_company_id' => $this->sortingCenter->id,
             'is_online' => true,
             'earnings_balance' => 0.00,
             'unremitted_cod_balance' => 0.00,
@@ -126,6 +127,15 @@ class RiderOperationsAndDispatchTest extends TestCase
         // Courier can access
         $this->actingAs($this->courier)->get(route('courier.dashboard'))->assertOk();
 
+        // Transfer Courier (role = courier) cannot access Rider dashboard/jobs
+        $transferCourier = User::factory()->create([
+            'role' => 'courier',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+        ]);
+        $this->actingAs($transferCourier)->getJson(route('courier.dashboard'))->assertStatus(403);
+        $this->actingAs($transferCourier)->get(route('courier.dashboard'))->assertRedirect($transferCourier->homeRoute());
+
         // Config session lifetime is 30 minutes
         $this->assertEquals(30, config('session.lifetime'));
     }
@@ -154,10 +164,11 @@ class RiderOperationsAndDispatchTest extends TestCase
     public function test_vehicle_update_workflow_with_unique_plate_and_verification_status(): void
     {
         // 1. Rejects duplicate plate numbers (case-insensitive and trimmed)
-        $otherCourier = User::factory()->create(['role' => 'courier']);
+        $otherCourier = User::factory()->create(['role' => 'rider']);
         CourierProfile::create([
             'user_id' => $otherCourier->id,
             'sorting_center_id' => $this->sortingCenter->id,
+            'logistics_company_id' => $this->sortingCenter->id,
             'plate_number' => 'ABC-1234',
             'vehicle_type' => 'Van',
         ]);
@@ -290,6 +301,19 @@ class RiderOperationsAndDispatchTest extends TestCase
 
     public function test_job_dispatching_engine_60s_sla_and_consecutive_declines(): void
     {
+        // Even if an online Transfer Courier exists for the same company, last-mile dispatch never picks role = courier
+        $transferCourier = User::factory()->create([
+            'role' => 'courier',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+        ]);
+        CourierProfile::create([
+            'user_id' => $transferCourier->id,
+            'sorting_center_id' => $this->sortingCenter->id,
+            'logistics_company_id' => $this->sortingCenter->id,
+            'is_online' => true,
+        ]);
+
         $dispatchService = app(JobDispatchService::class);
         $order = $this->createOrder(['status' => 'ready_for_pickup']);
 
@@ -513,7 +537,7 @@ class RiderOperationsAndDispatchTest extends TestCase
         $remittance = CodRemittance::where('courier_id', $this->courier->id)->latest()->first();
         $this->assertNotNull($remittance);
         $this->assertEquals(1200.00, (float) $remittance->amount);
-        $this->assertEquals('pending', $remittance->status);
+        $this->assertEquals('submitted', $remittance->status);
 
         // Logistics operator approves remittance
         $this->actingAs($this->sortingCenter)->post(route('logistics.remittances.review', $remittance), [
@@ -522,14 +546,14 @@ class RiderOperationsAndDispatchTest extends TestCase
         ])->assertRedirect();
 
         $remittance->refresh();
-        $this->assertEquals('approved', $remittance->status);
+        $this->assertEquals('verified', $remittance->status);
 
         $this->courierProfile->refresh();
         $this->assertEquals(0.00, (float) $this->courierProfile->unremitted_cod_balance);
 
         // Audit log created
         $this->assertDatabaseHas('audit_logs', [
-            'action' => 'cod_remittance_approved',
+            'action' => 'cod_remittance_verified',
             'operator_id' => $this->sortingCenter->id,
         ]);
     }

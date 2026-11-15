@@ -14,15 +14,20 @@ class LogisticsAdminRemittance extends Model
         'reference_number',
         'total_cod_amount',
         'shipping_retained',
+        'shipping_subsidy_total',
         'merchandise_amount',
+        'actual_received_amount',
+        'variance_amount',
         'transfer_method',
         'transfer_reference',
+        'verified_bank_reference',
         'proof_path',
         'notes',
         'status',
         'reviewed_by',
         'reviewed_at',
         'rejection_reason',
+        'discrepancy_notes',
     ];
 
     protected function casts(): array
@@ -30,7 +35,10 @@ class LogisticsAdminRemittance extends Model
         return [
             'total_cod_amount' => 'decimal:2',
             'shipping_retained' => 'decimal:2',
+            'shipping_subsidy_total' => 'decimal:2',
             'merchandise_amount' => 'decimal:2',
+            'actual_received_amount' => 'decimal:2',
+            'variance_amount' => 'decimal:2',
             'reviewed_at' => 'datetime',
         ];
     }

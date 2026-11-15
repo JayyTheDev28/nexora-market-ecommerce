@@ -53,6 +53,7 @@ class TransferManifest extends Model
         'vehicle_plate_number',
         'status',
         'total_parcels',
+        'distance_km',
         'dispatched_at',
         'arrived_at',
         'completed_at',
@@ -64,6 +65,7 @@ class TransferManifest extends Model
     {
         return [
             'total_parcels' => 'integer',
+            'distance_km' => 'decimal:2',
             'dispatched_at' => 'datetime',
             'arrived_at' => 'datetime',
             'completed_at' => 'datetime',

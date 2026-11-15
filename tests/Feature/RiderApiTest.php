@@ -40,7 +40,7 @@ class RiderApiTest extends TestCase
         ]);
 
         $this->courier = User::factory()->create([
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'active',
             'password' => Hash::make('Password123!@#'),
@@ -49,6 +49,7 @@ class RiderApiTest extends TestCase
         $this->courierProfile = CourierProfile::create([
             'user_id' => $this->courier->id,
             'sorting_center_id' => $this->sortingCenter->id,
+            'logistics_company_id' => $this->sortingCenter->id,
             'is_online' => true,
             'earnings_balance' => 0.00,
             'unremitted_cod_balance' => 0.00,
@@ -176,5 +177,14 @@ class RiderApiTest extends TestCase
             'notes' => 'EOD API remittance',
         ]);
         $remitRes->assertOk()->assertJsonPath('success', true);
+
+        // Transfer Courier cannot access legacy Rider APIs (403)
+        $transferCourier = User::factory()->create([
+            'role' => 'courier',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+        ]);
+        $this->actingAs($transferCourier)->getJson('/api/v1/rider/profile')->assertStatus(403);
+        $this->actingAs($transferCourier)->postJson('/api/v1/rider/remittance', ['amount' => 100])->assertStatus(403);
     }
 }

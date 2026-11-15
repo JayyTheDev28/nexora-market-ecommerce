@@ -132,6 +132,8 @@ class LogisticsRemittanceController extends Controller
         $admin = $request->user();
 
         $validated = $request->validate([
+            'actual_received_amount' => ['nullable', 'numeric', 'min:0'],
+            'verified_bank_reference' => ['nullable', 'string', 'max:120'],
             'admin_notes' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -139,7 +141,9 @@ class LogisticsRemittanceController extends Controller
             $this->financialService->verifyLogisticsAdminRemittance(
                 $remittance,
                 $admin,
-                $validated['admin_notes'] ?? null
+                $validated['admin_notes'] ?? null,
+                isset($validated['actual_received_amount']) ? (float) $validated['actual_received_amount'] : null,
+                $validated['verified_bank_reference'] ?? null
             );
 
             return redirect()->route('admin.logistics-remittances.show', $remittance)
@@ -189,6 +193,31 @@ class LogisticsRemittanceController extends Controller
 
             return redirect()->route('admin.logistics-remittances.show', $remittance)
                 ->with('status', "Remittance #{$remittance->reference_number} has been rejected. Orders have been unlocked.");
+        } catch (\DomainException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Dispute / flag an amount or proof discrepancy on a logistics remittance.
+     */
+    public function dispute(Request $request, LogisticsAdminRemittance $remittance): RedirectResponse
+    {
+        $validated = $request->validate([
+            'discrepancy_notes' => ['required', 'string', 'min:5', 'max:500'],
+            'actual_received_amount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        try {
+            $this->financialService->disputeLogisticsAdminRemittance(
+                $remittance,
+                $request->user(),
+                $validated['discrepancy_notes'],
+                isset($validated['actual_received_amount']) ? (float) $validated['actual_received_amount'] : null
+            );
+
+            return redirect()->route('admin.logistics-remittances.show', $remittance)
+                ->with('status', "Remittance #{$remittance->reference_number} has been flagged as Disputed for investigation.");
         } catch (\DomainException $e) {
             return back()->withErrors(['error' => $e->getMessage()]);
         }

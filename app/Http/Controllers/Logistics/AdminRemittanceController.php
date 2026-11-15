@@ -20,11 +20,13 @@ class AdminRemittanceController extends Controller
     {
         $logistics = $request->user();
 
+        $companyId = $logistics->logisticsCompanyId();
+
         $summary = $this->financialService->getLogisticsCodSummary($logistics);
         $eligibleOrders = $this->financialService->getEligibleOrdersForRemittance($logistics);
 
         $statusFilter = $request->query('status');
-        $query = LogisticsAdminRemittance::where('logistics_id', $logistics->id)
+        $query = LogisticsAdminRemittance::where('logistics_id', $companyId)
             ->with(['items.order.seller', 'reviewer'])
             ->latest();
 
@@ -47,7 +49,7 @@ class AdminRemittanceController extends Controller
      */
     public function show(Request $request, LogisticsAdminRemittance $remittance): View
     {
-        abort_unless((int) $remittance->logistics_id === (int) $request->user()->id, 403, 'Unauthorized remittance access.');
+        abort_unless((int) $remittance->logistics_id === $request->user()->logisticsCompanyId(), 403, 'Unauthorized remittance access.');
 
         $remittance->load(['items.order.seller.sellerProfile', 'items.order.buyer', 'reviewer']);
 

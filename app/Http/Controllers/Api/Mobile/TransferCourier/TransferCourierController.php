@@ -345,6 +345,75 @@ class TransferCourierController extends Controller
         return $data;
     }
 
+    /**
+     * GET /api/mobile/v1/transfer-courier/earnings
+     */
+    public function earnings(Request $request): JsonResponse
+    {
+        /** @var User $courier */
+        $courier = $request->user();
+        $overview = app(\App\Services\CourierPayoutService::class)->getCourierEarningsOverview($courier);
+
+        return response()->json([
+            'data' => $overview,
+            'message' => 'Transfer courier earnings retrieved successfully.',
+        ]);
+    }
+
+    /**
+     * GET /api/mobile/v1/transfer-courier/payouts
+     */
+    public function payouts(Request $request): JsonResponse
+    {
+        /** @var User $courier */
+        $courier = $request->user();
+        $overview = app(\App\Services\CourierPayoutService::class)->getCourierEarningsOverview($courier);
+
+        return response()->json([
+            'data' => [
+                'earnings_balance' => $overview['earnings_balance'],
+                'available_for_payout' => $overview['available_for_payout'],
+                'pending_payout_amount' => $overview['pending_payout_amount'],
+                'total_paid_out' => $overview['total_paid_out'],
+                'payouts' => $overview['recent_payouts'],
+            ],
+            'message' => 'Transfer courier payouts retrieved successfully.',
+        ]);
+    }
+
+    /**
+     * POST /api/mobile/v1/transfer-courier/payouts
+     */
+    public function requestPayout(Request $request): JsonResponse
+    {
+        /** @var User $courier */
+        $courier = $request->user();
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'payout_method' => ['required', 'string', 'in:gcash,maya,bank_transfer,physical_cash'],
+            'account_name' => ['required', 'string', 'max:120'],
+            'account_number' => ['required', 'string', 'max:120'],
+            'courier_notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
+        $payout = app(\App\Services\CourierPayoutService::class)->requestPayout($courier, array_merge($validated, [
+            'idempotency_key' => $key,
+        ]));
+
+        return response()->json([
+            'data' => [
+                'id' => $payout->id,
+                'payout_number' => $payout->payout_number,
+                'amount' => (float) $payout->amount,
+                'payout_method' => $payout->payout_method,
+                'status' => $payout->status,
+                'requested_at' => $payout->requested_at?->toIso8601String(),
+            ],
+            'message' => "Payout request #{$payout->payout_number} submitted for Logistics verification.",
+        ], 201);
+    }
+
     protected function formatInventoryItem(TransferManifestItem $item, ?TransferManifest $manifest): array
     {
         return [

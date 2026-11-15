@@ -214,6 +214,23 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isSortingCenter(): bool { return $this->isLogistics(); }
     public function isAdmin(): bool { return $this->role === 'admin'; }
 
+    /**
+     * Resolve the owning logistics company (User ID of the logistics partner account).
+     */
+    public function logisticsCompanyId(): ?int
+    {
+        if ($this->isLogistics()) {
+            return (int) $this->id;
+        }
+
+        if ($this->isMobileDeliveryPersonnel()) {
+            $companyId = $this->courierProfile?->logistics_company_id;
+            return $companyId ? (int) $companyId : null;
+        }
+
+        return null;
+    }
+
     public function address()
     {
         return $this->hasOne(Address::class);
