@@ -21,6 +21,7 @@ use App\Services\RiderPayoutService;
 use App\Services\ShipmentStateMachineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RiderController extends Controller
 {
@@ -277,63 +278,74 @@ class RiderController extends Controller
         $rider = $request->user();
 
         $validated = $request->validate([
-            'tracking_number' => ['required', 'string'],
+            'tracking_number' => ['required', 'string', 'max:100'],
+            'expected_order_id' => ['nullable', 'integer'],
         ]);
 
         $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
         $trackingNumber = trim($validated['tracking_number']);
+        $expectedOrderId = isset($validated['expected_order_id']) ? (int) $validated['expected_order_id'] : null;
 
-        return IdempotencyService::run($key, $rider->id, "mobile_pickup_{$trackingNumber}", function () use ($rider, $trackingNumber) {
-            $order = Order::where('tracking_number', $trackingNumber)
-                ->orWhere('order_number', $trackingNumber)
-                ->first();
+        return IdempotencyService::run($key, $rider->id, "mobile_pickup_{$trackingNumber}", function () use ($rider, $trackingNumber, $expectedOrderId) {
+            $resolvedOrder = Order::findByScanIdentifier($trackingNumber);
 
-            if (! $order) {
+            if (! $resolvedOrder) {
                 return response()->json([
-                    'message' => 'Order not found for tracking or order number.',
-                    'errors' => ['tracking_number' => ['Order not found.']],
+                    'message' => "Barcode '{$trackingNumber}' does not match any order in the system.",
+                    'errors' => ['tracking_number' => ['Order not found for scanned barcode.']],
                 ], 404);
             }
 
-            if ((int) $order->pickup_courier_id !== (int) $rider->id) {
+            if ($expectedOrderId !== null && (int) $resolvedOrder->id !== $expectedOrderId) {
                 return response()->json([
-                    'message' => 'You are not assigned as the pickup courier for this parcel.',
-                    'errors' => ['courier' => ['You are not assigned as the pickup courier for this parcel.']],
-                ], 403);
+                    'message' => "Scanned barcode '{$trackingNumber}' does not match your active pickup order.",
+                    'errors' => ['tracking_number' => ['Scanned waybill belongs to a different order.']],
+                ], 422);
             }
 
-            if ($order->status === 'picked_up') {
+            return DB::transaction(function () use ($rider, $resolvedOrder) {
+                $order = Order::whereKey($resolvedOrder->id)->lockForUpdate()->firstOrFail();
+
+                if ((int) $order->pickup_courier_id !== (int) $rider->id) {
+                    return response()->json([
+                        'message' => 'You are not assigned as the pickup courier for this parcel.',
+                        'errors' => ['courier' => ['You are not assigned as the pickup courier for this parcel.']],
+                    ], 403);
+                }
+
+                if ($order->status === 'picked_up') {
+                    return response()->json([
+                        'data' => [
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                            'tracking_number' => $order->tracking_number,
+                            'order_status' => 'picked_up',
+                        ],
+                        'message' => 'Already marked as Picked Up.',
+                    ]);
+                }
+
+                if (! in_array($order->status, ['ready_for_pickup', 'assigned'], true)) {
+                    return response()->json([
+                        'message' => "Cannot pickup order in status {$order->status}.",
+                        'errors' => ['status' => ["Cannot pickup order in status {$order->status}."]],
+                    ], 422);
+                }
+
+                $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
+                $this->payoutService->creditPickupPay($rider, $order);
+
                 return response()->json([
                     'data' => [
                         'order_id' => $order->id,
                         'order_number' => $order->order_number,
                         'tracking_number' => $order->tracking_number,
                         'order_status' => 'picked_up',
+                        'earned_pay' => 30.00,
                     ],
-                    'message' => 'Already marked as Picked Up.',
+                    'message' => "Order {$order->order_number} marked as Picked Up. ₱30.00 pay credited.",
                 ]);
-            }
-
-            if (! in_array($order->status, ['ready_for_pickup', 'assigned'], true)) {
-                return response()->json([
-                    'message' => "Cannot pickup order in status {$order->status}.",
-                    'errors' => ['status' => ["Cannot pickup order in status {$order->status}."]],
-                ], 422);
-            }
-
-            $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
-            $this->payoutService->creditPickupPay($rider, $order);
-
-            return response()->json([
-                'data' => [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'tracking_number' => $order->tracking_number,
-                    'order_status' => 'picked_up',
-                    'earned_pay' => 30.00,
-                ],
-                'message' => "Order {$order->order_number} marked as Picked Up. ₱30.00 pay credited.",
-            ]);
+            });
         });
     }
 
@@ -342,7 +354,7 @@ class RiderController extends Controller
      */
     public function confirmPickupOrder(Request $request, Order $order): JsonResponse
     {
-        $request->merge(['tracking_number' => $order->tracking_number]);
+        $request->merge(['expected_order_id' => $order->id]);
         return $this->confirmPickup($request);
     }
 

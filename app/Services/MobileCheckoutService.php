@@ -519,6 +519,7 @@ class MobileCheckoutService
                 // Rules 16, 17: COD Payment Method and Order creation
                 $order = Order::create([
                     'order_number' => 'NX-' . strtoupper(Str::random(10)),
+                    'tracking_number' => OrderLogisticsService::generateUniqueTrackingNumber(),
                     'checkout_session_id' => $checkoutSessionId,
                     'buyer_id' => $user->id,
                     'seller_id' => $sellerId,

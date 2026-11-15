@@ -8,8 +8,11 @@ use App\Models\Hub;
 use App\Models\HubTransfer;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Models\TransferManifest;
+use App\Models\TransferManifestItem;
 use App\Services\InterRegionLogisticsService;
 use App\Services\OrderLogisticsService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -95,6 +98,122 @@ class IncomingController extends Controller
     }
 
     /**
+     * Lookup parcel details by scanned barcode without modifying custody.
+     */
+    public function lookup(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'identifier' => ['required', 'string', 'max:255'],
+            'hub_id' => ['nullable', 'integer', 'exists:hubs,id'],
+        ]);
+
+        $companyId = (int) $request->user()->id;
+        $identifier = trim($validated['identifier']);
+
+        $selectedHub = null;
+        if (! empty($validated['hub_id'])) {
+            $selectedHub = Hub::where('id', $validated['hub_id'])
+                ->where('logistics_company_id', $companyId)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $selectedHub) {
+                return response()->json([
+                    'message' => 'The selected hub does not belong to your logistics company or is inactive.',
+                ], 403);
+            }
+        }
+
+        $order = Order::findByScanIdentifier($identifier);
+        if (! $order) {
+            return response()->json([
+                'message' => "Parcel with tracking or order number '{$identifier}' could not be found.",
+            ], 404);
+        }
+
+        $order->load(['buyer', 'address', 'seller.sellerProfile', 'originHub', 'destinationHub', 'currentHub']);
+
+        $activeManifestItem = TransferManifestItem::where('order_id', $order->id)
+            ->whereHas('manifest', fn ($q) => $q->whereIn('status', TransferManifest::ACTIVE_STATUSES))
+            ->with(['manifest.originHub', 'manifest.destinationHub'])
+            ->latest()
+            ->first();
+
+        $activeTransferToCompany = HubTransfer::where('order_id', $order->id)
+            ->where('status', 'in_transit')
+            ->where('receiver_logistics_id', $companyId)
+            ->latest()
+            ->first();
+
+        $hasCompanyOwnership = $this->isParcelAuthorizedForCompany($order, $companyId, $activeTransferToCompany);
+        if (! $hasCompanyOwnership && ! $activeManifestItem) {
+            return response()->json([
+                'message' => 'You are not authorized to access or receive this parcel at your logistics company.',
+            ], 403);
+        }
+
+        $hasHubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->exists();
+        $resolvedHub = $this->resolveVerifiedHub($order, $companyId, $selectedHub, $activeTransferToCompany);
+
+        $requiresManifest = $activeManifestItem !== null;
+        $alreadyPassed = in_array($order->status, ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed'], true);
+        $alreadyAtHub = in_array($order->status, ['at_sorting_center', 'received_at_hub', 'sorted'], true)
+            && (! $hasHubs || ($resolvedHub && (int) $order->current_hub_id === (int) $resolvedHub->id));
+
+        $hubMismatchError = $this->detectHubMismatchError($order, $companyId, $selectedHub, $activeTransferToCompany);
+
+        $eligibleForReceipt = ! $requiresManifest
+            && ! $alreadyPassed
+            && ! $alreadyAtHub
+            && $hubMismatchError === null
+            && (! $hasHubs || $resolvedHub !== null);
+
+        $statusMessage = match (true) {
+            $requiresManifest => "Parcel belongs to active Transfer Manifest {$activeManifestItem->manifest->manifest_number}. Use Manifest Receiving Verification instead of general inbound check-in.",
+            $hubMismatchError !== null => $hubMismatchError,
+            $alreadyPassed => 'Parcel has already passed hub receiving (current status: ' . ucwords(str_replace('_', ' ', $order->status)) . ').',
+            $alreadyAtHub => 'Parcel is already checked in at ' . ($resolvedHub?->name ?? 'this facility') . '.',
+            $eligibleForReceipt => 'Parcel verified and ready to confirm receipt' . ($resolvedHub ? " at {$resolvedHub->name}" : '') . '.',
+            default => 'Parcel requires hub routing before receipt can be confirmed.',
+        };
+
+        return response()->json([
+            'data' => [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'tracking_number' => $order->tracking_number ?: $order->order_number,
+                'status' => $order->status,
+                'status_label' => ucwords(str_replace('_', ' ', $order->status)),
+                'sender_name' => $order->seller?->sellerProfile?->business_name ?? $order->seller?->full_name ?? 'Merchant',
+                'recipient_name' => $order->address?->recipient_name ?? $order->buyer?->full_name ?? 'Customer',
+                'destination' => $order->formatted_destination,
+                'origin_hub' => $order->originHub ? "{$order->originHub->name} ({$order->originHub->code})" : 'Unassigned',
+                'destination_hub' => $order->destinationHub ? "{$order->destinationHub->name} ({$order->destinationHub->code})" : 'Unassigned',
+                'current_hub' => $order->currentHub ? "{$order->currentHub->name} ({$order->currentHub->code})" : null,
+                'resolved_hub' => $resolvedHub ? [
+                    'id' => $resolvedHub->id,
+                    'name' => $resolvedHub->name,
+                    'code' => $resolvedHub->code,
+                ] : null,
+                'weight_kg' => (float) ($order->shipping_weight ?? 0),
+                'cod_amount' => strtolower((string) $order->payment_method) === 'cod' ? (float) $order->total : 0.0,
+                'payment_method' => strtoupper((string) $order->payment_method),
+                'eligible_for_receipt' => $eligibleForReceipt,
+                'already_received' => $alreadyAtHub || $alreadyPassed,
+                'requires_manifest_receiving' => $requiresManifest,
+                'manifest' => $activeManifestItem ? [
+                    'id' => $activeManifestItem->manifest_id,
+                    'manifest_number' => $activeManifestItem->manifest->manifest_number,
+                    'status' => $activeManifestItem->manifest->status,
+                    'url' => route('logistics.transfers.manifests.show', $activeManifestItem->manifest_id),
+                ] : null,
+                'status_message' => $statusMessage,
+            ],
+            'message' => $statusMessage,
+        ], $hubMismatchError ? 422 : 200);
+    }
+
+    /**
      * Scan or enter a parcel identifier to receive it at the hub.
      */
     public function scan(Request $request): RedirectResponse
@@ -104,11 +223,24 @@ class IncomingController extends Controller
             'hub_id' => ['nullable', 'exists:hubs,id'],
         ]);
 
+        $companyId = (int) $request->user()->id;
         $identifier = trim($validated['identifier']);
 
-        $order = Order::where('tracking_number', $identifier)
-            ->orWhere('order_number', $identifier)
-            ->first();
+        $selectedHub = null;
+        if (! empty($validated['hub_id'])) {
+            $selectedHub = Hub::where('id', $validated['hub_id'])
+                ->where('logistics_company_id', $companyId)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $selectedHub) {
+                return back()->withInput()->withErrors([
+                    'hub_id' => 'The selected hub does not belong to your logistics company or is inactive.',
+                ]);
+            }
+        }
+
+        $order = Order::findByScanIdentifier($identifier);
 
         if (! $order) {
             return back()->withInput()->withErrors([
@@ -116,8 +248,35 @@ class IncomingController extends Controller
             ]);
         }
 
+        // Critical protection: never allow general inbound scanner to bypass an active Transfer Manifest
+        $activeManifestItem = TransferManifestItem::where('order_id', $order->id)
+            ->whereHas('manifest', fn ($q) => $q->whereIn('status', TransferManifest::ACTIVE_STATUSES))
+            ->with('manifest')
+            ->latest()
+            ->first();
+
+        if ($activeManifestItem) {
+            $manifestUrl = route('logistics.transfers.manifests.show', $activeManifestItem->manifest_id);
+
+            return back()->withInput()->withErrors([
+                'identifier' => "Parcel {$order->tracking_number} belongs to active Transfer Manifest {$activeManifestItem->manifest->manifest_number} ({$activeManifestItem->manifest->status}). Open the manifest receiving screen to verify it: {$manifestUrl}",
+            ]);
+        }
+
+        $activeTransferToCompany = HubTransfer::where('order_id', $order->id)
+            ->where('status', 'in_transit')
+            ->where('receiver_logistics_id', $companyId)
+            ->latest()
+            ->first();
+
+        if (! $this->isParcelAuthorizedForCompany($order, $companyId, $activeTransferToCompany)) {
+            return back()->withInput()->withErrors([
+                'identifier' => 'Unauthorized: this parcel is not assigned to or transferring to your logistics company.',
+            ]);
+        }
+
         // Fallback for legacy sorting center users without configured hubs
-        $hasHubs = Hub::where('logistics_company_id', $request->user()->id)->where('is_active', true)->exists();
+        $hasHubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->exists();
 
         if (! $hasHubs) {
             if (in_array($order->status, ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed'])) {
@@ -128,7 +287,7 @@ class IncomingController extends Controller
                 return back()->with('info', "Parcel {$order->order_number} is already checked in at this facility (current status: " . ucwords(str_replace('_', ' ', $order->status)) . ").");
             }
 
-            $matchedArea = DeliveryArea::where('sorting_center_id', $request->user()->id)
+            $matchedArea = DeliveryArea::where('sorting_center_id', $companyId)
                 ->where(function ($q) use ($order) {
                     if ($order->address?->municipality_name) {
                         $q->where('name', 'like', "%{$order->address->municipality_name}%");
@@ -137,8 +296,8 @@ class IncomingController extends Controller
                 ->first();
 
             $extra = [
-                'sorting_center_id' => $request->user()->id,
-                'current_custody_logistics_id' => $request->user()->id,
+                'sorting_center_id' => $companyId,
+                'current_custody_logistics_id' => $companyId,
             ];
 
             if ($matchedArea && empty($order->delivery_area_id)) {
@@ -148,7 +307,7 @@ class IncomingController extends Controller
             OrderLogisticsService::transition(
                 order: $order,
                 newStatus: 'at_sorting_center',
-                changedBy: $request->user()->id,
+                changedBy: $companyId,
                 note: "Scanned and physically received at Sorting Hub (" . ($request->user()->sortingCenterProfile?->business_name ?? 'Central Hub') . ").",
                 extraAttributes: $extra
             );
@@ -166,45 +325,32 @@ class IncomingController extends Controller
             $order = $this->logisticsService->matchLogisticsAndRouteOrder($order);
         }
 
-        // Determine which hub station this is being received at
-        $hub = null;
-        if (! empty($validated['hub_id'])) {
-            $hub = Hub::where('id', $validated['hub_id'])
-                ->where('logistics_company_id', $request->user()->id)
-                ->first();
+        $hubMismatchError = $this->detectHubMismatchError($order, $companyId, $selectedHub, $activeTransferToCompany);
+        if ($hubMismatchError !== null) {
+            return back()->withInput()->withErrors([
+                'hub_id' => $hubMismatchError,
+            ]);
         }
+
+        $hub = $this->resolveVerifiedHub($order, $companyId, $selectedHub, $activeTransferToCompany);
 
         if (! $hub) {
-            if ($order->status === 'in_transit_hub' && $order->destination_hub_id) {
-                $hub = Hub::where('id', $order->destination_hub_id)
-                    ->where('logistics_company_id', $request->user()->id)
-                    ->first();
-            }
-
-            if (! $hub && $order->origin_hub_id) {
-                $hub = Hub::where('id', $order->origin_hub_id)
-                    ->where('logistics_company_id', $request->user()->id)
-                    ->first();
-            }
-
-            if (! $hub) {
-                $hub = Hub::where('logistics_company_id', $request->user()->id)->where('is_active', true)->first();
-            }
+            return back()->withInput()->withErrors([
+                'hub_id' => 'No verified active hub matching this parcel route was found for your logistics company.',
+            ]);
         }
 
-        abort_unless($hub, 422, 'No active hub found for your logistics company to receive parcels.');
-
-        // If parcel was traveling between hubs (Hub Transfer arrival scan)
+        // If parcel was traveling between hubs (non-manifest historical Hub Transfer arrival scan)
         if ($order->status === 'in_transit_hub') {
-            $activeTransfer = HubTransfer::where('order_id', $order->id)
-                ->where('status', 'in_transit')
-                ->latest()
-                ->first();
-
-            if ($activeTransfer) {
-                $this->logisticsService->confirmHubTransferReceipt($activeTransfer, $request->user());
-                return back()->with('status', "Transfer confirmed! Parcel {$order->order_number} received at destination hub {$hub->name} and added to parcel inventory.");
+            if (! $activeTransferToCompany) {
+                return back()->withInput()->withErrors([
+                    'identifier' => "Parcel {$order->order_number} is in transit to another logistics company.",
+                ]);
             }
+
+            $this->logisticsService->confirmHubTransferReceipt($activeTransferToCompany, $request->user());
+
+            return back()->with('status', "Transfer confirmed! Parcel {$order->order_number} received at destination hub {$hub->name} and added to parcel inventory.");
         }
 
         // Must be in acceptable receiving states
@@ -213,7 +359,7 @@ class IncomingController extends Controller
         }
 
         // If already at hub and current_hub_id matches, idempotency note
-        if (in_array($order->status, ['received_at_hub', 'at_sorting_center']) && (int) $order->current_hub_id === (int) $hub->id) {
+        if (in_array($order->status, ['received_at_hub', 'at_sorting_center', 'sorted']) && (int) $order->current_hub_id === (int) $hub->id) {
             return back()->with('info', "Parcel {$order->order_number} is already in the inventory of {$hub->name}.");
         }
 
@@ -225,6 +371,111 @@ class IncomingController extends Controller
             : "Staged for transfer to " . ($order->destinationHub?->name ?? 'destination hub') . ".";
 
         return back()->with('status', "Parcel {$order->order_number} successfully received and verified at {$hub->name}. {$routeInfo}");
+    }
+
+    /**
+     * Check whether the acting logistics company has ownership or incoming transfer rights for the parcel.
+     */
+    private function isParcelAuthorizedForCompany(Order $order, int $companyId, ?HubTransfer $activeTransferToCompany): bool
+    {
+        if ($activeTransferToCompany) {
+            return true;
+        }
+
+        $ownerIds = array_filter([
+            $order->current_custody_logistics_id ? (int) $order->current_custody_logistics_id : null,
+            $order->pickup_logistics_id ? (int) $order->pickup_logistics_id : null,
+            $order->delivery_logistics_id ? (int) $order->delivery_logistics_id : null,
+            $order->sorting_center_id ? (int) $order->sorting_center_id : null,
+        ]);
+
+        // Preserve compatibility for legacy sorting-center orders with no company IDs populated yet
+        if ($ownerIds === []) {
+            return true;
+        }
+
+        return in_array($companyId, $ownerIds, true);
+    }
+
+    /**
+     * Resolve the verified hub for this company without falling back to an arbitrary hub.
+     */
+    private function resolveVerifiedHub(Order $order, int $companyId, ?Hub $selectedHub, ?HubTransfer $activeTransfer): ?Hub
+    {
+        if ($order->status === 'in_transit_hub') {
+            $expectedHubId = $activeTransfer?->receiver_hub_id ?? $order->destination_hub_id;
+            if (! $expectedHubId) {
+                return null;
+            }
+
+            if ($selectedHub && (int) $selectedHub->id !== (int) $expectedHubId) {
+                return null;
+            }
+
+            return Hub::where('id', $expectedHubId)
+                ->where('logistics_company_id', $companyId)
+                ->where('is_active', true)
+                ->first();
+        }
+
+        if ($selectedHub) {
+            return $selectedHub;
+        }
+
+        if ($order->origin_hub_id) {
+            $originHub = Hub::where('id', $order->origin_hub_id)
+                ->where('logistics_company_id', $companyId)
+                ->where('is_active', true)
+                ->first();
+
+            if ($originHub) {
+                return $originHub;
+            }
+        }
+
+        if ($order->destination_hub_id) {
+            $destHub = Hub::where('id', $order->destination_hub_id)
+                ->where('logistics_company_id', $companyId)
+                ->where('is_active', true)
+                ->first();
+
+            if ($destHub) {
+                return $destHub;
+            }
+        }
+
+        // Only auto-select a single company hub when the company operates exactly one active hub
+        $companyHubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->get();
+
+        return $companyHubs->count() === 1 ? $companyHubs->first() : null;
+    }
+
+    /**
+     * Detect explicit hub selection mismatches against the verified route or transfer destination.
+     */
+    private function detectHubMismatchError(Order $order, int $companyId, ?Hub $selectedHub, ?HubTransfer $activeTransfer): ?string
+    {
+        if (! $selectedHub) {
+            return null;
+        }
+
+        if ($order->status === 'in_transit_hub') {
+            $expectedHubId = $activeTransfer?->receiver_hub_id ?? $order->destination_hub_id;
+            if ($expectedHubId && (int) $selectedHub->id !== (int) $expectedHubId) {
+                $expectedHub = Hub::find($expectedHubId);
+
+                return "Hub mismatch: incoming transfer is destined for " . ($expectedHub?->name ?? 'another hub') . ", not {$selectedHub->name}.";
+            }
+        }
+
+        if ($order->status === 'picked_up' && $order->origin_hub_id) {
+            $originHub = Hub::find($order->origin_hub_id);
+            if ($originHub && (int) $originHub->logistics_company_id === $companyId && (int) $originHub->id !== (int) $selectedHub->id) {
+                return "Hub mismatch: parcel pickup is routed to {$originHub->name}, not {$selectedHub->name}.";
+            }
+        }
+
+        return null;
     }
 
     /**

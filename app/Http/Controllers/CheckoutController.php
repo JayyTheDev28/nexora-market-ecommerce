@@ -414,6 +414,7 @@ class CheckoutController extends Controller
 
                 $order = Order::create([
                     'order_number' => 'NX-' . strtoupper(Str::random(10)),
+                    'tracking_number' => \App\Services\OrderLogisticsService::generateUniqueTrackingNumber(),
                     'checkout_session_id' => $checkoutSessionId,
                     'buyer_id' => $user->id,
                     'seller_id' => $sellerId,

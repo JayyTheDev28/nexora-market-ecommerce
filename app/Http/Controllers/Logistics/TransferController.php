@@ -315,6 +315,65 @@ class TransferController extends Controller
     }
 
     /**
+     * Resolve a scanned barcode against this manifest for receiving verification without modifying custody.
+     */
+    public function lookupManifestParcel(Request $request, TransferManifest $manifest): \Illuminate\Http\JsonResponse
+    {
+        $companyId = (int) $request->user()->id;
+
+        if ((int) $manifest->receiver_logistics_id !== $companyId) {
+            return response()->json([
+                'message' => 'Only authorized staff of the receiving logistics company can verify incoming parcels.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'tracking_number' => ['required', 'string', 'max:100'],
+        ]);
+
+        $normalized = trim($validated['tracking_number']);
+        $manifest->loadMissing(['destinationHub', 'originHub']);
+
+        $item = $manifest->items()
+            ->with(['order.buyer', 'order.address', 'order.seller.sellerProfile'])
+            ->where(function ($q) use ($normalized) {
+                $q->where('tracking_number', $normalized)
+                  ->orWhereHas('order', fn ($oq) => $oq->where('order_number', $normalized));
+            })
+            ->first();
+
+        if (! $item) {
+            return response()->json([
+                'message' => "Tracking number '{$normalized}' does not belong to manifest {$manifest->manifest_number}.",
+            ], 422);
+        }
+
+        $order = $item->order;
+        $counts = $this->manifestService->getReceivingCounts($manifest->id);
+
+        return response()->json([
+            'data' => [
+                'item_id' => $item->id,
+                'tracking_number' => $item->tracking_number,
+                'order_number' => $order?->order_number,
+                'loading_status' => $item->loading_status,
+                'receiving_status' => $item->receiving_status,
+                'already_received' => $item->receiving_status === \App\Models\TransferManifestItem::RECEIVING_RECEIVED,
+                'issue_notes' => $item->issue_notes,
+                'sender_name' => $order?->seller?->sellerProfile?->business_name ?? $order?->seller?->full_name ?? 'Merchant',
+                'recipient_name' => $order?->address?->recipient_name ?? $order?->buyer?->full_name ?? 'Customer',
+                'destination' => $order?->formatted_destination ?? 'Destination Unavailable',
+                'weight_kg' => (float) ($order?->shipping_weight ?? 0),
+                'cod_amount' => strtolower((string) ($order?->payment_method ?? '')) === 'cod' ? (float) ($order?->total ?? 0) : 0.0,
+                'payment_method' => strtoupper((string) ($order?->payment_method ?? 'cod')),
+                'destination_hub' => $manifest->destinationHub ? "{$manifest->destinationHub->name} ({$manifest->destinationHub->code})" : 'Destination Hub',
+                'receiving_counts' => $counts,
+            ],
+            'message' => "Parcel {$item->tracking_number} verified on manifest {$manifest->manifest_number}. Choose condition to confirm.",
+        ]);
+    }
+
+    /**
      * Receiving hub operator scans/verifies an incoming parcel on a manifest.
      */
     public function verifyManifestParcel(Request $request, TransferManifest $manifest): RedirectResponse

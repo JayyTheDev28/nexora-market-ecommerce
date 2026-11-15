@@ -5,23 +5,57 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderStatusUpdated;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class OrderLogisticsService
 {
     /**
-     * Ensure the order has a unique tracking number.
+     * Generate a globally unique, Code-128-friendly tracking number.
+     */
+    public static function generateUniqueTrackingNumber(): string
+    {
+        do {
+            $candidate = 'NX-TRK-' . Str::upper(Str::random(10));
+        } while (Order::where('tracking_number', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    /**
+     * Ensure the order has a unique, permanent tracking number without overwriting existing values.
      */
     public static function ensureTrackingNumber(Order $order): string
     {
-        if (! empty($order->tracking_number)) {
-            return $order->tracking_number;
+        $existing = trim((string) ($order->tracking_number ?? ''));
+        if ($existing !== '') {
+            return $existing;
         }
 
-        $tracking = 'NX-TRK-' . strtoupper(substr(md5($order->id . $order->order_number . microtime()), 0, 10));
-        $order->update(['tracking_number' => $tracking]);
+        return DB::transaction(function () use ($order) {
+            $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $lockedExisting = trim((string) ($lockedOrder->tracking_number ?? ''));
+            if ($lockedExisting !== '') {
+                return $lockedExisting;
+            }
 
-        return $tracking;
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                $tracking = self::generateUniqueTrackingNumber();
+                try {
+                    $lockedOrder->update(['tracking_number' => $tracking]);
+                    $order->tracking_number = $tracking;
+
+                    return $tracking;
+                } catch (QueryException $e) {
+                    if ($attempt === 4) {
+                        throw $e;
+                    }
+                }
+            }
+
+            throw new \RuntimeException('Unable to assign unique tracking number.');
+        });
     }
 
     /**
@@ -42,8 +76,8 @@ class OrderLogisticsService
                 'status' => $newStatus,
             ], $extraAttributes);
 
-            if (empty($lockedOrder->tracking_number)) {
-                $attributes['tracking_number'] = 'NX-TRK-' . strtoupper(substr(md5($lockedOrder->id . $lockedOrder->order_number . microtime()), 0, 10));
+            if (empty(trim((string) $lockedOrder->tracking_number))) {
+                $attributes['tracking_number'] = self::generateUniqueTrackingNumber();
             }
 
             $lockedOrder->update($attributes);

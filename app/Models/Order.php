@@ -69,6 +69,36 @@ class Order extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (Order $order) {
+            if (trim((string) ($order->tracking_number ?? '')) === '') {
+                $order->tracking_number = \App\Services\OrderLogisticsService::generateUniqueTrackingNumber();
+            }
+        });
+    }
+
+    /**
+     * Resolve a parcel unambiguously by canonical tracking number first,
+     * falling back to unique legacy order_number only when unmatched.
+     */
+    public static function findByScanIdentifier(string $identifier): ?self
+    {
+        $normalized = trim($identifier);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $byTracking = static::where('tracking_number', $normalized)->first();
+        if ($byTracking) {
+            return $byTracking;
+        }
+
+        $byOrderNumber = static::where('order_number', $normalized)->limit(2)->get();
+
+        return $byOrderNumber->count() === 1 ? $byOrderNumber->first() : null;
+    }
+
     public function getTotalAmountAttribute(): float
     {
         return (float) ($this->total ?? 0);

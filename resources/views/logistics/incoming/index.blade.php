@@ -50,27 +50,27 @@
             </div>
         @endif
 
-        {{-- Barcode / Fast Scanner Station Box --}}
+        {{-- Scan Incoming Parcel Station Box --}}
         <div class="bg-gradient-to-r from-primary/10 via-surface-container-lowest to-secondary/10 rounded-3xl border border-primary/20 p-6 mb-8 shadow-xs">
-            <div class="flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                 <div class="max-w-md">
                     <div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider mb-1">
                         <span class="material-symbols-outlined text-[20px]">barcode_scanner</span>
                         <span>Rapid Scanner Station</span>
                     </div>
-                    <h2 class="font-headline-md text-xl font-bold text-on-surface">Physical Parcel Check-in</h2>
+                    <h2 class="font-headline-md text-xl font-bold text-on-surface">Scan Incoming Parcel</h2>
                     <p class="font-body-sm text-xs text-on-surface-variant mt-1">
-                        Connect a USB/Bluetooth barcode scanner, or manually enter the Tracking Number (e.g. <code class="font-mono text-primary font-bold">NX-TRK-...</code>) or Order Number.
+                        Use your device camera, a USB/Bluetooth barcode scanner, or manual entry (<code class="font-mono text-primary font-bold">NX-TRK-...</code>) to verify parcels before confirming hub receipt.
                     </p>
                 </div>
 
-                <form method="POST" action="{{ route('logistics.incoming.scan') }}" class="w-full lg:w-auto flex-1 max-w-2xl">
+                <form id="incoming-scan-form" method="POST" action="{{ route('logistics.incoming.scan') }}" class="w-full lg:w-auto flex-1 max-w-2xl">
                     @csrf
                     <div class="flex flex-col sm:flex-row items-stretch gap-2">
                         @if ($myHubs->isNotEmpty())
-                            <div class="sm:w-2/5">
-                                <select name="hub_id" class="w-full px-3 py-3 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl text-xs font-semibold text-on-surface focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all">
-                                    <option value="">Auto-Detect Origin Hub</option>
+                            <div class="sm:w-1/3">
+                                <select id="incoming-hub-select" name="hub_id" class="w-full px-3 py-3 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl text-xs font-semibold text-on-surface focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all">
+                                    <option value="">Auto-Detect Verified Hub</option>
                                     @foreach ($myHubs as $hub)
                                         <option value="{{ $hub->id }}" {{ old('hub_id', request('hub_id')) == $hub->id ? 'selected' : '' }}>
                                             {{ $hub->name }} ({{ $hub->city_name }})
@@ -82,23 +82,43 @@
                         <div class="relative flex-1">
                             <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-primary text-[20px]">qr_code_scanner</span>
                             <input
+                                id="incoming-identifier-input"
                                 type="text"
                                 name="identifier"
                                 value="{{ old('identifier') }}"
                                 autofocus
                                 required
-                                placeholder="Scan or enter Tracking # or NX-..."
+                                placeholder="Scan or enter Tracking # (NX-TRK-...)"
                                 class="w-full pl-11 pr-4 py-3 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl font-mono text-sm text-on-surface placeholder:font-sans placeholder:text-xs placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all">
                         </div>
                         <button
+                            type="button"
+                            onclick="window.toggleIncomingCamera()"
+                            class="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl bg-slate-900 text-white font-label-md text-xs font-bold hover:bg-slate-800 transition-all cursor-pointer whitespace-nowrap">
+                            <span class="material-symbols-outlined text-[18px]">photo_camera</span>
+                            <span>Camera</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="window.lookupIncomingParcel()"
+                            class="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl bg-surface-container-high text-on-surface font-label-md text-xs font-bold hover:bg-surface-container-highest transition-all cursor-pointer whitespace-nowrap">
+                            <span class="material-symbols-outlined text-[18px]">search</span>
+                            <span>Lookup</span>
+                        </button>
+                        <button
                             type="submit"
-                            class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-on-primary font-label-md text-xs font-bold shadow-md hover:bg-primary/90 transition-all cursor-pointer whitespace-nowrap">
+                            class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-primary text-on-primary font-label-md text-xs font-bold shadow-md hover:bg-primary/90 transition-all cursor-pointer whitespace-nowrap">
                             <span class="material-symbols-outlined text-[18px]">verified</span>
-                            <span>Check In Parcel</span>
+                            <span>Confirm Receipt</span>
                         </button>
                     </div>
                 </form>
             </div>
+
+            @include('logistics.components.camera_scanner_modal', ['scannerId' => 'incoming-camera'])
+
+            {{-- Live Scan Result Card --}}
+            <div id="incoming-lookup-result" class="hidden mt-4 rounded-2xl border bg-surface-container-lowest p-4"></div>
         </div>
 
         {{-- Stat Cards --}}
@@ -376,3 +396,91 @@
 
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    window.toggleIncomingCamera = function () {
+        if (!window.NexoraCameraScanner) return;
+        window.NexoraCameraScanner.toggle('incoming-camera', function (code) {
+            const input = document.getElementById('incoming-identifier-input');
+            if (input) {
+                input.value = code;
+            }
+            window.lookupIncomingParcel(code);
+        });
+    };
+
+    window.lookupIncomingParcel = async function (overrideCode) {
+        const input = document.getElementById('incoming-identifier-input');
+        const hubSelect = document.getElementById('incoming-hub-select');
+        const box = document.getElementById('incoming-lookup-result');
+        const identifier = (overrideCode || input?.value || '').trim();
+        if (!identifier || !box) return;
+
+        box.classList.remove('hidden');
+        box.className = 'mt-4 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 text-xs';
+        box.innerHTML = '<div class="text-on-surface-variant font-medium">Looking up barcode <span class="font-mono font-bold">' + identifier + '</span>...</div>';
+
+        try {
+            const response = await fetch('{{ route('logistics.incoming.lookup') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({
+                    identifier: identifier,
+                    hub_id: hubSelect ? (hubSelect.value || null) : null,
+                }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                const msg = payload.message || 'Parcel could not be verified.';
+                box.className = 'mt-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-xs text-rose-700';
+                box.innerHTML = '<div class="font-bold">Verification Rejected</div><div class="mt-1">' + msg + '</div>';
+                return;
+            }
+
+            const d = payload.data;
+            let actionHtml = '';
+            if (d.requires_manifest_receiving && d.manifest) {
+                actionHtml = '<a href="' + d.manifest.url + '" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-700">Open Manifest ' + d.manifest.manifest_number + '</a>';
+            } else if (d.eligible_for_receipt) {
+                actionHtml = '<button type="button" onclick="document.getElementById(\'incoming-scan-form\').submit()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 cursor-pointer">Confirm Receipt at ' + (d.resolved_hub ? d.resolved_hub.name : 'Hub') + '</button>';
+            }
+
+            const cardBorder = d.requires_manifest_receiving
+                ? 'border-amber-500/50 bg-amber-500/5'
+                : (d.eligible_for_receipt ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-outline-variant bg-surface-container-low');
+
+            box.className = 'mt-4 rounded-2xl border p-4 text-xs ' + cardBorder;
+            box.innerHTML = `
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="space-y-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-mono font-bold text-sm text-on-surface">${d.tracking_number}</span>
+                            <span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold text-[11px]">${d.status_label}</span>
+                            <span class="text-on-surface-variant">Order #${d.order_number}</span>
+                        </div>
+                        <div class="text-on-surface-variant">
+                            <strong>Sender:</strong> ${d.sender_name} · <strong>Recipient:</strong> ${d.recipient_name} · <strong>Dest:</strong> ${d.destination}
+                        </div>
+                        <div class="text-on-surface-variant">
+                            <strong>Route:</strong> ${d.origin_hub} → ${d.destination_hub} · <strong>Weight:</strong> ${d.weight_kg.toFixed(2)} kg · <strong>${d.payment_method}:</strong> ₱${d.cod_amount.toFixed(2)}
+                        </div>
+                        <div class="font-semibold ${d.requires_manifest_receiving ? 'text-amber-700' : (d.eligible_for_receipt ? 'text-emerald-700' : 'text-on-surface')}">
+                            ${d.status_message}
+                        </div>
+                    </div>
+                    <div class="shrink-0">${actionHtml}</div>
+                </div>
+            `;
+        } catch (err) {
+            box.className = 'mt-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-xs text-rose-700';
+            box.innerHTML = '<div class="font-bold">Network Error</div><div class="mt-1">Unable to look up parcel right now. Check connection and try again.</div>';
+        }
+    };
+</script>
+@endpush

@@ -20,6 +20,7 @@ use App\Services\ShipmentStateMachineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class RiderApiController extends Controller
@@ -198,34 +199,36 @@ class RiderApiController extends Controller
         $trackingNumber = trim($validated['tracking_number']);
 
         return IdempotencyService::run($key, $rider->id, "api_pickup_{$trackingNumber}", function () use ($rider, $trackingNumber) {
-            $order = Order::where('tracking_number', $trackingNumber)
-                ->orWhere('order_number', $trackingNumber)
-                ->first();
+            $resolvedOrder = Order::findByScanIdentifier($trackingNumber);
 
-            if (! $order) {
+            if (! $resolvedOrder) {
                 return response()->json(['error' => 'Order not found.'], 404);
             }
 
-            if ((int) $order->pickup_courier_id !== (int) $rider->id) {
-                return response()->json(['error' => 'You are not assigned as the pickup courier for this parcel.'], 403);
-            }
+            return DB::transaction(function () use ($rider, $resolvedOrder) {
+                $order = Order::whereKey($resolvedOrder->id)->lockForUpdate()->firstOrFail();
 
-            if ($order->status === 'picked_up') {
-                return response()->json(['success' => true, 'message' => 'Already marked as Picked Up.']);
-            }
+                if ((int) $order->pickup_courier_id !== (int) $rider->id) {
+                    return response()->json(['error' => 'You are not assigned as the pickup courier for this parcel.'], 403);
+                }
 
-            if (! in_array($order->status, ['ready_for_pickup', 'assigned'], true)) {
-                return response()->json(['error' => "Cannot pickup order in status {$order->status}."], 422);
-            }
+                if ($order->status === 'picked_up') {
+                    return response()->json(['success' => true, 'message' => 'Already marked as Picked Up.']);
+                }
 
-            $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
-            $this->payoutService->creditPickupPay($rider, $order);
+                if (! in_array($order->status, ['ready_for_pickup', 'assigned'], true)) {
+                    return response()->json(['error' => "Cannot pickup order in status {$order->status}."], 422);
+                }
 
-            return response()->json([
-                'success' => true,
-                'message' => "Order {$order->order_number} marked as Picked Up. ₱30.00 pay credited.",
-                'order_status' => 'picked_up',
-            ]);
+                $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
+                $this->payoutService->creditPickupPay($rider, $order);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => "Order {$order->order_number} marked as Picked Up. ₱30.00 pay credited.",
+                    'order_status' => 'picked_up',
+                ]);
+            });
         });
     }
 

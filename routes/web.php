@@ -221,6 +221,7 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::get('/transfers', [Logistics\TransferController::class, 'index'])->name('transfers.index');
     Route::post('/transfers/manifests', [Logistics\TransferController::class, 'storeManifest'])->name('transfers.manifests.store');
     Route::get('/transfers/manifests/{manifest}', [Logistics\TransferController::class, 'showManifest'])->name('transfers.manifests.show');
+    Route::post('/transfers/manifests/{manifest}/lookup-parcel', [Logistics\TransferController::class, 'lookupManifestParcel'])->name('transfers.manifests.lookup-parcel');
     Route::post('/transfers/manifests/{manifest}/assign-courier', [Logistics\TransferController::class, 'assignManifestCourier'])->name('transfers.manifests.assign-courier');
     Route::post('/transfers/manifests/{manifest}/verify-parcel', [Logistics\TransferController::class, 'verifyManifestParcel'])->name('transfers.manifests.verify-parcel');
     Route::post('/transfers/manifests/{manifest}/parcels', [Logistics\TransferController::class, 'addParcelsToManifest'])->name('transfers.manifests.add-parcels');
@@ -257,6 +258,7 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
 
     // Incoming Parcels
     Route::get('/incoming', [Logistics\IncomingController::class, 'index'])->name('incoming.index');
+    Route::post('/incoming/lookup', [Logistics\IncomingController::class, 'lookup'])->name('incoming.lookup');
     Route::post('/incoming/scan', [Logistics\IncomingController::class, 'scan'])->name('incoming.scan');
     Route::post('/incoming/{order}/flag', [Logistics\IncomingController::class, 'flag'])->name('incoming.flag');
 

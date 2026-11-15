@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderStatusUpdated;
+use App\Services\OrderLogisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Picqer\Barcode\BarcodeGenerator;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 class OrderController extends Controller
 {
@@ -121,6 +124,7 @@ class OrderController extends Controller
 
         abort_if(! $nextStatus, 400, 'This order cannot be advanced from its current status.');
 
+        OrderLogisticsService::ensureTrackingNumber($order);
         $order->update(['status' => $nextStatus]);
 
         OrderStatusHistory::create([
@@ -180,9 +184,30 @@ class OrderController extends Controller
     {
         $this->authorizeSellerInvolved($request, $order);
 
-        $order->load(['items.product', 'buyer', 'address', 'seller.sellerProfile']);
+        $order->load([
+            'items.product',
+            'buyer',
+            'address',
+            'seller.sellerProfile',
+            'seller.address',
+            'originHub',
+            'destinationHub',
+            'deliveryZone',
+        ]);
 
-        return view('seller.orders.waybill', compact('order'));
+        // Ensure canonical tracking number without overwriting an existing value on reprint
+        $trackingNumber = OrderLogisticsService::ensureTrackingNumber($order);
+
+        $generator = new BarcodeGeneratorSVG();
+        $barcodeSvg = $generator->getBarcode(
+            $trackingNumber,
+            BarcodeGenerator::TYPE_CODE_128,
+            2.2,
+            72,
+            '#000000'
+        );
+
+        return view('seller.orders.waybill', compact('order', 'trackingNumber', 'barcodeSvg'));
     }
 
     private function authorizeSellerInvolved(Request $request, Order $order): void
