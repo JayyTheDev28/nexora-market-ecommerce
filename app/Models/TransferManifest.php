@@ -136,4 +136,9 @@ class TransferManifest extends Model
     {
         return $this->hasMany(HubTransfer::class, 'manifest_id');
     }
+
+    public function incidents(): HasMany
+    {
+        return $this->hasMany(ParcelIncident::class, 'manifest_id')->latest('reported_at');
+    }
 }

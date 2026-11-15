@@ -182,7 +182,12 @@
                                 </thead>
                                 <tbody class="divide-y divide-outline-variant/60">
                                     @foreach ($manifests as $manifest)
-                                        @php $loadedCount = $manifest->items->where('loading_status', 'loaded')->count(); @endphp
+                                        @php
+                                            $loadedCount = $manifest->items->where('loading_status', 'loaded')->count();
+                                            $unresolvedManifestIncidents = $manifest->incidents->where('investigation_status', '!=', 'resolved');
+                                            $openDamageCount = $unresolvedManifestIncidents->where('incident_type', 'damage')->count();
+                                            $openMissingCount = $unresolvedManifestIncidents->where('incident_type', 'missing')->count();
+                                        @endphp
                                         <tr class="hover:bg-surface-container-low/40">
                                             <td class="px-4 py-3">
                                                 <div class="font-mono font-bold text-on-surface">{{ $manifest->manifest_number }}</div>
@@ -206,6 +211,16 @@
                                                 <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase bg-primary/10 text-primary">
                                                     {{ str_replace('_', ' ', $manifest->status) }}
                                                 </span>
+                                                @if ($openDamageCount > 0 || $openMissingCount > 0)
+                                                    <div class="flex flex-wrap gap-1 mt-1">
+                                                        @if ($openDamageCount > 0)
+                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-700">{{ $openDamageCount }} Damaged</span>
+                                                        @endif
+                                                        @if ($openMissingCount > 0)
+                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white">{{ $openMissingCount }} Missing</span>
+                                                        @endif
+                                                    </div>
+                                                @endif
                                                 @if ($manifest->dispatched_at)
                                                     <div class="text-[10px] text-on-surface-variant mt-1">Dep: {{ $manifest->dispatched_at->format('M d, H:i') }}</div>
                                                 @endif

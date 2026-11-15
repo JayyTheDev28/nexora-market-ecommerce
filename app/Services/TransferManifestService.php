@@ -6,6 +6,8 @@ use App\Models\AuditLog;
 use App\Models\Hub;
 use App\Models\HubTransfer;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
+use App\Models\ParcelIncident;
 use App\Models\TransferManifest;
 use App\Models\TransferManifestItem;
 use App\Models\User;
@@ -82,6 +84,12 @@ class TransferManifestService
                     $alreadyInActiveManifest,
                     422,
                     "Parcel #{$order->order_number} is already assigned to an active transfer manifest."
+                );
+
+                abort_if(
+                    $order->hasUnresolvedHandlingRestrictions(),
+                    422,
+                    "Parcel #{$order->order_number} has an unresolved damage or missing incident and cannot be dispatched."
                 );
             }
 
@@ -363,6 +371,12 @@ class TransferManifestService
             foreach ($manifest->items as $item) {
                 $order = Order::whereKey($item->order_id)->lockForUpdate()->firstOrFail();
 
+                abort_if(
+                    $order->hasUnresolvedHandlingRestrictions(),
+                    422,
+                    "Parcel #{$order->order_number} has an unresolved damage or missing incident and cannot be dispatched."
+                );
+
                 if (! $item->hub_transfer_id) {
                     $hubTransfer = $this->interRegionLogisticsService->dispatchHubTransfer(
                         $order,
@@ -562,9 +576,10 @@ class TransferManifestService
         string $trackingNumber,
         string $classification,
         User $operator,
-        ?string $notes = null
+        ?string $notes = null,
+        bool $autoScan = false
     ): array {
-        return DB::transaction(function () use ($manifest, $trackingNumber, $classification, $operator, $notes) {
+        return DB::transaction(function () use ($manifest, $trackingNumber, $classification, $operator, $notes, $autoScan) {
             $manifest = TransferManifest::whereKey($manifest->id)
                 ->with(['destinationHub', 'originHub'])
                 ->lockForUpdate()
@@ -575,6 +590,26 @@ class TransferManifestService
                 403,
                 'Only authorized staff of the receiving logistics company can verify incoming parcels.'
             );
+
+            $normalized = Order::normalizeScanIdentifier($trackingNumber);
+            abort_unless($normalized !== '', 422, 'Scanned barcode is empty or invalid.');
+
+            $item = TransferManifestItem::where('manifest_id', $manifest->id)
+                ->where(function ($q) use ($normalized) {
+                    $q->where('tracking_number', $normalized)
+                      ->orWhereRaw('UPPER(tracking_number) = ?', [$normalized])
+                      ->orWhereHas('order', fn ($oq) => $oq->where('order_number', $normalized)->orWhereRaw('UPPER(order_number) = ?', [$normalized]));
+                })
+                ->with(['hubTransfer', 'order'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($manifest->status === TransferManifest::STATUS_COMPLETED
+                && $item !== null
+                && $item->receiving_status === TransferManifestItem::RECEIVING_RECEIVED
+                && $classification === TransferManifestItem::RECEIVING_RECEIVED) {
+                return $this->buildReceivingSummary($manifest, $item, true);
+            }
 
             abort_if(
                 $manifest->isTerminal(),
@@ -603,16 +638,6 @@ class TransferManifestService
                 'Invalid parcel verification classification.'
             );
 
-            $normalized = trim($trackingNumber);
-            $item = TransferManifestItem::where('manifest_id', $manifest->id)
-                ->where(function ($q) use ($normalized) {
-                    $q->where('tracking_number', $normalized)
-                      ->orWhereHas('order', fn ($oq) => $oq->where('order_number', $normalized));
-                })
-                ->with('hubTransfer')
-                ->lockForUpdate()
-                ->first();
-
             abort_unless(
                 $item !== null,
                 422,
@@ -621,6 +646,31 @@ class TransferManifestService
 
             if ($item->receiving_status === TransferManifestItem::RECEIVING_RECEIVED && $classification === TransferManifestItem::RECEIVING_RECEIVED) {
                 return $this->buildReceivingSummary($manifest, $item, true);
+            }
+
+            if ($autoScan
+                && $classification === TransferManifestItem::RECEIVING_RECEIVED
+                && (in_array($item->receiving_status, [
+                    TransferManifestItem::RECEIVING_MISSING,
+                    TransferManifestItem::RECEIVING_DAMAGED,
+                    TransferManifestItem::RECEIVING_DISCREPANCY,
+                ], true) || ($item->order && $item->order->hasBlockingFlagHistoryOrIncidents()))) {
+                abort(
+                    422,
+                    "Parcel #{$item->tracking_number} is flagged for investigation (" . strtoupper($item->receiving_status) . ') and cannot be automatically accepted. Review manually before resolution.'
+                );
+            }
+
+            if (in_array($classification, [
+                TransferManifestItem::RECEIVING_MISSING,
+                TransferManifestItem::RECEIVING_DAMAGED,
+                TransferManifestItem::RECEIVING_DISCREPANCY,
+            ], true)) {
+                abort_if(
+                    trim((string) $notes) === '',
+                    422,
+                    'Notes are required when classifying a parcel as missing, damaged, or discrepancy.'
+                );
             }
 
             abort_if(
@@ -663,6 +713,8 @@ class TransferManifestService
                     'received_by' => $operator->id,
                     'issue_notes' => $notes ? trim($notes) : $item->issue_notes,
                 ]);
+
+                app(ParcelIncidentService::class)->resolveManifestReceivingIncidents($item, $operator, $notes);
             } else {
                 // Missing, damaged, or discrepancy: DO NOT transfer custody!
                 $item->update([
@@ -671,6 +723,14 @@ class TransferManifestService
                     'received_by' => $operator->id,
                     'issue_notes' => $notes ? trim($notes) : $item->issue_notes,
                 ]);
+
+                app(ParcelIncidentService::class)->recordManifestExceptionIncident(
+                    $manifest,
+                    $item,
+                    $classification,
+                    $operator,
+                    (string) $notes
+                );
             }
 
             AuditLog::log(
@@ -869,6 +929,12 @@ class TransferManifestService
                     422,
                     "Parcel #{$order->order_number} is already assigned to an active transfer manifest."
                 );
+
+                abort_if(
+                    $order->hasUnresolvedHandlingRestrictions(),
+                    422,
+                    "Parcel #{$order->order_number} has an unresolved damage or missing incident and cannot be dispatched."
+                );
             }
 
             foreach ($orders as $order) {
@@ -969,6 +1035,9 @@ class TransferManifestService
         $discrepancy = $items->where('receiving_status', TransferManifestItem::RECEIVING_DISCREPANCY)->count();
         $outstanding = $items->where('receiving_status', TransferManifestItem::RECEIVING_PENDING)->count();
 
+        $incidents = ParcelIncident::where('manifest_id', $manifestId)->get();
+        $unresolvedIncidents = $incidents->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED);
+
         return [
             'expected' => $expected,
             'received' => $received,
@@ -976,6 +1045,9 @@ class TransferManifestService
             'damaged' => $damaged,
             'discrepancy' => $discrepancy,
             'outstanding' => $outstanding,
+            'open_incidents' => $unresolvedIncidents->count(),
+            'open_damage_incidents' => $unresolvedIncidents->where('incident_type', ParcelIncident::TYPE_DAMAGE)->count(),
+            'open_missing_incidents' => $unresolvedIncidents->where('incident_type', ParcelIncident::TYPE_MISSING)->count(),
         ];
     }
 

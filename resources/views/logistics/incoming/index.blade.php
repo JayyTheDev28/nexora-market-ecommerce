@@ -51,36 +51,57 @@
         @endif
 
         {{-- Scan Incoming Parcel Station Box --}}
-        <div class="bg-gradient-to-r from-primary/10 via-surface-container-lowest to-secondary/10 rounded-3xl border border-primary/20 p-6 mb-8 shadow-xs">
-            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                <div class="max-w-md">
-                    <div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider mb-1">
+        <div class="rounded-3xl border border-[#bfdbfe] bg-gradient-to-br from-[#eff6ff] via-white to-[#fff7ed]/60 p-6 mb-8 shadow-sm">
+            {{-- Stacked Full-Width Header --}}
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-[#e2e8f0]">
+                <div>
+                    <div class="inline-flex items-center gap-2 text-[#0058be] font-bold text-xs uppercase tracking-wider mb-1">
                         <span class="material-symbols-outlined text-[20px]">barcode_scanner</span>
-                        <span>Rapid Scanner Station</span>
+                        <span>One-Scan Automatic Receiving</span>
                     </div>
-                    <h2 class="font-headline-md text-xl font-bold text-on-surface">Scan Incoming Parcel</h2>
-                    <p class="font-body-sm text-xs text-on-surface-variant mt-1">
-                        Use your device camera, a USB/Bluetooth barcode scanner, or manual entry (<code class="font-mono text-primary font-bold">NX-TRK-...</code>) to verify parcels before confirming hub receipt.
+                    <h2 class="font-headline-md text-xl font-bold text-[#0f172a]">Scan Incoming Parcel</h2>
+                    <p class="font-body-sm text-xs text-[#475569] mt-1">
+                        Point the camera at any waybill or scan via USB/manual entry (<code class="font-mono text-[#0058be] font-bold">NX-TRK-...</code>). Valid parcels are received automatically.
                     </p>
                 </div>
+                <div class="shrink-0">
+                    <span class="inline-flex items-center gap-2 rounded-full border border-[#86efac] bg-[#f0fdf4] px-3.5 py-1.5 text-xs font-bold text-[#166534]">
+                        <span class="h-2 w-2 rounded-full bg-[#16a34a]"></span>
+                        <span>Parcels Received This Session: <strong id="incoming-session-count" class="font-mono text-sm">0</strong></span>
+                    </span>
+                </div>
+            </div>
 
-                <form id="incoming-scan-form" method="POST" action="{{ route('logistics.incoming.scan') }}" class="w-full lg:w-auto flex-1 max-w-2xl">
-                    @csrf
-                    <div class="flex flex-col sm:flex-row items-stretch gap-2">
-                        @if ($myHubs->isNotEmpty())
-                            <div class="sm:w-1/3">
-                                <select id="incoming-hub-select" name="hub_id" class="w-full px-3 py-3 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl text-xs font-semibold text-on-surface focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all">
-                                    <option value="">Auto-Detect Verified Hub</option>
-                                    @foreach ($myHubs as $hub)
-                                        <option value="{{ $hub->id }}" {{ old('hub_id', request('hub_id')) == $hub->id ? 'selected' : '' }}>
-                                            {{ $hub->name }} ({{ $hub->city_name }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        @endif
-                        <div class="relative flex-1">
-                            <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-primary text-[20px]">qr_code_scanner</span>
+            {{-- Streamlined One-Scan Form (No separate Lookup or Confirm steps) --}}
+            <form id="incoming-scan-form" method="POST" action="{{ route('logistics.incoming.scan') }}" class="mt-4 space-y-3">
+                @csrf
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+                    @if ($myHubs->isNotEmpty())
+                        <div class="lg:col-span-4">
+                            <label for="incoming-hub-select" class="block text-[11px] font-bold uppercase tracking-wider text-[#334155] mb-1.5">
+                                Receiving Hub
+                            </label>
+                            <select
+                                id="incoming-hub-select"
+                                name="hub_id"
+                                class="w-full px-3.5 py-3 bg-white border-2 border-[#cbd5e1] rounded-2xl text-sm font-semibold text-[#0f172a] focus:border-[#0058be] focus:ring-4 focus:ring-[#0058be]/10 transition-all"
+                            >
+                                <option value="">Auto-Detect Verified Hub</option>
+                                @foreach ($myHubs as $hub)
+                                    <option value="{{ $hub->id }}" {{ old('hub_id', request('hub_id')) == $hub->id ? 'selected' : '' }}>
+                                        {{ $hub->name }} ({{ $hub->city_name }})
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+
+                    <div class="{{ $myHubs->isNotEmpty() ? 'lg:col-span-8' : 'lg:col-span-12' }}">
+                        <label for="incoming-identifier-input" class="block text-[11px] font-bold uppercase tracking-wider text-[#334155] mb-1.5">
+                            Waybill Tracking # or Order #
+                        </label>
+                        <div class="relative flex items-center">
+                            <span class="material-symbols-outlined absolute left-4 text-[#0058be] text-[22px] pointer-events-none">qr_code_scanner</span>
                             <input
                                 id="incoming-identifier-input"
                                 type="text"
@@ -88,37 +109,58 @@
                                 value="{{ old('identifier') }}"
                                 autofocus
                                 required
-                                placeholder="Scan or enter Tracking # (NX-TRK-...)"
-                                class="w-full pl-11 pr-4 py-3 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl font-mono text-sm text-on-surface placeholder:font-sans placeholder:text-xs placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all">
+                                autocomplete="off"
+                                spellcheck="false"
+                                placeholder="Scan or enter Tracking # (e.g. NX-TRK-...)"
+                                class="w-full pl-12 pr-10 py-3 bg-white border-2 border-[#93c5fd] rounded-2xl font-mono text-base font-bold tracking-wide text-[#0f172a] placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:text-[#94a3b8] focus:border-[#0058be] focus:ring-4 focus:ring-[#0058be]/10 transition-all"
+                            >
+                            <button
+                                type="button"
+                                id="incoming-clear-input-btn"
+                                onclick="window.clearIncomingScannerInput()"
+                                class="hidden absolute right-3 rounded-lg p-1 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a]"
+                                title="Clear barcode input"
+                            >
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
                         </div>
+                    </div>
+                </div>
+
+                {{-- Streamlined Action Row --}}
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div class="flex flex-wrap items-center gap-2.5">
                         <button
+                            id="incoming-camera-toggle-btn"
                             type="button"
                             onclick="window.toggleIncomingCamera()"
-                            class="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl bg-slate-900 text-white font-label-md text-xs font-bold hover:bg-slate-800 transition-all cursor-pointer whitespace-nowrap">
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#0f172a] text-white font-label-md text-xs font-bold hover:bg-[#1e293b] transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                        >
                             <span class="material-symbols-outlined text-[18px]">photo_camera</span>
-                            <span>Camera</span>
+                            <span id="incoming-camera-toggle-label">Open Camera</span>
                         </button>
+
                         <button
-                            type="button"
-                            onclick="window.lookupIncomingParcel()"
-                            class="inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl bg-surface-container-high text-on-surface font-label-md text-xs font-bold hover:bg-surface-container-highest transition-all cursor-pointer whitespace-nowrap">
-                            <span class="material-symbols-outlined text-[18px]">search</span>
-                            <span>Lookup</span>
-                        </button>
-                        <button
+                            id="incoming-manual-submit-btn"
                             type="submit"
-                            class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-primary text-on-primary font-label-md text-xs font-bold shadow-md hover:bg-primary/90 transition-all cursor-pointer whitespace-nowrap">
-                            <span class="material-symbols-outlined text-[18px]">verified</span>
-                            <span>Confirm Receipt</span>
+                            class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0058be] text-white font-label-md text-xs font-bold hover:bg-[#004494] transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                        >
+                            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                            <span>Receive Parcel</span>
                         </button>
                     </div>
-                </form>
-            </div>
+                </div>
+            </form>
 
-            @include('logistics.components.camera_scanner_modal', ['scannerId' => 'incoming-camera'])
+            @include('logistics.components.camera_scanner_modal', [
+                'scannerId' => 'incoming-camera',
+                'title' => 'Incoming Parcel Auto-Scanner',
+                'subtitle' => 'Point camera at any waybill — valid parcels are received automatically for continuous batch scanning.',
+                'manualFocusInputId' => 'incoming-identifier-input',
+            ])
 
-            {{-- Live Scan Result Card --}}
-            <div id="incoming-lookup-result" class="hidden mt-4 rounded-2xl border bg-surface-container-lowest p-4"></div>
+            {{-- Live Result Notification Card --}}
+            <div id="incoming-scan-feedback" class="hidden mt-4 rounded-2xl border p-4"></div>
         </div>
 
         {{-- Stat Cards --}}
@@ -130,7 +172,7 @@
                         <span class="material-symbols-outlined text-[18px]">local_shipping</span>
                     </span>
                 </div>
-                <div class="font-headline-md text-2xl font-bold text-on-surface mt-2">{{ number_format($counts['awaiting']) }}</div>
+                <div id="incoming-count-awaiting" class="font-headline-md text-2xl font-bold text-on-surface mt-2">{{ number_format($counts['awaiting']) }}</div>
                 <p class="font-body-xs text-xs text-on-surface-variant mt-1">Picked up from seller, en route</p>
             </a>
 
@@ -141,7 +183,7 @@
                         <span class="material-symbols-outlined text-[18px]">warehouse</span>
                     </span>
                 </div>
-                <div class="font-headline-md text-2xl font-bold text-on-surface mt-2">{{ number_format($counts['received']) }}</div>
+                <div id="incoming-count-received" class="font-headline-md text-2xl font-bold text-on-surface mt-2">{{ number_format($counts['received']) }}</div>
                 <p class="font-body-xs text-xs text-on-surface-variant mt-1">Received, ready for area sorting</p>
             </a>
 
@@ -152,7 +194,7 @@
                         <span class="material-symbols-outlined text-[18px]">inventory</span>
                     </span>
                 </div>
-                <div class="font-headline-md text-2xl font-bold text-on-surface mt-2">{{ number_format($counts['all']) }}</div>
+                <div id="incoming-count-all" class="font-headline-md text-2xl font-bold text-on-surface mt-2">{{ number_format($counts['all']) }}</div>
                 <p class="font-body-xs text-xs text-on-surface-variant mt-1">Combined incoming pipeline</p>
             </a>
         </div>
@@ -399,88 +441,254 @@
 
 @push('scripts')
 <script>
-    window.toggleIncomingCamera = function () {
-        if (!window.NexoraCameraScanner) return;
-        window.NexoraCameraScanner.toggle('incoming-camera', function (code) {
-            const input = document.getElementById('incoming-identifier-input');
-            if (input) {
-                input.value = code;
-            }
-            window.lookupIncomingParcel(code);
-        });
-    };
-
-    window.lookupIncomingParcel = async function (overrideCode) {
+    (function () {
+        const SCANNER_ID = 'incoming-camera';
+        const form = document.getElementById('incoming-scan-form');
         const input = document.getElementById('incoming-identifier-input');
         const hubSelect = document.getElementById('incoming-hub-select');
-        const box = document.getElementById('incoming-lookup-result');
-        const identifier = (overrideCode || input?.value || '').trim();
-        if (!identifier || !box) return;
+        const clearBtn = document.getElementById('incoming-clear-input-btn');
+        const toggleLabel = document.getElementById('incoming-camera-toggle-label');
+        const feedbackBox = document.getElementById('incoming-scan-feedback');
+        const sessionCountEl = document.getElementById('incoming-session-count');
+        const countAwaitingEl = document.getElementById('incoming-count-awaiting');
+        const countReceivedEl = document.getElementById('incoming-count-received');
+        const countAllEl = document.getElementById('incoming-count-all');
 
-        box.classList.remove('hidden');
-        box.className = 'mt-4 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 text-xs';
-        box.innerHTML = '<div class="text-on-surface-variant font-medium">Looking up barcode <span class="font-mono font-bold">' + identifier + '</span>...</div>';
+        let sessionReceivedCount = 0;
+        let scanRequestSeq = 0;
 
-        try {
-            const response = await fetch('{{ route('logistics.incoming.lookup') }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                body: JSON.stringify({
-                    identifier: identifier,
-                    hub_id: hubSelect ? (hubSelect.value || null) : null,
-                }),
+        function normalizeCode(raw) {
+            if (window.NexoraCameraScanner && typeof window.NexoraCameraScanner.normalizeBarcode === 'function') {
+                return window.NexoraCameraScanner.normalizeBarcode(raw);
+            }
+            return String(raw || '').trim().replace(/[\x00-\x1F\x7F\s]+/g, '').toUpperCase();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function currentHubValue() {
+            return hubSelect ? String(hubSelect.value || '') : '';
+        }
+
+        function setScannerStatus(statusCode, message, decodedTracking) {
+            if (window.NexoraCameraScanner && typeof window.NexoraCameraScanner.setStatus === 'function') {
+                window.NexoraCameraScanner.setStatus(SCANNER_ID, statusCode, message, decodedTracking);
+            }
+        }
+
+        function scheduleResume(delayMs) {
+            if (window.NexoraCameraScanner && typeof window.NexoraCameraScanner.scheduleResumeScanning === 'function') {
+                window.NexoraCameraScanner.scheduleResumeScanning(SCANNER_ID, delayMs);
+            }
+        }
+
+        function playFeedback(kind) {
+            if (window.NexoraCameraScanner && typeof window.NexoraCameraScanner.feedback === 'function') {
+                window.NexoraCameraScanner.feedback(kind);
+            }
+        }
+
+        function updatePipelineCounts(counts) {
+            if (!counts) return;
+            if (countAwaitingEl && typeof counts.awaiting === 'number') {
+                countAwaitingEl.textContent = Number(counts.awaiting).toLocaleString();
+            }
+            if (countReceivedEl && typeof counts.received === 'number') {
+                countReceivedEl.textContent = Number(counts.received).toLocaleString();
+            }
+            if (countAllEl && typeof counts.all === 'number') {
+                countAllEl.textContent = Number(counts.all).toLocaleString();
+            }
+        }
+
+        function syncClearButton() {
+            if (clearBtn && input) {
+                clearBtn.classList.toggle('hidden', !input.value.trim());
+            }
+        }
+
+        window.clearIncomingScannerInput = function () {
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
+            syncClearButton();
+        };
+
+        window.toggleIncomingCamera = async function () {
+            if (!window.NexoraCameraScanner) return;
+            const isOpen = await window.NexoraCameraScanner.toggle(SCANNER_ID, function (code) {
+                if (input) {
+                    input.value = code;
+                }
+                syncClearButton();
+                return window.receiveIncomingParcel(code, true);
             });
+            if (toggleLabel) {
+                toggleLabel.textContent = isOpen ? 'Close Camera' : 'Open Camera';
+            }
+        };
 
-            const payload = await response.json();
-            if (!response.ok) {
-                const msg = payload.message || 'Parcel could not be verified.';
-                box.className = 'mt-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-xs text-rose-700';
-                box.innerHTML = '<div class="font-bold">Verification Rejected</div><div class="mt-1">' + msg + '</div>';
+        window.receiveIncomingParcel = async function (overrideCode, fromAutoScan) {
+            const rawValue = overrideCode !== undefined ? overrideCode : (input ? input.value : '');
+            const identifier = normalizeCode(rawValue);
+            if (input && identifier) {
+                input.value = identifier;
+            }
+            syncClearButton();
+
+            if (!identifier || !feedbackBox) {
                 return;
             }
 
-            const d = payload.data;
-            let actionHtml = '';
-            if (d.requires_manifest_receiving && d.manifest) {
-                actionHtml = '<a href="' + d.manifest.url + '" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-700">Open Manifest ' + d.manifest.manifest_number + '</a>';
-            } else if (d.eligible_for_receipt) {
-                actionHtml = '<button type="button" onclick="document.getElementById(\'incoming-scan-form\').submit()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 cursor-pointer">Confirm Receipt at ' + (d.resolved_hub ? d.resolved_hub.name : 'Hub') + '</button>';
+            const hubId = currentHubValue();
+            const requestSeq = ++scanRequestSeq;
+
+            setScannerStatus('RECEIVING', 'Processing parcel ' + identifier + '...', identifier);
+
+            try {
+                const response = await fetch('{{ route('logistics.incoming.scan') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    },
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        hub_id: hubId || null,
+                        auto_scan: Boolean(fromAutoScan),
+                    }),
+                });
+
+                if (requestSeq !== scanRequestSeq) {
+                    return;
+                }
+
+                const payload = await response.json().catch(() => ({}));
+                const outcome = payload.outcome || 'error';
+                const msg = payload.message || 'Unable to process parcel receipt.';
+                const d = payload.data || {};
+
+                if (payload.counts) {
+                    updatePipelineCounts(payload.counts);
+                }
+
+                if (response.ok && outcome === 'received') {
+                    if (payload.newly_received) {
+                        sessionReceivedCount += 1;
+                        if (sessionCountEl) {
+                            sessionCountEl.textContent = String(sessionReceivedCount);
+                        }
+                    }
+
+                    playFeedback('success');
+                    setScannerStatus('RECEIVED', 'PARCEL RECEIVED — ' + (d.tracking_number || identifier), d.tracking_number || identifier);
+
+                    const hubName = d.resolved_hub ? d.resolved_hub.name : (d.resolved_hub_label || 'Verified Hub');
+                    feedbackBox.classList.remove('hidden');
+                    feedbackBox.className = 'mt-4 rounded-2xl border-2 border-[#86efac] bg-[#f0fdf4] p-4 text-xs text-[#166534] shadow-xs';
+                    feedbackBox.innerHTML = `
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="space-y-1">
+                                <div class="inline-flex items-center gap-1.5 font-extrabold text-sm text-[#15803d]">
+                                    <span class="material-symbols-outlined text-[20px]">check_circle</span>
+                                    <span>PARCEL RECEIVED</span>
+                                </div>
+                                <div class="font-mono text-sm font-bold text-[#0f172a]">
+                                    Tracking: ${escapeHtml(d.tracking_number || identifier)}
+                                    <span class="font-sans text-xs font-medium text-[#475569] ml-2">Order #${escapeHtml(d.order_number || '')}</span>
+                                </div>
+                                <div class="text-[#166534]">
+                                    <strong>Received at:</strong> ${escapeHtml(hubName)} · <strong>Session Count:</strong> ${sessionReceivedCount}
+                                </div>
+                                ${d.route_info ? `<div class="text-[#334155]">${escapeHtml(d.route_info)}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+
+                    if (input && !fromAutoScan) {
+                        input.value = '';
+                        input.focus();
+                        syncClearButton();
+                    }
+                    scheduleResume(1800);
+                    return;
+                }
+
+                if (outcome === 'already_received') {
+                    playFeedback('error');
+                    setScannerStatus('ALREADY_RECEIVED', msg, d.tracking_number || identifier);
+                    feedbackBox.classList.remove('hidden');
+                    feedbackBox.className = 'mt-4 rounded-2xl border-2 border-[#fcd34d] bg-[#fffbeb] p-4 text-xs text-[#92400e]';
+                    feedbackBox.innerHTML = `
+                        <div class="font-extrabold text-sm">ALREADY RECEIVED</div>
+                        <div class="mt-1 font-mono font-bold text-[#0f172a]">Tracking: ${escapeHtml(d.tracking_number || identifier)}</div>
+                        <div class="mt-1">${escapeHtml(msg)}</div>
+                    `;
+                    scheduleResume(2600);
+                    return;
+                }
+
+                // Rejected outcomes
+                playFeedback('error');
+                const statusMap = {
+                    not_found: 'INVALID_BARCODE',
+                    invalid_barcode: 'INVALID_BARCODE',
+                    unauthorized_company: 'INVALID_BARCODE',
+                    wrong_hub: 'WRONG_HUB',
+                    invalid_hub: 'WRONG_HUB',
+                    manifest_required: 'MANIFEST_REQUIRED',
+                };
+                setScannerStatus(statusMap[outcome] || 'ERROR', msg, identifier);
+
+                const manifestBtn = payload.manifest && payload.manifest.url
+                    ? '<div class="mt-2"><a href="' + escapeHtml(payload.manifest.url) + '" class="inline-flex items-center gap-1.5 rounded-xl bg-[#d97706] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#b45309]">Open Manifest ' + escapeHtml(payload.manifest.manifest_number) + '</a></div>'
+                    : '';
+
+                feedbackBox.classList.remove('hidden');
+                feedbackBox.className = 'mt-4 rounded-2xl border-2 border-[#fca5a5] bg-[#fef2f2] p-4 text-xs text-[#991b1b]';
+                feedbackBox.innerHTML = `
+                    <div class="font-extrabold text-sm">${escapeHtml(outcome === 'manifest_required' ? 'MANIFEST REQUIRED' : (outcome === 'wrong_hub' ? 'WRONG HUB' : 'SCAN REJECTED'))}</div>
+                    <div class="mt-1">${escapeHtml(msg)}</div>
+                    ${manifestBtn}
+                `;
+                scheduleResume(3000);
+            } catch (err) {
+                if (requestSeq !== scanRequestSeq) return;
+                playFeedback('error');
+                setScannerStatus('ERROR', 'Server connection error — please try again.', identifier);
+                feedbackBox.classList.remove('hidden');
+                feedbackBox.className = 'mt-4 rounded-2xl border-2 border-[#fca5a5] bg-[#fef2f2] p-4 text-xs text-[#991b1b]';
+                feedbackBox.innerHTML = '<div class="font-extrabold text-sm">NETWORK ERROR</div><div class="mt-1">Unable to reach Laravel server. Check connection and retry.</div>';
+                scheduleResume(3000);
             }
+        };
 
-            const cardBorder = d.requires_manifest_receiving
-                ? 'border-amber-500/50 bg-amber-500/5'
-                : (d.eligible_for_receipt ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-outline-variant bg-surface-container-low');
-
-            box.className = 'mt-4 rounded-2xl border p-4 text-xs ' + cardBorder;
-            box.innerHTML = `
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div class="space-y-1">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="font-mono font-bold text-sm text-on-surface">${d.tracking_number}</span>
-                            <span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold text-[11px]">${d.status_label}</span>
-                            <span class="text-on-surface-variant">Order #${d.order_number}</span>
-                        </div>
-                        <div class="text-on-surface-variant">
-                            <strong>Sender:</strong> ${d.sender_name} · <strong>Recipient:</strong> ${d.recipient_name} · <strong>Dest:</strong> ${d.destination}
-                        </div>
-                        <div class="text-on-surface-variant">
-                            <strong>Route:</strong> ${d.origin_hub} → ${d.destination_hub} · <strong>Weight:</strong> ${d.weight_kg.toFixed(2)} kg · <strong>${d.payment_method}:</strong> ₱${d.cod_amount.toFixed(2)}
-                        </div>
-                        <div class="font-semibold ${d.requires_manifest_receiving ? 'text-amber-700' : (d.eligible_for_receipt ? 'text-emerald-700' : 'text-on-surface')}">
-                            ${d.status_message}
-                        </div>
-                    </div>
-                    <div class="shrink-0">${actionHtml}</div>
-                </div>
-            `;
-        } catch (err) {
-            box.className = 'mt-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-xs text-rose-700';
-            box.innerHTML = '<div class="font-bold">Network Error</div><div class="mt-1">Unable to look up parcel right now. Check connection and try again.</div>';
+        if (input) {
+            syncClearButton();
+            input.addEventListener('input', syncClearButton);
         }
-    };
+
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                window.receiveIncomingParcel(input ? input.value : '', false);
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('[data-camera-close="' + SCANNER_ID + '"], [data-camera-manual="' + SCANNER_ID + '"]')) {
+                if (toggleLabel) toggleLabel.textContent = 'Open Camera';
+            }
+        });
+    })();
 </script>
 @endpush

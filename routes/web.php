@@ -224,6 +224,9 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::post('/transfers/manifests/{manifest}/lookup-parcel', [Logistics\TransferController::class, 'lookupManifestParcel'])->name('transfers.manifests.lookup-parcel');
     Route::post('/transfers/manifests/{manifest}/assign-courier', [Logistics\TransferController::class, 'assignManifestCourier'])->name('transfers.manifests.assign-courier');
     Route::post('/transfers/manifests/{manifest}/verify-parcel', [Logistics\TransferController::class, 'verifyManifestParcel'])->name('transfers.manifests.verify-parcel');
+    Route::post('/transfers/manifests/{manifest}/items/{item}/report-damage', [Logistics\TransferController::class, 'reportManifestItemDamage'])->name('transfers.manifests.items.report-damage');
+    Route::post('/transfers/manifests/{manifest}/items/{item}/report-missing', [Logistics\TransferController::class, 'reportManifestItemMissing'])->name('transfers.manifests.items.report-missing');
+    Route::match(['patch', 'post'], '/transfers/manifests/{manifest}/incidents/{incident}/status', [Logistics\TransferController::class, 'updateIncidentStatus'])->name('transfers.manifests.incidents.update-status');
     Route::post('/transfers/manifests/{manifest}/parcels', [Logistics\TransferController::class, 'addParcelsToManifest'])->name('transfers.manifests.add-parcels');
     Route::delete('/transfers/manifests/{manifest}/items/{item}', [Logistics\TransferController::class, 'removeManifestParcel'])->name('transfers.manifests.remove-parcel');
     Route::post('/transfers/manifests/{manifest}/cancel', [Logistics\TransferController::class, 'cancelManifest'])->name('transfers.manifests.cancel');

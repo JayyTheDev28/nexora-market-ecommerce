@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Address;
 use App\Models\CourierProfile;
 use App\Models\Hub;
+use App\Models\HubTransfer;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
 use App\Models\RiderEarning;
 use App\Models\SortingCenterProfile;
 use App\Models\TransferManifest;
@@ -400,5 +402,614 @@ class BarcodeWaybillAndScanningTest extends TestCase
         ])->assertStatus(200)
           ->assertJsonPath('data.tracking_number', $manifestOrder->tracking_number)
           ->assertJsonPath('data.receiving_status', TransferManifestItem::RECEIVING_PENDING);
+    }
+
+    public function test_incoming_lookup_returns_structured_outcomes_and_normalizes_barcode_variants(): void
+    {
+        $companyA = $this->createLogisticsCompany('Logistics One', 'log1_' . uniqid() . '@nexora.test');
+        $companyB = $this->createLogisticsCompany('Logistics Two', 'log2_' . uniqid() . '@nexora.test');
+        $hubA1 = $this->createHub($companyA, 'Calamba Main Hub', 'CAL-M1');
+        $hubA2 = $this->createHub($companyA, 'San Pablo Hub', 'SPB-01');
+        $hubB = $this->createHub($companyB, 'Laguna East Hub', 'LAG-E1');
+
+        [$buyer, $address] = $this->createBuyer();
+        $seller = $this->createSeller();
+
+        $eligibleOrder = Order::create([
+            'order_number' => 'NX-ELG-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $companyA->id,
+            'delivery_logistics_id' => $companyA->id,
+            'current_custody_logistics_id' => $companyA->id,
+            'origin_hub_id' => $hubA1->id,
+            'destination_hub_id' => $hubA1->id,
+            'status' => 'picked_up',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 400.00,
+            'shipping_fee' => 50.00,
+            'total' => 450.00,
+            'placed_at' => now(),
+        ]);
+
+        $receivedOrder = Order::create([
+            'order_number' => 'NX-RCV-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $companyA->id,
+            'delivery_logistics_id' => $companyA->id,
+            'current_custody_logistics_id' => $companyA->id,
+            'origin_hub_id' => $hubA1->id,
+            'destination_hub_id' => $hubA1->id,
+            'current_hub_id' => $hubA1->id,
+            'status' => 'received_at_hub',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 300.00,
+            'shipping_fee' => 50.00,
+            'total' => 350.00,
+            'placed_at' => now(),
+        ]);
+
+        $this->actingAs($companyA);
+
+        // Lowercase + whitespace + USB scanner CR/LF normalized cleanly
+        $dirtyInput = '  ' . strtolower($eligibleOrder->tracking_number) . "\r\n";
+        $this->postJson(route('logistics.incoming.lookup'), [
+            'identifier' => $dirtyInput,
+            'hub_id' => $hubA1->id,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'eligible')
+          ->assertJsonPath('data.eligible_for_receipt', true)
+          ->assertJsonPath('data.tracking_number', $eligibleOrder->tracking_number);
+
+        // Wrong hub returns 422 with wrong_hub outcome and not eligible
+        $this->postJson(route('logistics.incoming.lookup'), [
+            'identifier' => $eligibleOrder->tracking_number,
+            'hub_id' => $hubA2->id,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'wrong_hub')
+          ->assertJsonPath('data.eligible_for_receipt', false);
+
+        // Selecting another company's hub returns 403 invalid_hub
+        $this->postJson(route('logistics.incoming.lookup'), [
+            'identifier' => $eligibleOrder->tracking_number,
+            'hub_id' => $hubB->id,
+        ])->assertStatus(403)
+          ->assertJsonPath('outcome', 'invalid_hub');
+
+        // Unknown tracking returns 404 not_found
+        $this->postJson(route('logistics.incoming.lookup'), [
+            'identifier' => 'NX-TRK-DOESNOTEXIST',
+            'hub_id' => $hubA1->id,
+        ])->assertStatus(404)
+          ->assertJsonPath('outcome', 'not_found');
+
+        // Already received parcel returns already_received and eligible_for_receipt = false
+        $this->postJson(route('logistics.incoming.lookup'), [
+            'identifier' => $receivedOrder->tracking_number,
+            'hub_id' => $hubA1->id,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'already_received')
+          ->assertJsonPath('data.already_received', true)
+          ->assertJsonPath('data.eligible_for_receipt', false);
+
+        // Unauthorized company returns 403 unauthorized_company
+        $this->actingAs($companyB);
+        $this->postJson(route('logistics.incoming.lookup'), [
+            'identifier' => $eligibleOrder->tracking_number,
+            'hub_id' => $hubB->id,
+        ])->assertStatus(403)
+          ->assertJsonPath('outcome', 'unauthorized_company');
+    }
+
+    public function test_incoming_page_renders_simplified_one_scan_scanner_without_step_bar(): void
+    {
+        $company = $this->createLogisticsCompany('Logistics UI Test', 'logui_' . uniqid() . '@nexora.test');
+        $this->createHub($company, 'Test Hub UI', 'THU-01');
+
+        $response = $this->actingAs($company)->get(route('logistics.incoming.index'));
+
+        $response->assertStatus(200)
+            ->assertSee('vendor/html5-qrcode/html5-qrcode.min.js', false)
+            ->assertSee('data-camera-status-panel="incoming-camera"', false)
+            ->assertSee('data-fullframe-scanner="true"', false)
+            ->assertSee('id="incoming-session-count"', false)
+            ->assertSee('Parcels Received This Session', false)
+            ->assertSee('PARCEL RECEIVED', false)
+            ->assertSee('ALREADY_RECEIVED', false)
+            ->assertSee('INVALID_BARCODE', false)
+            ->assertSee('WRONG_HUB', false)
+            ->assertSee('MANIFEST_REQUIRED', false)
+            ->assertSee('Retry', false)
+            ->assertSee('Flashlight', false)
+            ->assertSee('Switch Camera', false)
+            ->assertSee('Manual Entry', false)
+            ->assertDontSee('1. Camera Feed', false)
+            ->assertDontSee('Step 1/4', false)
+            ->assertDontSee('id="incoming-confirm-btn"', false)
+            ->assertDontSee('qrbox:', false);
+    }
+
+    public function test_manifest_lookup_returns_structured_outcomes_and_already_received_state(): void
+    {
+        $senderCo = $this->createLogisticsCompany('Sender Co', 'snd_' . uniqid() . '@nexora.test');
+        $receiverCo = $this->createLogisticsCompany('Receiver Co', 'rcv_' . uniqid() . '@nexora.test');
+        $originHub = $this->createHub($senderCo, 'Calamba Hub', 'CAL-02');
+        $destHub = $this->createHub($receiverCo, 'Laguna Hub', 'LAG-02');
+
+        [$buyer, $address] = $this->createBuyer();
+        $seller = $this->createSeller();
+
+        $order = Order::create([
+            'order_number' => 'NX-MNF-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $senderCo->id,
+            'delivery_logistics_id' => $receiverCo->id,
+            'current_custody_logistics_id' => $senderCo->id,
+            'origin_hub_id' => $originHub->id,
+            'destination_hub_id' => $destHub->id,
+            'status' => 'in_transit_hub',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 700.00,
+            'shipping_fee' => 80.00,
+            'total' => 780.00,
+            'placed_at' => now(),
+        ]);
+
+        $manifest = TransferManifest::create([
+            'manifest_number' => 'MNF-' . uniqid(),
+            'sender_logistics_id' => $senderCo->id,
+            'receiver_logistics_id' => $receiverCo->id,
+            'origin_hub_id' => $originHub->id,
+            'destination_hub_id' => $destHub->id,
+            'status' => TransferManifest::STATUS_ARRIVED,
+            'total_parcels' => 1,
+            'loaded_parcels' => 1,
+            'received_parcels' => 0,
+            'missing_parcels' => 0,
+            'damaged_parcels' => 0,
+        ]);
+
+        $hubTransfer = HubTransfer::create([
+            'manifest_id' => $manifest->id,
+            'order_id' => $order->id,
+            'tracking_number' => $order->tracking_number,
+            'sender_logistics_id' => $senderCo->id,
+            'sender_hub_id' => $originHub->id,
+            'receiver_logistics_id' => $receiverCo->id,
+            'receiver_hub_id' => $destHub->id,
+            'status' => 'in_transit',
+            'dispatched_at' => now(),
+            'dispatched_by' => $senderCo->id,
+        ]);
+
+        TransferManifestItem::create([
+            'manifest_id' => $manifest->id,
+            'order_id' => $order->id,
+            'hub_transfer_id' => $hubTransfer->id,
+            'tracking_number' => $order->tracking_number,
+            'loading_status' => TransferManifestItem::LOADING_LOADED,
+            'receiving_status' => TransferManifestItem::RECEIVING_PENDING,
+        ]);
+
+        $this->actingAs($receiverCo);
+
+        // Lookup with lowercase + whitespace succeeds with eligible outcome
+        $this->postJson(route('logistics.transfers.manifests.lookup-parcel', $manifest), [
+            'tracking_number' => ' ' . strtolower($order->tracking_number) . "\n",
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'eligible')
+          ->assertJsonPath('data.already_received', false);
+
+        // Wrong tracking number fails with not_on_manifest outcome
+        $this->postJson(route('logistics.transfers.manifests.lookup-parcel', $manifest), [
+            'tracking_number' => 'NX-TRK-WRONGITEM',
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'not_on_manifest');
+
+        // Verify parcel as received
+        $this->post(route('logistics.transfers.manifests.verify-parcel', $manifest), [
+            'tracking_number' => strtolower($order->tracking_number),
+            'classification' => 'received',
+        ])->assertSessionHas('status');
+
+        // Subsequent lookup flags already_received
+        $this->postJson(route('logistics.transfers.manifests.lookup-parcel', $manifest), [
+            'tracking_number' => $order->tracking_number,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'already_received')
+          ->assertJsonPath('data.already_received', true);
+    }
+
+    public function test_one_scan_automatic_incoming_receiving_batch_idempotency_and_security(): void
+    {
+        $companyA = $this->createLogisticsCompany('Auto Scan Co', 'auto_' . uniqid() . '@nexora.test');
+        $companyB = $this->createLogisticsCompany('Other Co', 'other_' . uniqid() . '@nexora.test');
+        $hubA = $this->createHub($companyA, 'Calamba Main', 'CAL-AUTO1');
+        $hubOther = $this->createHub($companyA, 'San Pablo', 'SPB-AUTO1');
+
+        [$buyer, $address] = $this->createBuyer();
+        $seller = $this->createSeller();
+
+        $parcelOne = Order::create([
+            'order_number' => 'NX-ONE-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $companyA->id,
+            'delivery_logistics_id' => $companyA->id,
+            'current_custody_logistics_id' => $companyA->id,
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubA->id,
+            'status' => 'picked_up',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 450.00,
+            'shipping_fee' => 50.00,
+            'total' => 500.00,
+            'placed_at' => now(),
+        ]);
+
+        $parcelTwo = Order::create([
+            'order_number' => 'NX-TWO-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $companyA->id,
+            'delivery_logistics_id' => $companyA->id,
+            'current_custody_logistics_id' => $companyA->id,
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubOther->id,
+            'status' => 'picked_up',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 300.00,
+            'shipping_fee' => 50.00,
+            'total' => 350.00,
+            'placed_at' => now(),
+        ]);
+
+        $flaggedParcel = Order::create([
+            'order_number' => 'NX-FLG-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $companyA->id,
+            'delivery_logistics_id' => $companyA->id,
+            'current_custody_logistics_id' => $companyA->id,
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubOther->id,
+            'status' => 'picked_up',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 250.00,
+            'shipping_fee' => 50.00,
+            'total' => 300.00,
+            'placed_at' => now(),
+        ]);
+
+        OrderStatusHistory::create([
+            'order_id' => $flaggedParcel->id,
+            'status' => 'picked_up',
+            'note' => 'ISSUE FLAGGED: Damaged packaging requires manual inspection.',
+            'changed_by' => $companyA->id,
+        ]);
+
+        $manifestParcel = Order::create([
+            'order_number' => 'NX-MNP-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $companyB->id,
+            'delivery_logistics_id' => $companyA->id,
+            'current_custody_logistics_id' => $companyB->id,
+            'origin_hub_id' => $hubOther->id,
+            'destination_hub_id' => $hubA->id,
+            'status' => 'in_transit_hub',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 600.00,
+            'shipping_fee' => 70.00,
+            'total' => 670.00,
+            'placed_at' => now(),
+        ]);
+
+        $manifest = TransferManifest::create([
+            'manifest_number' => 'MNF-AUTO-' . uniqid(),
+            'sender_logistics_id' => $companyB->id,
+            'receiver_logistics_id' => $companyA->id,
+            'origin_hub_id' => $hubOther->id,
+            'destination_hub_id' => $hubA->id,
+            'status' => TransferManifest::STATUS_IN_TRANSIT,
+            'total_parcels' => 1,
+            'loaded_parcels' => 1,
+            'received_parcels' => 0,
+            'missing_parcels' => 0,
+            'damaged_parcels' => 0,
+        ]);
+
+        TransferManifestItem::create([
+            'manifest_id' => $manifest->id,
+            'order_id' => $manifestParcel->id,
+            'tracking_number' => $manifestParcel->tracking_number,
+            'loading_status' => TransferManifestItem::LOADING_LOADED,
+            'receiving_status' => TransferManifestItem::RECEIVING_PENDING,
+        ]);
+
+        $this->actingAs($companyA);
+
+        // Batch scan 1 (clean lowercase/whitespace normalized)
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => ' ' . strtolower($parcelOne->tracking_number) . "\n",
+            'hub_id' => $hubA->id,
+            'auto_scan' => true,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'received')
+          ->assertJsonPath('newly_received', true)
+          ->assertJsonPath('already_received', false)
+          ->assertJsonPath('data.tracking_number', $parcelOne->tracking_number)
+          ->assertJsonPath('data.status', 'sorted')
+          ->assertJsonPath('counts.awaiting', 2);
+
+        $historyCountAfterFirst = OrderStatusHistory::where('order_id', $parcelOne->id)->count();
+
+        // Duplicate scan of parcel 1 is idempotent (no duplicate receiving history)
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => $parcelOne->tracking_number,
+            'hub_id' => $hubA->id,
+            'auto_scan' => true,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'already_received')
+          ->assertJsonPath('newly_received', false)
+          ->assertJsonPath('already_received', true);
+
+        $this->assertSame(
+            $historyCountAfterFirst,
+            OrderStatusHistory::where('order_id', $parcelOne->id)->count()
+        );
+
+        // Wrong hub blocked
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => $parcelTwo->tracking_number,
+            'hub_id' => $hubOther->id,
+            'auto_scan' => true,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'wrong_hub')
+          ->assertJsonPath('newly_received', false);
+
+        // Correct hub receives parcel 2 continuously
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => $parcelTwo->tracking_number,
+            'hub_id' => $hubA->id,
+            'auto_scan' => true,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'received')
+          ->assertJsonPath('newly_received', true)
+          ->assertJsonPath('data.status', 'received_at_hub')
+          ->assertJsonPath('counts.received', 1)
+          ->assertJsonPath('counts.awaiting', 1);
+
+        // Invalid barcode returns 404 invalid_barcode
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => 'NX-TRK-DOESNOTEXIST',
+            'hub_id' => $hubA->id,
+            'auto_scan' => true,
+        ])->assertStatus(404)
+          ->assertJsonPath('outcome', 'invalid_barcode')
+          ->assertJsonPath('newly_received', false);
+
+        // Flagged parcel blocked from auto-scan acceptance
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => $flaggedParcel->tracking_number,
+            'hub_id' => $hubA->id,
+            'auto_scan' => true,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'flagged_for_investigation')
+          ->assertJsonPath('newly_received', false);
+        $this->assertSame('picked_up', $flaggedParcel->fresh()->status);
+
+        // Active Transfer Manifest parcel cannot bypass manifest workflow
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => $manifestParcel->tracking_number,
+            'hub_id' => $hubA->id,
+            'auto_scan' => true,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'manifest_required')
+          ->assertJsonPath('newly_received', false)
+          ->assertJsonPath('manifest.manifest_number', $manifest->manifest_number);
+
+        // Unauthorized company blocked even when using its own valid hub
+        $hubB = $this->createHub($companyB, 'Unauthorized Co Hub', 'UCH-01');
+        $this->actingAs($companyB);
+        $this->postJson(route('logistics.incoming.scan'), [
+            'identifier' => $parcelTwo->tracking_number,
+            'hub_id' => $hubB->id,
+            'auto_scan' => true,
+        ])->assertStatus(403)
+          ->assertJsonPath('outcome', 'unauthorized_company')
+          ->assertJsonPath('newly_received', false);
+    }
+
+    public function test_manifest_auto_scan_receives_clean_parcels_and_blocks_damaged_or_flagged_items(): void
+    {
+        $senderCo = $this->createLogisticsCompany('Sender Mnf', 'smnf_' . uniqid() . '@nexora.test');
+        $receiverCo = $this->createLogisticsCompany('Receiver Mnf', 'rmnf_' . uniqid() . '@nexora.test');
+        $originHub = $this->createHub($senderCo, 'Calamba Hub M', 'CAL-M9');
+        $destHub = $this->createHub($receiverCo, 'Laguna Hub M', 'LAG-M9');
+
+        [$buyer, $address] = $this->createBuyer();
+        $seller = $this->createSeller();
+
+        $cleanOrder = Order::create([
+            'order_number' => 'NX-CLN-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $senderCo->id,
+            'delivery_logistics_id' => $receiverCo->id,
+            'current_custody_logistics_id' => $senderCo->id,
+            'origin_hub_id' => $originHub->id,
+            'destination_hub_id' => $destHub->id,
+            'status' => 'in_transit_hub',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 500.00,
+            'shipping_fee' => 60.00,
+            'total' => 560.00,
+            'placed_at' => now(),
+        ]);
+
+        $damagedOrder = Order::create([
+            'order_number' => 'NX-DMG-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $senderCo->id,
+            'delivery_logistics_id' => $receiverCo->id,
+            'current_custody_logistics_id' => $senderCo->id,
+            'origin_hub_id' => $originHub->id,
+            'destination_hub_id' => $destHub->id,
+            'status' => 'in_transit_hub',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 400.00,
+            'shipping_fee' => 60.00,
+            'total' => 460.00,
+            'placed_at' => now(),
+        ]);
+
+        $flaggedHistoryOrder = Order::create([
+            'order_number' => 'NX-HST-' . uniqid(),
+            'tracking_number' => 'NX-TRK-' . strtoupper(substr(uniqid(), -8)),
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'address_id' => $address->id,
+            'pickup_logistics_id' => $senderCo->id,
+            'delivery_logistics_id' => $receiverCo->id,
+            'current_custody_logistics_id' => $senderCo->id,
+            'origin_hub_id' => $originHub->id,
+            'destination_hub_id' => $destHub->id,
+            'status' => 'in_transit_hub',
+            'payment_method' => 'cod',
+            'payment_status' => 'unpaid',
+            'subtotal' => 300.00,
+            'shipping_fee' => 60.00,
+            'total' => 360.00,
+            'placed_at' => now(),
+        ]);
+
+        OrderStatusHistory::create([
+            'order_id' => $flaggedHistoryOrder->id,
+            'status' => 'in_transit_hub',
+            'note' => 'ISSUE FLAGGED: Tampered seal noted during transit.',
+            'changed_by' => $senderCo->id,
+        ]);
+
+        $manifest = TransferManifest::create([
+            'manifest_number' => 'MNF-BAT-' . uniqid(),
+            'sender_logistics_id' => $senderCo->id,
+            'receiver_logistics_id' => $receiverCo->id,
+            'origin_hub_id' => $originHub->id,
+            'destination_hub_id' => $destHub->id,
+            'status' => TransferManifest::STATUS_ARRIVED,
+            'total_parcels' => 3,
+            'loaded_parcels' => 3,
+            'received_parcels' => 0,
+            'missing_parcels' => 0,
+            'damaged_parcels' => 1,
+        ]);
+
+        foreach ([
+            [$cleanOrder, TransferManifestItem::RECEIVING_PENDING],
+            [$damagedOrder, TransferManifestItem::RECEIVING_DAMAGED],
+            [$flaggedHistoryOrder, TransferManifestItem::RECEIVING_PENDING],
+        ] as [$ord, $recStatus]) {
+            $ht = HubTransfer::create([
+                'manifest_id' => $manifest->id,
+                'order_id' => $ord->id,
+                'tracking_number' => $ord->tracking_number,
+                'sender_logistics_id' => $senderCo->id,
+                'sender_hub_id' => $originHub->id,
+                'receiver_logistics_id' => $receiverCo->id,
+                'receiver_hub_id' => $destHub->id,
+                'status' => 'in_transit',
+                'dispatched_at' => now(),
+                'dispatched_by' => $senderCo->id,
+            ]);
+
+            TransferManifestItem::create([
+                'manifest_id' => $manifest->id,
+                'order_id' => $ord->id,
+                'hub_transfer_id' => $ht->id,
+                'tracking_number' => $ord->tracking_number,
+                'loading_status' => TransferManifestItem::LOADING_LOADED,
+                'receiving_status' => $recStatus,
+            ]);
+        }
+
+        $this->actingAs($receiverCo);
+
+        // Clean parcel auto-receives on single scan
+        $this->postJson(route('logistics.transfers.manifests.verify-parcel', $manifest), [
+            'tracking_number' => ' ' . strtolower($cleanOrder->tracking_number),
+            'classification' => 'received',
+            'auto_scan' => true,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'received')
+          ->assertJsonPath('newly_received', true)
+          ->assertJsonPath('item.receiving_status', 'received');
+
+        // Duplicate auto-scan is idempotent
+        $this->postJson(route('logistics.transfers.manifests.verify-parcel', $manifest), [
+            'tracking_number' => $cleanOrder->tracking_number,
+            'classification' => 'received',
+            'auto_scan' => true,
+        ])->assertStatus(200)
+          ->assertJsonPath('outcome', 'already_received')
+          ->assertJsonPath('newly_received', false)
+          ->assertJsonPath('already_received', true);
+
+        // Already-damaged item blocked from auto-scan approval
+        $this->postJson(route('logistics.transfers.manifests.verify-parcel', $manifest), [
+            'tracking_number' => $damagedOrder->tracking_number,
+            'classification' => 'received',
+            'auto_scan' => true,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'flagged_for_investigation')
+          ->assertJsonPath('newly_received', false);
+
+        // Item with ISSUE FLAGGED history blocked from auto-scan approval
+        $this->postJson(route('logistics.transfers.manifests.verify-parcel', $manifest), [
+            'tracking_number' => $flaggedHistoryOrder->tracking_number,
+            'classification' => 'received',
+            'auto_scan' => true,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'flagged_for_investigation')
+          ->assertJsonPath('newly_received', false);
+
+        // Parcel belonging to no manifest returns not_on_manifest
+        $this->postJson(route('logistics.transfers.manifests.verify-parcel', $manifest), [
+            'tracking_number' => 'NX-TRK-WRONGMNF',
+            'classification' => 'received',
+            'auto_scan' => true,
+        ])->assertStatus(422)
+          ->assertJsonPath('outcome', 'not_on_manifest')
+          ->assertJsonPath('newly_received', false);
     }
 }

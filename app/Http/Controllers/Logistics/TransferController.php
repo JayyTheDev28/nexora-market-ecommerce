@@ -6,20 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Models\Hub;
 use App\Models\HubTransfer;
 use App\Models\Order;
+use App\Models\ParcelIncident;
 use App\Models\TransferManifest;
 use App\Models\TransferManifestItem;
 use App\Models\User;
 use App\Services\InterRegionLogisticsService;
+use App\Services\ParcelIncidentService;
 use App\Services\TransferManifestService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class TransferController extends Controller
 {
     public function __construct(
         protected InterRegionLogisticsService $logisticsService,
-        protected TransferManifestService $manifestService
+        protected TransferManifestService $manifestService,
+        protected ParcelIncidentService $incidentService
     ) {}
 
     /**
@@ -116,14 +121,15 @@ class TransferController extends Controller
                   ->orWhereNull('destination_hub_id')
                   ->orWhereColumn('current_hub_id', '!=', 'destination_hub_id');
             })
-            ->with(['buyer', 'address', 'currentHub.logisticsCompany', 'originHub.logisticsCompany', 'destinationHub.logisticsCompany', 'pickupLogistics', 'deliveryLogistics'])
+            ->with(['buyer', 'address', 'currentHub.logisticsCompany', 'originHub.logisticsCompany', 'destinationHub.logisticsCompany', 'pickupLogistics', 'deliveryLogistics', 'unresolvedIncidents'])
             ->orderByDesc('updated_at')
             ->get();
 
         // Separate cleanly routed parcels from parcels requiring routing review
         $eligibleForManifest = $candidateOrders
             ->filter(fn (Order $order) => $order->hasValidTransferRouting()
-                && (int) $order->currentHub->logistics_company_id === (int) $companyId)
+                && (int) $order->currentHub->logistics_company_id === (int) $companyId
+                && ! $order->hasUnresolvedHandlingRestrictions())
             ->values();
 
         $routingReviewParcels = $candidateOrders
@@ -141,7 +147,7 @@ class TransferController extends Controller
                 $q->where('sender_logistics_id', $companyId)
                   ->orWhere('receiver_logistics_id', $companyId);
             })
-            ->with(['originHub', 'destinationHub', 'assignedCourier', 'senderLogistics', 'receiverLogistics', 'items'])
+            ->with(['originHub', 'destinationHub', 'assignedCourier', 'senderLogistics', 'receiverLogistics', 'items', 'incidents'])
             ->latest()
             ->limit(25)
             ->get();
@@ -274,6 +280,13 @@ class TransferController extends Controller
             'assignedCourier.courierProfile',
             'items.order',
             'items.hubTransfer',
+            'items.receivedByUser',
+            'items.incidents.reporter',
+            'items.incidents.resolver',
+            'items.incidents.hub',
+            'incidents.reporter',
+            'incidents.resolver',
+            'incidents.hub',
         ]);
 
         $receivingCounts = $this->manifestService->getReceivingCounts($manifest->id);
@@ -323,6 +336,7 @@ class TransferController extends Controller
 
         if ((int) $manifest->receiver_logistics_id !== $companyId) {
             return response()->json([
+                'outcome' => 'unauthorized',
                 'message' => 'Only authorized staff of the receiving logistics company can verify incoming parcels.',
             ], 403);
         }
@@ -331,34 +345,64 @@ class TransferController extends Controller
             'tracking_number' => ['required', 'string', 'max:100'],
         ]);
 
-        $normalized = trim($validated['tracking_number']);
+        $normalized = \App\Models\Order::normalizeScanIdentifier($validated['tracking_number']);
+        if ($normalized === '') {
+            return response()->json([
+                'outcome' => 'invalid_barcode',
+                'message' => 'Scanned barcode is empty or contains invalid characters.',
+            ], 422);
+        }
+
         $manifest->loadMissing(['destinationHub', 'originHub']);
 
         $item = $manifest->items()
             ->with(['order.buyer', 'order.address', 'order.seller.sellerProfile'])
             ->where(function ($q) use ($normalized) {
                 $q->where('tracking_number', $normalized)
-                  ->orWhereHas('order', fn ($oq) => $oq->where('order_number', $normalized));
+                  ->orWhereRaw('UPPER(tracking_number) = ?', [$normalized])
+                  ->orWhereHas('order', fn ($oq) => $oq->where('order_number', $normalized)->orWhereRaw('UPPER(order_number) = ?', [$normalized]));
             })
             ->first();
 
         if (! $item) {
             return response()->json([
+                'outcome' => 'not_on_manifest',
                 'message' => "Tracking number '{$normalized}' does not belong to manifest {$manifest->manifest_number}.",
             ], 422);
         }
 
         $order = $item->order;
         $counts = $this->manifestService->getReceivingCounts($manifest->id);
+        $alreadyReceived = $item->receiving_status === \App\Models\TransferManifestItem::RECEIVING_RECEIVED;
+        $canVerifyManifest = in_array($manifest->status, [
+            TransferManifest::STATUS_ARRIVED,
+            TransferManifest::STATUS_RECEIVING,
+            TransferManifest::STATUS_EXCEPTION,
+        ], true);
+
+        $outcome = match (true) {
+            $alreadyReceived => 'already_received',
+            ! $canVerifyManifest => 'manifest_not_ready',
+            default => 'eligible',
+        };
+
+        $message = match ($outcome) {
+            'already_received' => "Parcel {$item->tracking_number} has already been received and verified on manifest {$manifest->manifest_number}.",
+            'manifest_not_ready' => "Manifest {$manifest->manifest_number} is currently " . strtoupper(str_replace('_', ' ', $manifest->status)) . ". Only arrived or active receiving manifests can verify parcels.",
+            default => "Parcel {$item->tracking_number} verified on manifest {$manifest->manifest_number}. Choose condition to confirm.",
+        };
 
         return response()->json([
+            'outcome' => $outcome,
             'data' => [
+                'outcome' => $outcome,
                 'item_id' => $item->id,
                 'tracking_number' => $item->tracking_number,
                 'order_number' => $order?->order_number,
                 'loading_status' => $item->loading_status,
                 'receiving_status' => $item->receiving_status,
-                'already_received' => $item->receiving_status === \App\Models\TransferManifestItem::RECEIVING_RECEIVED,
+                'already_received' => $alreadyReceived,
+                'can_verify' => $canVerifyManifest,
                 'issue_notes' => $item->issue_notes,
                 'sender_name' => $order?->seller?->sellerProfile?->business_name ?? $order?->seller?->full_name ?? 'Merchant',
                 'recipient_name' => $order?->address?->recipient_name ?? $order?->buyer?->full_name ?? 'Customer',
@@ -369,31 +413,109 @@ class TransferController extends Controller
                 'destination_hub' => $manifest->destinationHub ? "{$manifest->destinationHub->name} ({$manifest->destinationHub->code})" : 'Destination Hub',
                 'receiving_counts' => $counts,
             ],
-            'message' => "Parcel {$item->tracking_number} verified on manifest {$manifest->manifest_number}. Choose condition to confirm.",
+            'message' => $message,
         ]);
     }
 
     /**
      * Receiving hub operator scans/verifies an incoming parcel on a manifest.
      */
-    public function verifyManifestParcel(Request $request, TransferManifest $manifest): RedirectResponse
+    public function verifyManifestParcel(Request $request, TransferManifest $manifest): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'tracking_number' => ['required', 'string', 'max:100'],
             'classification' => ['required', 'string', 'in:received,missing,damaged,discrepancy'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'auto_scan' => ['nullable', 'boolean'],
         ]);
 
-        $result = $this->manifestService->verifyReceivingParcel(
-            $manifest,
-            $validated['tracking_number'],
-            $validated['classification'],
-            $request->user(),
-            $validated['notes'] ?? null
-        );
+        $trackingNumber = Order::normalizeScanIdentifier($validated['tracking_number']);
+        if ($trackingNumber === '') {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'outcome' => 'invalid_barcode',
+                    'newly_received' => false,
+                    'already_received' => false,
+                    'message' => 'Scanned barcode is empty or invalid.',
+                ], 422);
+            }
+
+            return back()->withErrors(['tracking_number' => 'Scanned barcode is empty or invalid.']);
+        }
+
+        $autoScan = $request->boolean('auto_scan');
+
+        try {
+            $result = $this->manifestService->verifyReceivingParcel(
+                $manifest,
+                $trackingNumber,
+                $validated['classification'],
+                $request->user(),
+                $validated['notes'] ?? null,
+                $autoScan
+            );
+        } catch (HttpExceptionInterface $e) {
+            if (! $request->expectsJson()) {
+                throw $e;
+            }
+
+            $msg = $e->getMessage() ?: 'Unable to verify manifest parcel.';
+            $lower = strtolower($msg);
+            $outcome = match (true) {
+                $e->getStatusCode() === 403 => 'unauthorized',
+                str_contains($lower, 'flagged for investigation') => 'flagged_for_investigation',
+                str_contains($lower, 'does not belong to manifest') => 'not_on_manifest',
+                str_contains($lower, 'must arrive') || str_contains($lower, 'completed') => 'manifest_not_ready',
+                default => 'invalid_barcode',
+            };
+
+            return response()->json([
+                'outcome' => $outcome,
+                'newly_received' => false,
+                'already_received' => false,
+                'message' => $msg,
+            ], $e->getStatusCode());
+        }
 
         $label = ucfirst($validated['classification']);
-        return back()->with('status', "Parcel {$validated['tracking_number']} marked as {$label}. Manifest status: " . strtoupper(str_replace('_', ' ', $result['manifest']->status)) . '.');
+        $manifestModel = $result['manifest'];
+        $item = $result['item'];
+        $isIdempotent = (bool) ($result['already_verified'] ?? $result['idempotent'] ?? false);
+        $isReceived = $validated['classification'] === TransferManifestItem::RECEIVING_RECEIVED;
+        $statusText = $isIdempotent
+            ? "Parcel {$item->tracking_number} was already received on manifest {$manifestModel->manifest_number}."
+            : "Parcel {$item->tracking_number} marked as {$label}. Manifest status: " . strtoupper(str_replace('_', ' ', $manifestModel->status)) . '.';
+
+        if ($request->expectsJson()) {
+            $manifestModel->loadMissing('destinationHub');
+            $item->loadMissing('incidents');
+            $outcome = match (true) {
+                $isIdempotent && $isReceived => 'already_received',
+                $isReceived => 'received',
+                default => 'classified',
+            };
+
+            return response()->json([
+                'outcome' => $outcome,
+                'newly_received' => ! $isIdempotent && $isReceived,
+                'already_received' => $isIdempotent && $isReceived,
+                'manifest_status' => $manifestModel->status,
+                'destination_hub' => $manifestModel->destinationHub
+                    ? "{$manifestModel->destinationHub->name} ({$manifestModel->destinationHub->code})"
+                    : 'Destination Hub',
+                'counts' => $result['counts'],
+                'item' => [
+                    'id' => $item->id,
+                    'tracking_number' => $item->tracking_number,
+                    'receiving_status' => $item->receiving_status,
+                    'issue_notes' => $item->issue_notes,
+                    'condition_summary' => $item->condition_summary,
+                ],
+                'message' => $statusText,
+            ]);
+        }
+
+        return back()->with('status', $statusText);
     }
 
     /**
@@ -439,6 +561,97 @@ class TransferController extends Controller
         $updated = $this->manifestService->removeParcelFromManifest($manifest, $item, $request->user());
 
         return back()->with('status', "Parcel {$item->tracking_number} removed from manifest {$updated->manifest_number} and returned to available staging if eligible.");
+    }
+
+    /**
+     * Report post-receipt damage on an already-received manifest parcel without overwriting receipt history.
+     */
+    public function reportManifestItemDamage(Request $request, TransferManifest $manifest, TransferManifestItem $item): RedirectResponse|JsonResponse
+    {
+        $damageKeys = implode(',', array_keys(ParcelIncident::DAMAGE_TYPES));
+        $validated = $request->validate([
+            'damage_type' => ['required', 'string', "in:{$damageKeys}"],
+            'description' => ['required', 'string', 'min:3', 'max:1000'],
+            'evidence' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $incident = $this->incidentService->reportPostReceiptDamage(
+            $manifest,
+            $item,
+            $request->user(),
+            $validated,
+            $request->file('evidence')
+        );
+
+        $message = "Post-receipt damage report logged for parcel {$incident->tracking_number}. Original receipt record remains preserved.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'incident' => $incident,
+            ], 201);
+        }
+
+        return back()->with('status', $message);
+    }
+
+    /**
+     * Report an already-received manifest parcel as missing/lost post-receipt without overwriting receipt history.
+     */
+    public function reportManifestItemMissing(Request $request, TransferManifest $manifest, TransferManifestItem $item): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'description' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        $incident = $this->incidentService->reportPostReceiptMissing(
+            $manifest,
+            $item,
+            $request->user(),
+            $validated['description']
+        );
+
+        $message = "Parcel {$incident->tracking_number} reported missing/lost after receipt. Investigation status is now Open.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'incident' => $incident,
+            ], 201);
+        }
+
+        return back()->with('status', $message);
+    }
+
+    /**
+     * Transition investigation status on a manifest parcel incident (Open / Under Investigation / Found / Resolved).
+     */
+    public function updateIncidentStatus(Request $request, TransferManifest $manifest, ParcelIncident $incident): RedirectResponse|JsonResponse
+    {
+        $statuses = implode(',', ParcelIncident::ALL_STATUSES);
+        $validated = $request->validate([
+            'investigation_status' => ['required', 'string', "in:{$statuses}"],
+            'resolution_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $updated = $this->incidentService->updateIncidentStatus(
+            $incident,
+            $request->user(),
+            $validated['investigation_status'],
+            $validated['resolution_notes'] ?? null,
+            $manifest
+        );
+
+        $message = "Incident for parcel {$updated->tracking_number} updated to {$updated->status_label}.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'incident' => $updated,
+            ]);
+        }
+
+        return back()->with('status', $message);
     }
 }
 

@@ -134,24 +134,34 @@
         }
         .barcode-section {
             text-align: center;
-            padding: 12px 18px;
+            padding: 14px 16px;
             background: #ffffff;
             border: 2px solid #000;
             margin-bottom: 12px;
+        }
+        .label-4x6 .barcode-section {
+            padding: 12px 10px;
         }
         .barcode-wrap {
             display: flex;
             justify-content: center;
             align-items: center;
             background: #ffffff;
-            padding: 10px 22px;
+            padding: 12px 24px;
             margin: 6px auto;
         }
+        .label-4x6 .barcode-wrap {
+            padding: 10px 16px;
+        }
         .barcode-wrap svg {
-            max-width: 100%;
-            height: auto;
+            width: 100%;
+            max-width: 480px;
+            height: 84px;
             display: block;
             shape-rendering: crispEdges;
+        }
+        .label-4x6 .barcode-wrap svg {
+            height: 76px;
         }
         .tracking-text {
             font-family: 'Courier New', Courier, monospace;

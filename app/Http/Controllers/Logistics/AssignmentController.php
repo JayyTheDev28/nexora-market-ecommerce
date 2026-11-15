@@ -118,6 +118,17 @@ class AssignmentController extends Controller
                 "Order cannot be assigned in status '" . ucwords(str_replace('_', ' ', $lockedOrder->status)) . "'."
             );
 
+            if ($lockedOrder->hasUnresolvedHandlingRestrictions()) {
+                $restrictionMessage = "Parcel {$lockedOrder->order_number} has an unresolved damage or missing incident and cannot proceed through normal rider dispatch.";
+                if ($request->expectsJson()) {
+                    abort(422, $restrictionMessage);
+                }
+
+                return back()->withInput()->withErrors([
+                    'courier_id' => $restrictionMessage,
+                ]);
+            }
+
             // Guard: If parcel requires a hub transfer and has not reached the destination hub yet
             if ($lockedOrder->requiresHubTransfer() && (int) $lockedOrder->current_hub_id !== (int) $lockedOrder->destination_hub_id) {
                 return back()->withInput()->withErrors([
@@ -206,7 +217,12 @@ class AssignmentController extends Controller
         }
 
         $count = 0;
+        $blockedCount = 0;
         foreach ($orders as $order) {
+            if ($order->hasUnresolvedHandlingRestrictions()) {
+                $blockedCount++;
+                continue;
+            }
             OrderLogisticsService::transition(
                 order: $order,
                 newStatus: 'assigned_to_rider',
@@ -217,6 +233,12 @@ class AssignmentController extends Controller
                 ]
             );
             $count++;
+        }
+
+        if ($count === 0 && $blockedCount > 0) {
+            return back()->withErrors([
+                'courier_id' => "{$blockedCount} sorted parcel(s) in '{$area->name}' could not be dispatched because they have unresolved damage or missing incidents.",
+            ]);
         }
 
         return back()->with('status', "Successfully assigned {$count} sorted parcel(s) in '{$area->name}' to rider {$courier->full_name}.");

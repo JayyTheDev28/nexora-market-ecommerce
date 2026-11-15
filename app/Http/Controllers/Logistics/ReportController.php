@@ -12,6 +12,7 @@ use App\Models\Hub;
 use App\Models\LogisticsAdminRemittance;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Models\ParcelIncident;
 use App\Models\RiderEarning;
 use App\Models\TransferManifest;
 use App\Models\User;
@@ -100,6 +101,22 @@ class ReportController extends Controller
                         $tc['parcels_moved'],
                         number_format($tc['period_earnings'], 2, '.', ''),
                         number_format($tc['paid_out'], 2, '.', ''),
+                    ]);
+                }
+            } elseif ($reportType === 'exceptions') {
+                fputcsv($out, ['Tracking #', 'Manifest #', 'Incident Type', 'Stage', 'Status', 'Hub', 'Description', 'Reported By', 'Reported At', 'Resolved At']);
+                foreach ($data['incidentReport']['incidents'] as $inc) {
+                    fputcsv($out, [
+                        $inc->tracking_number,
+                        $inc->manifest?->manifest_number ?? '',
+                        ucfirst($inc->incident_type),
+                        str_replace('_', ' ', $inc->source_stage),
+                        $inc->status_label,
+                        $inc->hub?->name ?? '',
+                        $inc->description,
+                        $inc->reporter?->full_name ?? '',
+                        $inc->reported_at?->toDateTimeString() ?? '',
+                        $inc->resolved_at?->toDateTimeString() ?? '',
                     ]);
                 }
             } else {
@@ -302,6 +319,34 @@ class ReportController extends Controller
         $reconciliation = $this->reconciliationService->runReconciliationReport($companyId);
         $hubs = Hub::where('logistics_company_id', $companyId)->orderBy('name')->get();
 
+        // 7. Parcel Incidents & Exceptions (Damage, Missing/Lost & Discrepancy)
+        $incidentsQuery = ParcelIncident::query()
+            ->where(function ($q) use ($companyId) {
+                $q->where('logistics_company_id', $companyId)
+                    ->orWhereHas('manifest', fn ($mq) => $mq->where('sender_logistics_id', $companyId)->orWhere('receiver_logistics_id', $companyId));
+            })
+            ->whereBetween('reported_at', [$startDate, $endDate])
+            ->with(['order', 'manifest', 'hub', 'reporter', 'resolver'])
+            ->latest('reported_at');
+
+        if ($hubId) {
+            $incidentsQuery->where('hub_id', $hubId);
+        }
+
+        $incidents = $incidentsQuery->get();
+        $unresolvedIncidents = $incidents->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED);
+
+        $incidentReport = [
+            'incidents' => $incidents,
+            'total' => $incidents->count(),
+            'unresolved_total' => $unresolvedIncidents->count(),
+            'open_damage' => $unresolvedIncidents->where('incident_type', ParcelIncident::TYPE_DAMAGE)->count(),
+            'open_missing' => $unresolvedIncidents->where('incident_type', ParcelIncident::TYPE_MISSING)->count(),
+            'under_investigation' => $incidents->where('investigation_status', ParcelIncident::STATUS_UNDER_INVESTIGATION)->count(),
+            'found' => $incidents->where('investigation_status', ParcelIncident::STATUS_FOUND)->count(),
+            'resolved' => $incidents->where('investigation_status', ParcelIncident::STATUS_RESOLVED)->count(),
+        ];
+
         return compact(
             'metrics',
             'statusCounts',
@@ -313,6 +358,7 @@ class ReportController extends Controller
             'adminReport',
             'profitability',
             'reconciliation',
+            'incidentReport',
             'hubs',
             'fromInput',
             'toInput',

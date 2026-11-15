@@ -95,19 +95,33 @@ class Order extends Model
      * Resolve a parcel unambiguously by canonical tracking number first,
      * falling back to unique legacy order_number only when unmatched.
      */
+    /**
+     * Normalize barcode/manual scan text (strip USB scanner CR/LF/control chars & whitespace, uppercase).
+     */
+    public static function normalizeScanIdentifier(string $identifier): string
+    {
+        $cleaned = preg_replace('/[\x00-\x1F\x7F\s]+/', '', trim($identifier)) ?? '';
+
+        return strtoupper($cleaned);
+    }
+
     public static function findByScanIdentifier(string $identifier): ?self
     {
-        $normalized = trim($identifier);
+        $normalized = static::normalizeScanIdentifier($identifier);
         if ($normalized === '') {
             return null;
         }
 
-        $byTracking = static::where('tracking_number', $normalized)->first();
+        $byTracking = static::where('tracking_number', $normalized)->first()
+            ?? static::whereRaw('UPPER(tracking_number) = ?', [$normalized])->first();
         if ($byTracking) {
             return $byTracking;
         }
 
-        $byOrderNumber = static::where('order_number', $normalized)->limit(2)->get();
+        $byOrderNumber = static::where('order_number', $normalized)
+            ->orWhereRaw('UPPER(order_number) = ?', [$normalized])
+            ->limit(2)
+            ->get();
 
         return $byOrderNumber->count() === 1 ? $byOrderNumber->first() : null;
     }
@@ -208,6 +222,54 @@ class Order extends Model
     public function manifestItems()
     {
         return $this->hasMany(TransferManifestItem::class);
+    }
+
+    public function incidents()
+    {
+        return $this->hasMany(ParcelIncident::class)->latest('reported_at');
+    }
+
+    public function unresolvedIncidents()
+    {
+        return $this->hasMany(ParcelIncident::class)
+            ->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED)
+            ->latest('reported_at');
+    }
+
+    public function hasUnresolvedHandlingRestrictions(): bool
+    {
+        if ($this->relationLoaded('unresolvedIncidents')) {
+            return $this->unresolvedIncidents->isNotEmpty();
+        }
+
+        return ParcelIncident::where('order_id', $this->id)
+            ->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED)
+            ->exists();
+    }
+
+    public function hasUnresolvedMissingIncident(): bool
+    {
+        return ParcelIncident::where('order_id', $this->id)
+            ->where('incident_type', ParcelIncident::TYPE_MISSING)
+            ->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED)
+            ->exists();
+    }
+
+    public function hasBlockingFlagHistoryOrIncidents(): bool
+    {
+        if ($this->hasUnresolvedHandlingRestrictions()) {
+            return true;
+        }
+
+        // Preserve blocking behavior for legacy/direct 'ISSUE FLAGGED:' history entries when no resolved incident covers them
+        $hasIncidents = ParcelIncident::where('order_id', $this->id)->exists();
+        if (! $hasIncidents) {
+            return OrderStatusHistory::where('order_id', $this->id)
+                ->where('note', 'like', 'ISSUE FLAGGED:%')
+                ->exists();
+        }
+
+        return false;
     }
 
     public function requiresHubTransfer(): bool

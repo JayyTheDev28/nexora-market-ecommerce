@@ -202,8 +202,8 @@ class OrderController extends Controller
         $barcodeSvg = $generator->getBarcode(
             $trackingNumber,
             BarcodeGenerator::TYPE_CODE_128,
-            2.2,
-            72,
+            2.0,
+            84,
             '#000000'
         );
 

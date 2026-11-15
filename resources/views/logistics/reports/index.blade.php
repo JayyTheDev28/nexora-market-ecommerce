@@ -72,6 +72,9 @@
                     <button type="button" @click="tab = 'rider_performance'" :class="tab === 'rider_performance' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'" class="px-4 py-2 rounded-full cursor-pointer">Rider Performance</button>
                     <button type="button" @click="tab = 'courier_performance'" :class="tab === 'courier_performance' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'" class="px-4 py-2 rounded-full cursor-pointer">Transfer Couriers</button>
                     <button type="button" @click="tab = 'profitability'" :class="tab === 'profitability' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'" class="px-4 py-2 rounded-full cursor-pointer">Profitability & Routes</button>
+                    <button type="button" @click="tab = 'exceptions'" :class="tab === 'exceptions' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'" class="px-4 py-2 rounded-full cursor-pointer">
+                        Damage &amp; Missing Incidents ({{ $incidentReport['unresolved_total'] }})
+                    </button>
                 </div>
 
                 {{-- TAB 1: Operations --}}
@@ -200,6 +203,71 @@
                                     </tr>
                                 @empty
                                     <tr><td colspan="6" class="py-6 text-center text-outline">No completed deliveries in range to analyze routes.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {{-- TAB 7: Damage, Missing & Discrepancy Incidents --}}
+                <div x-show="tab === 'exceptions'" class="space-y-6">
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Unresolved Damage</span><strong class="text-2xl text-rose-700">{{ $incidentReport['open_damage'] }}</strong></div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Missing / Lost</span><strong class="text-2xl text-rose-800">{{ $incidentReport['open_missing'] }}</strong></div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Under Investigation</span><strong class="text-2xl text-amber-700">{{ $incidentReport['under_investigation'] }}</strong></div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Found</span><strong class="text-2xl text-indigo-700">{{ $incidentReport['found'] }}</strong></div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Resolved</span><strong class="text-2xl text-emerald-700">{{ $incidentReport['resolved'] }}</strong></div>
+                    </div>
+
+                    <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 overflow-x-auto">
+                        <h3 class="text-sm font-bold mb-3">Parcel Damage, Missing &amp; Discrepancy Exception Report</h3>
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="border-b border-outline-variant text-[11px] uppercase text-on-surface-variant">
+                                    <th class="pb-2">Tracking #</th>
+                                    <th class="pb-2">Manifest</th>
+                                    <th class="pb-2">Type &amp; Stage</th>
+                                    <th class="pb-2">Status</th>
+                                    <th class="pb-2">Hub</th>
+                                    <th class="pb-2">Details &amp; Evidence</th>
+                                    <th class="pb-2">Reported</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-outline-variant/40">
+                                @forelse($incidentReport['incidents'] as $inc)
+                                    <tr>
+                                        <td class="py-2.5 font-mono font-bold">{{ $inc->tracking_number }}</td>
+                                        <td class="py-2.5">
+                                            @if ($inc->manifest)
+                                                <a href="{{ route('logistics.transfers.manifests.show', $inc->manifest) }}" class="text-primary font-semibold hover:underline">{{ $inc->manifest->manifest_number }}</a>
+                                            @else
+                                                —
+                                            @endif
+                                        </td>
+                                        <td class="py-2.5">
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $inc->incident_type === 'missing' ? 'bg-rose-600 text-white' : ($inc->incident_type === 'damage' ? 'bg-rose-500/15 text-rose-700' : 'bg-amber-500/15 text-amber-800') }}">
+                                                {{ ucfirst($inc->incident_type) }}
+                                            </span>
+                                            <span class="block text-[10px] text-on-surface-variant mt-0.5">{{ str_replace('_', ' ', ucfirst($inc->source_stage)) }}</span>
+                                        </td>
+                                        <td class="py-2.5 font-semibold">{{ $inc->status_label }}</td>
+                                        <td class="py-2.5">{{ $inc->hub?->name ?? '—' }}</td>
+                                        <td class="py-2.5 max-w-xs">
+                                            @if ($inc->damage_type_label)
+                                                <span class="font-semibold text-on-surface">[{{ $inc->damage_type_label }}]</span>
+                                            @endif
+                                            <span>{{ $inc->description }}</span>
+                                            @if ($inc->evidence_url)
+                                                <a href="{{ $inc->evidence_url }}" target="_blank" class="ml-1 text-primary underline text-[11px]">Evidence</a>
+                                            @endif
+                                        </td>
+                                        <td class="py-2.5 text-[11px] text-on-surface-variant">
+                                            {{ $inc->reporter?->full_name ?? 'Operator' }}<br>
+                                            {{ $inc->reported_at?->format('M d, Y H:i') }}
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="7" class="py-6 text-center text-outline">No parcel damage or missing incidents in this date range.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
