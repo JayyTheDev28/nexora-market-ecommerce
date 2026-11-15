@@ -544,4 +544,126 @@ class InterRegionLogisticsTest extends TestCase
 
         $controller->store($request);
     }
+
+    /**
+     * TEST: Hub transfer index page renders cleanly and dispatch modal works.
+     */
+    public function test_hub_transfers_index_page_renders_cleanly_with_modal(): void
+    {
+        $this->actingAs($this->lagunaCompany);
+
+        $response = $this->get(route('logistics.transfers.index'));
+
+        $response->assertOk();
+        $response->assertSee('Hub Transfers & Cross-Docking');
+        $response->assertSee('Dispatch Hub Transfer');
+        $response->assertSee('modalOpen');
+        $response->assertSee('stagedOrders');
+    }
+
+    /**
+     * TEST: Two-hop transfer succeeds on both first and second dispatch.
+     * Prevents regression of 422 error on second dispatch when parcel is at intermediate hub.
+     */
+    public function test_two_hop_transfer_first_and_second_dispatch_success(): void
+    {
+        $this->actingAs($this->lagunaCompany);
+
+        $intermediateHub = Hub::create([
+            'logistics_company_id' => $this->lagunaCompany->id,
+            'name' => 'Calamba Transfer Hub',
+            'code' => 'HUB-LAG-CAL-' . uniqid(),
+            'hub_type' => 'sorting_center',
+            'province_code' => '043400000',
+            'province_name' => 'Laguna',
+            'city_code' => '043404000',
+            'city_name' => 'City of Calamba',
+            'barangay_code' => '043404001',
+            'barangay_name' => 'Barandal',
+            'street' => 'Expressway Exit',
+            'is_active' => true,
+        ]);
+
+        // 1. Order originated in Laguna Santa Cruz, destined for Cavite Bacoor
+        $order = Order::create([
+            'order_number' => 'ORD-2HOP-' . strtoupper(uniqid()),
+            'tracking_number' => 'NX-2HOP-' . strtoupper(uniqid()),
+            'seller_id' => $this->sellerLaguna->id,
+            'buyer_id' => $this->buyerCavite->id,
+            'address_id' => $this->buyerCavite->address->id,
+            'pickup_logistics_id' => $this->lagunaCompany->id,
+            'delivery_logistics_id' => $this->caviteCompany->id,
+            'origin_hub_id' => $this->lagunaHub->id,
+            'destination_hub_id' => $this->caviteHub->id,
+            'current_hub_id' => $this->lagunaHub->id,
+            'current_custody_logistics_id' => $this->lagunaCompany->id,
+            'sorting_center_id' => $this->lagunaCompany->id,
+            'status' => 'received_at_hub',
+            'subtotal' => 1000.00,
+            'total' => 1100.00,
+            'shipping_fee' => 100.00,
+            'payment_status' => 'pending',
+            'payment_method' => 'cod',
+            'shipping_province' => 'Cavite',
+            'shipping_city' => 'City of Bacoor',
+            'shipping_barangay' => 'Alima',
+        ]);
+
+        // Hop 1 (First Dispatch): Laguna Santa Cruz Hub -> Calamba Intermediate Hub
+        $dispatch1Response = $this->post(route('logistics.transfers.dispatch', $order), [
+            'sender_hub_id' => $this->lagunaHub->id,
+            'receiver_hub_id' => $intermediateHub->id,
+            'notes' => 'Feeder leg 1: Santa Cruz to Calamba Sorting Hub',
+        ]);
+
+        $dispatch1Response->assertRedirect();
+        $order->refresh();
+        $this->assertEquals('in_transit_hub', $order->status);
+
+        $transfer1 = $order->transfers()->latest()->first();
+        $this->assertNotNull($transfer1);
+        $this->assertEquals($this->lagunaHub->id, $transfer1->sender_hub_id);
+        $this->assertEquals($intermediateHub->id, $transfer1->receiver_hub_id);
+
+        // Receive at intermediate hub (Calamba Hub)
+        $this->service->confirmHubTransferReceipt(
+            transfer: $transfer1,
+            actor: $this->lagunaCompany,
+            notes: 'Parcel arrived at Calamba intermediate hub'
+        );
+
+        $order->refresh();
+        $this->assertEquals('received_at_hub', $order->status);
+        $this->assertEquals($intermediateHub->id, $order->current_hub_id);
+        $this->assertEquals($this->caviteHub->id, $order->destination_hub_id);
+
+        // Hop 2 (Second Dispatch): Calamba Hub -> Cavite Bacoor Hub (Final Destination Hub)
+        // This was previously throwing 422 before the fix!
+        $dispatch2Response = $this->post(route('logistics.transfers.dispatch', $order), [
+            'sender_hub_id' => $intermediateHub->id,
+            'receiver_hub_id' => $this->caviteHub->id,
+            'notes' => 'Linehaul leg 2: Calamba to Bacoor Hub',
+        ]);
+
+        $dispatch2Response->assertRedirect();
+        $order->refresh();
+        $this->assertEquals('in_transit_hub', $order->status);
+
+        $transfer2 = $order->transfers()->latest('id')->first();
+        $this->assertNotNull($transfer2);
+        $this->assertEquals($intermediateHub->id, $transfer2->sender_hub_id);
+        $this->assertEquals($this->caviteHub->id, $transfer2->receiver_hub_id);
+
+        // Cavite receives at final hub
+        $this->service->confirmHubTransferReceipt(
+            transfer: $transfer2,
+            actor: $this->caviteCompany,
+            notes: 'Arrived at final Cavite destination hub'
+        );
+
+        $order->refresh();
+        $this->assertEquals('received_at_hub', $order->status);
+        $this->assertEquals($this->caviteHub->id, $order->current_hub_id);
+        $this->assertEquals($this->caviteCompany->id, $order->current_custody_logistics_id);
+    }
 }

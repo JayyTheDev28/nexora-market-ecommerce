@@ -132,7 +132,9 @@ class HubController extends Controller
             'barangay_code' => ['required', 'string', 'max:20'],
             'barangay_name' => ['required', 'string', 'max:100'],
             'street_address' => ['nullable', 'string', 'max:255'],
-            'contact_number' => ['nullable', 'string', 'max:50'],
+            'contact_number' => ['nullable', 'string', 'regex:/^09\d{9}$/'],
+        ], [
+            'contact_number.regex' => 'The contact number must be exactly 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         Hub::create(array_merge($validated, [
@@ -171,7 +173,9 @@ class HubController extends Controller
             'barangay_code' => ['required', 'string', 'max:20'],
             'barangay_name' => ['required', 'string', 'max:100'],
             'street_address' => ['nullable', 'string', 'max:255'],
-            'contact_number' => ['nullable', 'string', 'max:50'],
+            'contact_number' => ['nullable', 'string', 'regex:/^09\d{9}$/'],
+        ], [
+            'contact_number.regex' => 'The contact number must be exactly 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         $hub->update($validated);

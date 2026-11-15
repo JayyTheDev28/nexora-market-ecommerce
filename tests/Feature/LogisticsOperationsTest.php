@@ -97,7 +97,7 @@ class LogisticsOperationsTest extends TestCase
             'contact_number' => '09180000001',
             'email' => 'courier1_' . uniqid() . '@nexora.test',
             'password' => Hash::make('password'),
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'active',
             'email_verified_at' => now(),
@@ -119,7 +119,7 @@ class LogisticsOperationsTest extends TestCase
             'contact_number' => '09180000002',
             'email' => 'courier2_' . uniqid() . '@nexora.test',
             'password' => Hash::make('password'),
-            'role' => 'courier',
+            'role' => 'rider',
             'approval_status' => 'approved',
             'account_status' => 'active',
             'email_verified_at' => now(),
@@ -479,5 +479,58 @@ class LogisticsOperationsTest extends TestCase
         $this->assertEquals('UpdatedManager', $this->sortingCenter->first_name);
         $this->assertEquals('logistics', $this->sortingCenter->role); // Role remains protected
         $this->assertEquals('Nexora Hub Updated Laguna', $this->sortingCenter->sortingCenterProfile->business_name);
+    }
+
+    public function test_rider_management_index_renders_coverage_zones_and_no_legacy_delivery_areas(): void
+    {
+        $zone = \App\Models\Zone::create([
+            'logistics_company_id' => $this->sortingCenter->id,
+            'name' => 'Zone Alpha - Laguna',
+            'code' => 'Z-ALPHA',
+            'province_code' => '043400000',
+            'province_name' => 'Laguna',
+            'city_code' => '043426000',
+            'city_name' => 'Santa Cruz',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->sortingCenter)
+            ->get('/logistics/riders');
+
+        $response->assertStatus(200);
+        $response->assertSee('Hub Delivery Coverage Zones');
+        $response->assertSee('Coverage Zones');
+        $response->assertSee('Zone Alpha - Laguna');
+        $response->assertDontSee('New Delivery Area');
+        $response->assertDontSee('Hub Delivery Coverage Areas');
+    }
+
+    public function test_logistics_can_assign_coverage_zones_to_rider(): void
+    {
+        $zone = \App\Models\Zone::create([
+            'logistics_company_id' => $this->sortingCenter->id,
+            'name' => 'Zone Beta - Liliw',
+            'code' => 'Z-BETA',
+            'province_code' => '043400000',
+            'province_name' => 'Laguna',
+            'city_code' => '043411000',
+            'city_name' => 'Liliw',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->sortingCenter)
+            ->post("/logistics/riders/{$this->courier1->id}/assign-zones", [
+                'zone_ids' => [$zone->id],
+            ]);
+
+        $response->assertSessionHas('status');
+        $this->assertTrue($this->courier1->fresh()->assignedZones->contains($zone->id));
+
+        $showResponse = $this->actingAs($this->sortingCenter)
+            ->get("/logistics/riders/{$this->courier1->id}");
+
+        $showResponse->assertStatus(200);
+        $showResponse->assertSee('Assigned Coverage Zones');
+        $showResponse->assertSee('Zone Beta - Liliw');
     }
 }

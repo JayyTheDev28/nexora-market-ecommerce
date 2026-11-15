@@ -294,11 +294,11 @@ class AuthController extends Controller
             ], 401);
         }
 
-        if (! $user->isRider()) {
+        if (! $user->isMobileDeliveryPersonnel()) {
             return response()->json([
-                'message' => 'Access denied. Account is not a registered rider.',
+                'message' => 'Access denied. Account is not a registered rider or transfer courier.',
                 'errors' => [
-                    'role' => ['Access denied. Account is not a registered rider.'],
+                    'role' => ['Access denied. Account is not a registered rider or transfer courier.'],
                 ],
             ], 403);
         }
@@ -331,14 +331,15 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken('rider-app')->plainTextToken;
-        $profile = $user->courierProfile()->with('sortingCenter')->first();
+        $token = $user->createToken($user->isCourier() ? 'courier-app' : 'rider-app')->plainTextToken;
+        $profile = $user->courierProfile()->with(['sortingCenter', 'logisticsCompany', 'assignedHub'])->first();
 
         return response()->json([
             'data' => [
                 'token' => $token,
+                'role' => $user->role,
                 'user' => new UserResource($user),
-                'courier_profile' => new RiderProfileResource($profile),
+                'courier_profile' => $profile ? new RiderProfileResource($profile) : null,
             ],
             'message' => 'Login successful.',
         ]);
@@ -403,12 +404,13 @@ class AuthController extends Controller
         $user = $request->user();
 
         $data = [
+            'role' => $user->role,
             'user' => new UserResource($user),
         ];
 
-        if ($user->isRider()) {
-            $profile = $user->courierProfile()->with('sortingCenter')->first();
-            $data['courier_profile'] = new RiderProfileResource($profile);
+        if ($user->isMobileDeliveryPersonnel()) {
+            $profile = $user->courierProfile()->with(['sortingCenter', 'logisticsCompany', 'assignedHub'])->first();
+            $data['courier_profile'] = $profile ? new RiderProfileResource($profile) : null;
         }
 
         return response()->json([

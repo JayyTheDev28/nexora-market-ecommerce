@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Address;
 use App\Models\Commission;
 use App\Models\DeliveryArea;
+use App\Models\Hub;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderStatusHistory;
@@ -12,6 +13,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\UserVoucher;
 use App\Models\Voucher;
+use App\Models\Zone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -310,12 +312,78 @@ class MobileCheckoutService
             ]);
         }
 
-        // Rule 6: Delivery area coverage checking
-        if (DeliveryArea::exists()) {
-            $isCovered = DeliveryArea::where(function ($q) use ($address) {
-                $q->where('name', 'LIKE', "%{$address->province_name}%")
-                  ->orWhere('name', 'LIKE', "%{$address->municipality_name}%");
-            })->exists();
+        // Rule 6: Courier servicing area checking
+        $hasConfiguredLogistics = DeliveryArea::exists() || Hub::where('is_active', true)->exists() || Zone::where('is_active', true)->exists();
+
+        if ($hasConfiguredLogistics) {
+            $isCovered = false;
+
+            // 1. Check InterRegionLogisticsService resolution
+            try {
+                $route = app(\App\Services\InterRegionLogisticsService::class)->resolveCoverage(
+                    $address->barangay_code,
+                    $address->municipality_code,
+                    $address->province_code,
+                    $address->barangay_name,
+                    $address->municipality_name,
+                    $address->province_name
+                );
+                if ($route !== null) {
+                    $isCovered = true;
+                }
+            } catch (\Throwable $e) {
+                // Ignore resolution error
+            }
+
+            // 2. Check Hubs covering the province or city
+            if (! $isCovered) {
+                $isCovered = Hub::where('is_active', true)
+                    ->where(function ($q) use ($address) {
+                        if ($address->province_code) {
+                            $q->where('province_code', $address->province_code);
+                        }
+                        if ($address->city_code || $address->municipality_code) {
+                            $code = $address->city_code ?: $address->municipality_code;
+                            $q->orWhere('city_code', $code);
+                        }
+                        if ($address->province_name) {
+                            $q->orWhere('province_name', 'LIKE', "%{$address->province_name}%");
+                        }
+                        if ($address->municipality_name) {
+                            $q->orWhere('city_name', 'LIKE', "%{$address->municipality_name}%")
+                              ->orWhere('name', 'LIKE', "%{$address->municipality_name}%");
+                        }
+                    })->exists();
+            }
+
+            // 3. Check Zones covering the province or city
+            if (! $isCovered) {
+                $isCovered = Zone::where('is_active', true)
+                    ->where(function ($q) use ($address) {
+                        if ($address->province_code) {
+                            $q->where('province_code', $address->province_code);
+                        }
+                        if ($address->city_code || $address->municipality_code) {
+                            $code = $address->city_code ?: $address->municipality_code;
+                            $q->orWhere('city_code', $code);
+                        }
+                        if ($address->province_name) {
+                            $q->orWhere('province_name', 'LIKE', "%{$address->province_name}%");
+                        }
+                        if ($address->municipality_name) {
+                            $q->orWhere('city_name', 'LIKE', "%{$address->municipality_name}%")
+                              ->orWhere('name', 'LIKE', "%{$address->municipality_name}%");
+                        }
+                    })->exists();
+            }
+
+            // 4. Check legacy DeliveryArea
+            if (! $isCovered && DeliveryArea::exists()) {
+                $isCovered = DeliveryArea::where(function ($q) use ($address) {
+                    $q->where('name', 'LIKE', "%{$address->province_name}%")
+                      ->orWhere('name', 'LIKE', "%{$address->municipality_name}%");
+                })->exists();
+            }
 
             if (! $isCovered) {
                 throw ValidationException::withMessages([

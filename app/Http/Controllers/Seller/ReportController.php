@@ -5,17 +5,20 @@ namespace App\Http\Controllers\Seller;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\SellerPayoutRequest;
+use App\Services\CodFinancialService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ReportController extends Controller
 {
+    public function __construct(protected CodFinancialService $financialService) {}
+
     public function index(Request $request): View
     {
-        $sellerId = $request->user()->id;
+        $seller = $request->user();
+        $sellerId = $seller->id;
 
         $from = $request->query('from') ? Carbon::parse($request->query('from'))->startOfDay() : now()->startOfMonth();
         $to = $request->query('to') ? Carbon::parse($request->query('to'))->endOfDay() : now()->endOfDay();
@@ -38,48 +41,11 @@ class ReportController extends Controller
         });
 
         $totalCommission = $orders->flatMap->commissions->sum('commission_amount');
-        $netEarnings = max(0, $grossSales - $totalCommission);
+        $netEarnings = max(0.00, $grossSales - $totalCommission);
         $byStatus = $orders->groupBy('status')->map->count();
 
-        // Lifetime financial balances
-        $allCompletedOrders = Order::where(function ($q) use ($sellerId) {
-            $q->where('seller_id', $sellerId)
-              ->orWhereHas('items.product', fn ($sq) => $sq->where('seller_id', $sellerId));
-        })
-        ->whereIn('status', ['delivered', 'completed'])
-        ->with([
-            'items' => fn ($q) => $q->whereHas('product', fn ($sq) => $sq->where('seller_id', $sellerId)),
-            'commissions' => fn ($q) => $q->where('seller_id', $sellerId),
-        ])
-        ->get();
-
-        $lifetimeCompletedGross = $allCompletedOrders->sum(function ($o) use ($sellerId) {
-            $itemTotal = $o->items->where('product.seller_id', $sellerId)->sum(fn ($i) => $i->price * $i->quantity);
-            return $itemTotal > 0 ? $itemTotal : (float) $o->subtotal;
-        });
-        $lifetimeCommission = $allCompletedOrders->flatMap->commissions->sum('commission_amount');
-        if ($lifetimeCommission <= 0 && $lifetimeCompletedGross > 0) {
-            $lifetimeCommission = $lifetimeCompletedGross * 0.10;
-        }
-        $totalLifetimeNet = max(0, $lifetimeCompletedGross - $lifetimeCommission);
-
-        // Pending earnings (in transit / processing orders)
-        $pendingOrders = Order::where(function ($q) use ($sellerId) {
-            $q->where('seller_id', $sellerId)
-              ->orWhereHas('items.product', fn ($sq) => $sq->where('seller_id', $sellerId));
-        })
-        ->whereNotIn('status', ['delivered', 'completed', 'cancelled', 'returned'])
-        ->with(['items' => fn ($q) => $q->whereHas('product', fn ($sq) => $sq->where('seller_id', $sellerId))])
-        ->get();
-
-        $pendingEarnings = $pendingOrders->sum(fn ($o) => $o->items->sum(fn ($i) => $i->price * $i->quantity) * 0.90);
-
-        // Total payouts already requested (pending or processed)
-        $payoutsRequested = (float) SellerPayoutRequest::where('seller_id', $sellerId)
-            ->whereIn('status', ['pending', 'processed'])
-            ->sum('amount');
-
-        $availableBalance = max(0, round($totalLifetimeNet - $payoutsRequested, 2));
+        // Comprehensive financial overview from verified COD remittance ledger
+        $financialOverview = $this->financialService->getSellerFinancialOverview($seller);
 
         // Payout history
         $payoutRequests = SellerPayoutRequest::where('seller_id', $sellerId)
@@ -95,16 +61,24 @@ class ReportController extends Controller
             'commission' => $totalCommission,
             'netPayout' => $netEarnings,
             'byStatus' => $byStatus,
-            'pendingEarnings' => $pendingEarnings,
-            'availableBalance' => $availableBalance,
+
+            // Financial breakdown cards per Section 7 & 9
+            'pendingEarnings' => $financialOverview['pendingInTransitEarnings'],
+            'earningsWaitingLogistics' => $financialOverview['earningsWaitingLogistics'],
+            'settledEarnings' => $financialOverview['verifiedEarningsPayable'],
+            'availableBalance' => $financialOverview['availableBalance'],
+            'pendingPayouts' => $financialOverview['pendingPayouts'],
+            'completedPayouts' => $financialOverview['completedPayouts'],
+            'platformCommissionDeducted' => $financialOverview['platformCommissionDeducted'],
+            'lifetimeCompletedGross' => $financialOverview['grossSales'],
+
             'payoutRequests' => $payoutRequests,
-            'lifetimeCompletedGross' => $lifetimeCompletedGross,
         ]);
     }
 
     public function requestPayout(Request $request): RedirectResponse
     {
-        $sellerId = $request->user()->id;
+        $seller = $request->user();
 
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:500'],
@@ -114,51 +88,16 @@ class ReportController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        // Calculate current available balance
-        $allCompletedOrders = Order::where(function ($q) use ($sellerId) {
-            $q->where('seller_id', $sellerId)
-              ->orWhereHas('items.product', fn ($sq) => $sq->where('seller_id', $sellerId));
-        })
-        ->whereIn('status', ['delivered', 'completed'])
-        ->with([
-            'items' => fn ($q) => $q->whereHas('product', fn ($sq) => $sq->where('seller_id', $sellerId)),
-            'commissions' => fn ($q) => $q->where('seller_id', $sellerId),
-        ])
-        ->get();
-
-        $lifetimeCompletedGross = $allCompletedOrders->sum(function ($o) use ($sellerId) {
-            $itemTotal = $o->items->where('product.seller_id', $sellerId)->sum(fn ($i) => $i->price * $i->quantity);
-            return $itemTotal > 0 ? $itemTotal : (float) $o->subtotal;
-        });
-        $lifetimeCommission = $allCompletedOrders->flatMap->commissions->sum('commission_amount');
-        if ($lifetimeCommission <= 0 && $lifetimeCompletedGross > 0) {
-            $lifetimeCommission = $lifetimeCompletedGross * 0.10;
-        }
-        $totalLifetimeNet = max(0, $lifetimeCompletedGross - $lifetimeCommission);
-
-        $payoutsRequested = (float) SellerPayoutRequest::where('seller_id', $sellerId)
-            ->whereIn('status', ['pending', 'processed'])
-            ->sum('amount');
-
-        $availableBalance = max(0, round($totalLifetimeNet - $payoutsRequested, 2));
-
-        if ((float) $validated['amount'] > $availableBalance) {
-            return back()->withErrors([
-                'amount' => "Requested payout (₱" . number_format($validated['amount'], 2) . ") exceeds your available balance (₱" . number_format($availableBalance, 2) . ").",
-            ]);
-        }
-
-        SellerPayoutRequest::create([
-            'seller_id' => $sellerId,
-            'amount' => $validated['amount'],
-            'payout_method' => $validated['payout_method'],
-            'account_name' => $validated['account_name'],
-            'account_number' => $validated['account_number'],
-            'status' => 'pending',
-            'notes' => $validated['notes'] ?? null,
-        ]);
+        $this->financialService->requestSellerPayout(
+            $seller,
+            (float) $validated['amount'],
+            $validated['payout_method'],
+            $validated['account_name'],
+            $validated['account_number'],
+            $validated['notes'] ?? null
+        );
 
         return redirect()->route('seller.reports.index')
-            ->with('status', "Payout request for ₱" . number_format($validated['amount'], 2) . " has been submitted for processing.");
+            ->with('status', "Payout withdrawal request for ₱" . number_format($validated['amount'], 2) . " has been submitted for Admin approval.");
     }
 }

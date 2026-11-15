@@ -237,7 +237,7 @@ class InterRegionLogisticsService
     ): ?User {
         // Base candidate pool: riders strictly belonging to this company, online, approved, active
         $baseQuery = fn () => User::query()
-            ->whereIn('role', ['rider', 'courier'])
+            ->where('role', 'rider')
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->whereNotIn('id', $excludeRiderIds)
@@ -354,9 +354,10 @@ class InterRegionLogisticsService
         Hub $senderHub,
         Hub $receiverHub,
         User $actor,
-        ?string $notes = null
+        ?string $notes = null,
+        ?int $manifestId = null
     ): HubTransfer {
-        return DB::transaction(function () use ($order, $senderHub, $receiverHub, $actor, $notes) {
+        return DB::transaction(function () use ($order, $senderHub, $receiverHub, $actor, $notes, $manifestId) {
             // Validate sender custody
             abort_unless(
                 (int) $order->current_custody_logistics_id === (int) $senderHub->logistics_company_id,
@@ -373,6 +374,7 @@ class InterRegionLogisticsService
             $isInternal = (int) $senderHub->logistics_company_id === (int) $receiverHub->logistics_company_id;
 
             $transfer = HubTransfer::create([
+                'manifest_id' => $manifestId,
                 'order_id' => $order->id,
                 'tracking_number' => $order->tracking_number,
                 'sender_logistics_id' => $senderHub->logistics_company_id,
@@ -445,25 +447,35 @@ class InterRegionLogisticsService
 
             $order = $transfer->order;
 
+            $buyerBarangayCode = $order->address?->barangay_code ?? ($order->address_snapshot['barangay_code'] ?? null);
+            $buyerCityCode = $order->address?->municipality_code ?? ($order->address_snapshot['municipality_code'] ?? null);
+            $buyerProvinceCode = $order->address?->province_code ?? ($order->address_snapshot['province_code'] ?? null);
+            $buyerBarangayName = $order->address?->barangay_name ?? ($order->address_snapshot['barangay_name'] ?? null);
+            $buyerCityName = $order->address?->municipality_name ?? ($order->address_snapshot['municipality_name'] ?? null);
+            $buyerProvinceName = $order->address?->province_name ?? ($order->address_snapshot['province_name'] ?? null);
+
+            $deliveryRoute = $this->resolveCoverage(
+                $buyerBarangayCode,
+                $buyerCityCode,
+                $buyerProvinceCode,
+                $buyerBarangayName,
+                $buyerCityName,
+                $buyerProvinceName
+            );
+
+            $ultimateHubId = $deliveryRoute['hub_id'] ?? $order->destination_hub_id;
+            $ultimateZoneId = $deliveryRoute['zone_id'] ?? $order->delivery_zone_id;
+
             $orderUpdates = [
                 'status' => 'received_at_hub',
                 'current_hub_id' => $transfer->receiver_hub_id,
                 'current_custody_logistics_id' => $receiverLogisticsId,
                 'sorting_center_id' => $receiverLogisticsId, // so receiver's dashboard has it
-                'destination_hub_id' => $transfer->receiver_hub_id,
+                'destination_hub_id' => $ultimateHubId ?: $transfer->receiver_hub_id,
             ];
 
-            // Auto-match destination delivery area if available
-            $matchedArea = \App\Models\DeliveryArea::where('sorting_center_id', $receiverLogisticsId)
-                ->where(function ($q) use ($order) {
-                    if ($order->address?->municipality_name) {
-                        $q->where('name', 'like', "%{$order->address->municipality_name}%");
-                    }
-                })
-                ->first();
-
-            if ($matchedArea && empty($order->delivery_area_id)) {
-                $orderUpdates['delivery_area_id'] = $matchedArea->id;
+            if ($ultimateZoneId) {
+                $orderUpdates['delivery_zone_id'] = $ultimateZoneId;
             }
 
             // Custody transfers to receiving company! Parcel appears in destination hub inventory

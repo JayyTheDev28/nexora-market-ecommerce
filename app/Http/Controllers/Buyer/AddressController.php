@@ -117,20 +117,30 @@ class AddressController extends Controller
         abort_if($address->user_id !== $request->user()->id, 403);
 
         $user = $request->user();
-        $totalAddresses = $user->addresses()->count();
 
-        // If user has other addresses and this is the default, prevent deletion unless another is chosen first
-        // Or automatically designate another address as default.
-        if ($address->is_default && $totalAddresses > 1) {
-            // Promote the most recently updated remaining address to default
-            $nextDefault = $user->addresses()->where('id', '!=', $address->id)->latest('updated_at')->first();
-            if ($nextDefault) {
-                $nextDefault->update(['is_default' => true]);
-            }
+        try {
+            DB::transaction(function () use ($user, $address) {
+                $totalAddresses = $user->addresses()->count();
+
+                // If user has other addresses and this is the default, promote remaining address to default
+                if ($address->is_default && $totalAddresses > 1) {
+                    $nextDefault = $user->addresses()
+                        ->where('id', '!=', $address->id)
+                        ->latest('updated_at')
+                        ->first();
+
+                    if ($nextDefault) {
+                        $nextDefault->update(['is_default' => true]);
+                    }
+                }
+
+                $address->delete();
+            });
+
+            return back()->with('status', 'Address removed successfully.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to delete address {$address->id}: " . $e->getMessage());
+            return back()->withErrors(['address' => 'Unable to remove address at this time. Please try again.']);
         }
-
-        $address->delete();
-
-        return back()->with('status', 'Address removed successfully.');
     }
 }

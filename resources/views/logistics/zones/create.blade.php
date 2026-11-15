@@ -64,31 +64,35 @@
                     <div class="pt-4 border-t border-outline-variant/60">
                         <h2 class="text-xs font-bold uppercase tracking-wider text-primary mb-3">Geographic Region</h2>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {{-- Province --}}
+                            {{-- Fixed Province (Locked to Logistics Account's Region) --}}
                             <div>
-                                <label class="block text-xs font-medium text-on-surface mb-1.5">Province <span class="text-rose-500">*</span></label>
-                                <select x-model="selectedProvinceCode" @change="onProvinceChange()" required
-                                        class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
-                                    <option value="">Select Province</option>
-                                    <template x-for="p in provinces" :key="p.code">
-                                        <option :value="p.code" x-text="p.name"></option>
-                                    </template>
-                                </select>
-                                <input type="hidden" name="province_code" :value="selectedProvinceCode">
-                                <input type="hidden" name="province_name" :value="selectedProvinceName">
+                                <label class="block text-xs font-medium text-on-surface mb-1.5 flex items-center justify-between">
+                                    <span>Province</span>
+                                    <span class="text-[10px] uppercase font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Operating Region (Fixed)</span>
+                                </label>
+                                <div class="px-3.5 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-low text-xs font-semibold text-on-surface flex items-center justify-between shadow-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">location_on</span>
+                                        <span>{{ $companyProvinceName }}</span>
+                                    </div>
+                                    <span class="text-[11px] text-on-surface-variant font-medium">Assigned</span>
+                                </div>
+                                <input type="hidden" name="province_code" value="{{ $companyProvinceCode }}">
+                                <input type="hidden" name="province_name" value="{{ $companyProvinceName }}">
                             </div>
 
-                            {{-- City --}}
+                            {{-- City / Municipality Pre-Loaded --}}
                             <div>
                                 <label class="block text-xs font-medium text-on-surface mb-1.5">City / Municipality <span class="text-rose-500">*</span></label>
-                                <select x-model="selectedCityCode" @change="onCityChange()" :disabled="!selectedProvinceCode" required
-                                        class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary disabled:opacity-50">
-                                    <option value="">Select City/Municipality</option>
-                                    <template x-for="c in cities" :key="c.code">
-                                        <option :value="c.code" x-text="c.name"></option>
-                                    </template>
+                                <select name="city_code" x-model="selectedCityCode" @change="onCityChange()" required
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
+                                    <option value="">Select City / Municipality ({{ count($cities) }} available)</option>
+                                    @foreach ($cities as $city)
+                                        <option value="{{ $city->code }}" {{ old('city_code') == $city->code ? 'selected' : '' }}>
+                                            {{ $city->name }}
+                                        </option>
+                                    @endforeach
                                 </select>
-                                <input type="hidden" name="city_code" :value="selectedCityCode">
                                 <input type="hidden" name="city_name" :value="selectedCityName">
                             </div>
                         </div>
@@ -119,7 +123,7 @@
 
                         <div x-show="!loading && !selectedCityCode" class="p-6 text-center bg-surface-container-low rounded-xl border border-outline-variant/40">
                             <span class="material-symbols-outlined text-2xl text-on-surface-variant mb-1">map</span>
-                            <p class="text-xs text-on-surface-variant">Please select a Province and City above to view and assign barangays.</p>
+                            <p class="text-xs text-on-surface-variant">Please select a City / Municipality above to view and assign barangays.</p>
                         </div>
 
                         {{-- Coverage Summary Stats --}}
@@ -216,13 +220,12 @@
 <script>
 function zonePicker() {
     return {
-        provinces: @json($provinces),
-        cities: [],
+        cities: @json($cities),
         barangays: [],
         loading: false,
 
-        selectedProvinceCode: '{{ old('province_code', '') }}',
-        selectedProvinceName: '{{ old('province_name', '') }}',
+        selectedProvinceCode: '{{ $companyProvinceCode }}',
+        selectedProvinceName: '{{ $companyProvinceName }}',
         selectedCityCode: '{{ old('city_code', '') }}',
         selectedCityName: '{{ old('city_name', '') }}',
         selectedBarangayCodes: @json(old('barangay_codes', [])),
@@ -238,24 +241,12 @@ function zonePicker() {
         },
 
         async init() {
-            if (this.selectedProvinceCode) {
-                await this.fetchCities(this.selectedProvinceCode);
-                if (this.selectedCityCode) {
-                    await this.fetchBarangays(this.selectedCityCode);
+            if (this.selectedCityCode) {
+                const c = this.cities.find(item => item.code === this.selectedCityCode);
+                if (c && !this.selectedCityName) {
+                    this.selectedCityName = c.name;
                 }
-            }
-        },
-
-        async onProvinceChange() {
-            const p = this.provinces.find(item => item.code === this.selectedProvinceCode);
-            this.selectedProvinceName = p ? p.name : '';
-            this.selectedCityCode = '';
-            this.selectedCityName = '';
-            this.selectedBarangayCodes = [];
-            this.cities = [];
-            this.barangays = [];
-            if (this.selectedProvinceCode) {
-                await this.fetchCities(this.selectedProvinceCode);
+                await this.fetchBarangays(this.selectedCityCode);
             }
         },
 
@@ -288,15 +279,6 @@ function zonePicker() {
 
         deselectAll() {
             this.selectedBarangayCodes = [];
-        },
-
-        async fetchCities(provCode) {
-            try {
-                const res = await fetch(`/locations/provinces/${provCode}/cities`);
-                this.cities = await res.json();
-            } catch (e) {
-                console.error('Failed to load cities:', e);
-            }
         },
 
         async fetchBarangays(cityCode) {

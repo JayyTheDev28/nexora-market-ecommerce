@@ -242,8 +242,8 @@ class BuyerSeeder extends Seeder
 
         // 9. Sample Active Order (Out for delivery)
         $activeProduct = Product::where('slug', 'artisan-ceramic-pour-over-set')->first() ?? $products->skip(1)->first();
-        $courier = User::where('role', 'courier')->first();
-        $sortingCenter = User::where('role', 'sorting_center')->first();
+        $courier = User::whereIn('role', ['courier', 'rider'])->first();
+        $sortingCenter = User::whereIn('role', ['sorting_center', 'logistics'])->first();
 
         if ($activeProduct) {
             $activeOrder = Order::updateOrCreate(

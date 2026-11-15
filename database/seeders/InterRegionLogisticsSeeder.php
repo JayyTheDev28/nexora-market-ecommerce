@@ -156,10 +156,24 @@ class InterRegionLogisticsSeeder extends Seeder
             ]
         );
 
+        $lagunaZone4 = Zone::updateOrCreate(
+            ['logistics_company_id' => $lagunaCompany->id, 'name' => 'Pagsanjan Zone'],
+            [
+                'hub_id' => $lagunaHub1->id,
+                'code' => 'ZONE-LAG-PAG',
+                'province_code' => '043400000',
+                'province_name' => 'Laguna',
+                'city_code' => '043419000',
+                'city_name' => 'Pagsanjan',
+                'is_active' => true,
+            ]
+        );
+
         // Seed Zone Barangays for Laguna
         $this->attachBarangaysToZone($lagunaZone1, '043426000', ['043426001', '043426002', '043426003', '043426006', '043426011']);
         $this->attachBarangaysToZone($lagunaZone2, '043411000', ['043411001', '043411002', '043411004', '043411005', '043411009']);
         $this->attachBarangaysToZone($lagunaZone3, '043404000', ['043404001', '043404002', '043404011', '043404042', '043404050']);
+        $this->attachBarangaysToZone($lagunaZone4, '043419000', ['043419001', '043419002', '043419003', '043419004', '043419009']);
 
         // Laguna Riders
         $lagunaRider1 = $this->createOrUpdateRider(
@@ -184,11 +198,47 @@ class InterRegionLogisticsSeeder extends Seeder
             [$lagunaZone3->id]
         );
 
-        // Also ensure user 134 (existing Juan Rider 01) is assigned to Laguna Zone 1
-        $existingRider = User::find(134);
-        if ($existingRider) {
-            $existingRider->assignedZones()->syncWithoutDetaching([$lagunaZone1->id]);
+        // Also ensure default rider accounts are assigned to their respective real coverage zones
+        $defaultRiders = User::whereIn('email', ['rider@nexora.test', 'rider1@nexora.test'])->get();
+        foreach ($defaultRiders as $dRider) {
+            $dRider->assignedZones()->syncWithoutDetaching([$lagunaZone1->id]);
+            if ($dRider->courierProfile) {
+                $dRider->courierProfile->update([
+                    'logistics_company_id' => $lagunaCompany->id,
+                    'sorting_center_id' => $lagunaCompany->id,
+                    'is_online' => true,
+                ]);
+            }
         }
+
+        // Carlos Rider 02 (rider2@nexora.test) -> Pagsanjan Zone
+        $rider2 = User::where('email', 'rider2@nexora.test')->first();
+        if ($rider2) {
+            $rider2->assignedZones()->sync([$lagunaZone4->id]);
+            if ($rider2->courierProfile) {
+                $rider2->courierProfile->update([
+                    'logistics_company_id' => $lagunaCompany->id,
+                    'sorting_center_id' => $lagunaCompany->id,
+                    'is_online' => true,
+                ]);
+            }
+        }
+
+        // Mateo Rider 03 (rider3@nexora.test) -> Los Baños Zone
+        $rider3 = User::where('email', 'rider3@nexora.test')->first();
+        if ($rider3) {
+            $rider3->assignedZones()->sync([$lagunaZone2->id]);
+            if ($rider3->courierProfile) {
+                $rider3->courierProfile->update([
+                    'logistics_company_id' => $lagunaCompany->id,
+                    'sorting_center_id' => $lagunaCompany->id,
+                    'is_online' => true,
+                ]);
+            }
+        }
+
+        // Remove legacy delivery areas for clean zone-only operation
+        \App\Models\DeliveryArea::where('sorting_center_id', $lagunaCompany->id)->delete();
 
 
         // ==========================================

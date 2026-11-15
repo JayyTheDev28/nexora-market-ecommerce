@@ -19,6 +19,9 @@
 
     $openDisputesCount = \App\Models\Dispute::whereIn('status', ['open', 'under_review'])->count();
 
+    $pendingRemittancesCount = \App\Models\LogisticsAdminRemittance::whereIn('status', ['pending', 'under_review'])->count();
+    $pendingSellerPayoutsCount = \App\Models\SellerPayoutRequest::where('status', 'pending')->count();
+
     $sections = [
         [
             'title' => null,
@@ -38,6 +41,8 @@
         [
             'title' => 'FINANCES & AUDITS',
             'items' => [
+                'logistics-remittances' => ['label' => 'Logistics Remittances', 'icon' => 'local_shipping', 'url' => route('admin.logistics-remittances.index'), 'badge' => $pendingRemittancesCount ?: null, 'badgeColor' => 'bg-amber-500 text-white'],
+                'seller-payouts' => ['label' => 'Seller Payouts', 'icon' => 'account_balance_wallet', 'url' => route('admin.seller-payouts.index'), 'badge' => $pendingSellerPayoutsCount ?: null, 'badgeColor' => 'bg-primary text-on-primary'],
                 'commissions' => ['label' => 'Commissions (10%)', 'icon' => 'payments', 'url' => route('admin.commissions.index'), 'badge' => null],
                 'reports' => ['label' => 'Reports & analytics', 'icon' => 'bar_chart', 'url' => route('admin.reports.index'), 'badge' => null],
                 'audit-logs' => ['label' => 'Audit trail', 'icon' => 'history', 'url' => route('admin.audit-logs.index'), 'badge' => null],

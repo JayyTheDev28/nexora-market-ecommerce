@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Logistics;
 use App\Http\Controllers\Controller;
 use App\Models\Hub;
 use App\Models\PsgcBarangay;
+use App\Models\PsgcCity;
 use App\Models\PsgcProvince;
 use App\Models\User;
 use App\Models\Zone;
@@ -36,20 +37,64 @@ class ZoneController extends Controller
     }
 
     /**
+     * Resolve the assigned province for a logistics company account.
+     */
+    protected function resolveCompanyProvince(User $company): array
+    {
+        $code = $company->address?->province_code;
+        $name = $company->address?->province_name;
+
+        if (! $code) {
+            $hub = $company->hubs()->first();
+            $code = $hub?->province_code;
+            $name = $hub?->province_name;
+        }
+
+        if (! $code && $company->logisticsProfile?->province) {
+            $prov = PsgcProvince::where('name', 'like', '%' . $company->logisticsProfile->province . '%')->first();
+            $code = $prov?->code;
+            $name = $prov?->name;
+        }
+
+        return [
+            'code' => $code ?: '043400000',
+            'name' => $name ?: 'Laguna',
+        ];
+    }
+
+    /**
      * Show the form for creating a new zone.
      */
     public function create(Request $request): View
     {
-        $companyId = $request->user()->id;
+        $company = $request->user();
+        $companyId = $company->id;
         $hubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->get();
-        $provinces = PsgcProvince::orderBy('name')->get();
-        $riders = User::whereIn('role', ['rider', 'courier'])
+
+        $province = $this->resolveCompanyProvince($company);
+        $companyProvinceCode = $province['code'];
+        $companyProvinceName = $province['name'];
+
+        // Pre-fetch all cities for the company's operating province (supports any province in the Philippines)
+        $cities = PsgcCity::where('province_code', $companyProvinceCode)
+            ->orderBy('name')
+            ->get(['code', 'name', 'province_code', 'province_name']);
+
+        if ($cities->isEmpty()) {
+            $cities = app(\App\Http\Controllers\Api\LocationApiController::class)->syncCitiesForProvince($companyProvinceCode);
+        }
+
+        if ($cities->isEmpty()) {
+            $cities = app(\App\Http\Controllers\Api\LocationApiController::class)->syncCitiesForProvince($companyProvinceCode);
+        }
+
+        $riders = User::where('role', 'rider')
             ->whereHas('courierProfile', fn ($q) => $q->where('logistics_company_id', $companyId)->orWhere('sorting_center_id', $companyId))
             ->where('approval_status', 'approved')
             ->orderBy('first_name')
             ->get();
 
-        return view('logistics.zones.create', compact('hubs', 'provinces', 'riders'));
+        return view('logistics.zones.create', compact('hubs', 'companyProvinceCode', 'companyProvinceName', 'cities', 'riders'));
     }
 
     /**
@@ -57,7 +102,24 @@ class ZoneController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $companyId = $request->user()->id;
+        $company = $request->user();
+        $companyId = $company->id;
+        $province = $this->resolveCompanyProvince($company);
+
+        // Enforce province locked to company account
+        if (! $request->filled('province_code')) {
+            $request->merge([
+                'province_code' => $province['code'],
+                'province_name' => $province['name'],
+            ]);
+        }
+
+        if ($request->filled('city_code') && ! $request->filled('city_name')) {
+            $cityObj = PsgcCity::where('code', $request->input('city_code'))->first();
+            if ($cityObj) {
+                $request->merge(['city_name' => $cityObj->name]);
+            }
+        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
@@ -72,16 +134,22 @@ class ZoneController extends Controller
             'rider_ids.*' => ['exists:users,id'],
         ]);
 
-        // Enforce: Coverage must live in one place only per logistics company
-        $existingCoverage = ZoneBarangay::where('logistics_company_id', $companyId)
-            ->whereIn('barangay_code', $validated['barangay_codes'])
-            ->with('zone')
+        // Enforce: Area exclusivity across all logistics providers ("Must not have a same logistics within the same area")
+        $existingCoverage = ZoneBarangay::whereIn('barangay_code', $validated['barangay_codes'])
+            ->with(['zone', 'logisticsCompany.logisticsProfile', 'logisticsCompany'])
             ->get();
 
         if ($existingCoverage->isNotEmpty()) {
-            $conflicts = $existingCoverage->map(fn ($c) => "{$c->barangay_name} (already in zone '{$c->zone?->name}')")->implode(', ');
+            $conflicts = $existingCoverage->map(function ($c) use ($companyId) {
+                if ((int) $c->logistics_company_id === (int) $companyId) {
+                    return "{$c->barangay_name} (already in your zone '{$c->zone?->name}')";
+                }
+                $compName = $c->logisticsCompany?->logisticsProfile?->company_name ?? $c->logisticsCompany?->name ?? 'another logistics provider';
+                return "{$c->barangay_name} (already served by {$compName})";
+            })->implode(', ');
+
             throw ValidationException::withMessages([
-                'barangay_codes' => "Coverage must live in one place only. The following barangays are already covered by other zones of your company: {$conflicts}",
+                'barangay_codes' => "Area exclusivity violation: The following barangays are already covered: {$conflicts}",
             ]);
         }
 
@@ -126,12 +194,25 @@ class ZoneController extends Controller
      */
     public function edit(Request $request, Zone $zone): View
     {
-        $companyId = $request->user()->id;
+        $company = $request->user();
+        $companyId = $company->id;
         abort_unless((int) $zone->logistics_company_id === (int) $companyId, 403);
 
         $hubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->get();
-        $provinces = PsgcProvince::orderBy('name')->get();
-        $riders = User::whereIn('role', ['rider', 'courier'])
+
+        $province = $this->resolveCompanyProvince($company);
+        $companyProvinceCode = $zone->province_code ?: $province['code'];
+        $companyProvinceName = $zone->province_name ?: $province['name'];
+
+        $cities = PsgcCity::where('province_code', $companyProvinceCode)
+            ->orderBy('name')
+            ->get(['code', 'name', 'province_code', 'province_name']);
+
+        if ($cities->isEmpty()) {
+            $cities = app(\App\Http\Controllers\Api\LocationApiController::class)->syncCitiesForProvince($companyProvinceCode);
+        }
+
+        $riders = User::where('role', 'rider')
             ->whereHas('courierProfile', fn ($q) => $q->where('logistics_company_id', $companyId)->orWhere('sorting_center_id', $companyId))
             ->where('approval_status', 'approved')
             ->orderBy('first_name')
@@ -140,7 +221,7 @@ class ZoneController extends Controller
         $selectedBarangayCodes = $zone->barangays()->pluck('barangay_code')->all();
         $selectedRiderIds = $zone->riders()->pluck('users.id')->all();
 
-        return view('logistics.zones.edit', compact('zone', 'hubs', 'provinces', 'riders', 'selectedBarangayCodes', 'selectedRiderIds'));
+        return view('logistics.zones.edit', compact('zone', 'hubs', 'companyProvinceCode', 'companyProvinceName', 'cities', 'riders', 'selectedBarangayCodes', 'selectedRiderIds'));
     }
 
     /**
@@ -148,8 +229,24 @@ class ZoneController extends Controller
      */
     public function update(Request $request, Zone $zone): RedirectResponse
     {
-        $companyId = $request->user()->id;
+        $company = $request->user();
+        $companyId = $company->id;
         abort_unless((int) $zone->logistics_company_id === (int) $companyId, 403);
+
+        $province = $this->resolveCompanyProvince($company);
+        if (! $request->filled('province_code')) {
+            $request->merge([
+                'province_code' => $zone->province_code ?: $province['code'],
+                'province_name' => $zone->province_name ?: $province['name'],
+            ]);
+        }
+
+        if ($request->filled('city_code') && ! $request->filled('city_name')) {
+            $cityObj = PsgcCity::where('code', $request->input('city_code'))->first();
+            if ($cityObj) {
+                $request->merge(['city_name' => $cityObj->name]);
+            }
+        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
@@ -164,17 +261,23 @@ class ZoneController extends Controller
             'rider_ids.*' => ['exists:users,id'],
         ]);
 
-        // Enforce: Coverage must live in one place only per logistics company (excluding this zone)
-        $existingCoverage = ZoneBarangay::where('logistics_company_id', $companyId)
-            ->where('zone_id', '!=', $zone->id)
+        // Enforce: Area exclusivity across all logistics providers (excluding this zone)
+        $existingCoverage = ZoneBarangay::where('zone_id', '!=', $zone->id)
             ->whereIn('barangay_code', $validated['barangay_codes'])
-            ->with('zone')
+            ->with(['zone', 'logisticsCompany.logisticsProfile', 'logisticsCompany'])
             ->get();
 
         if ($existingCoverage->isNotEmpty()) {
-            $conflicts = $existingCoverage->map(fn ($c) => "{$c->barangay_name} (already in zone '{$c->zone?->name}')")->implode(', ');
+            $conflicts = $existingCoverage->map(function ($c) use ($companyId) {
+                if ((int) $c->logistics_company_id === (int) $companyId) {
+                    return "{$c->barangay_name} (already in your zone '{$c->zone?->name}')";
+                }
+                $compName = $c->logisticsCompany?->logisticsProfile?->company_name ?? $c->logisticsCompany?->name ?? 'another logistics provider';
+                return "{$c->barangay_name} (already served by {$compName})";
+            })->implode(', ');
+
             throw ValidationException::withMessages([
-                'barangay_codes' => "Coverage must live in one place only. The following barangays are already covered by another zone: {$conflicts}",
+                'barangay_codes' => "Area exclusivity violation: The following barangays are already covered: {$conflicts}",
             ]);
         }
 

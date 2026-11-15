@@ -22,11 +22,13 @@ class RiderActivationNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $activationUrl = route('rider.activate', ['token' => $this->token]);
+        $isCourier = method_exists($notifiable, 'isCourier') && $notifiable->isCourier();
+        $roleName = $isCourier ? 'Transfer Courier' : 'Delivery Rider';
 
         return (new MailMessage)
-            ->subject('Activate Your Nexora Delivery Rider Account')
+            ->subject("Activate Your Nexora {$roleName} Account")
             ->greeting("Hello {$notifiable->first_name},")
-            ->line('Your logistics company has created a courier / rider account for you on Nexora Market.')
+            ->line("Your logistics company has created a {$roleName} account for you on Nexora Market.")
             ->line('To activate your account and set up your login password, click the button below:')
             ->action('Activate Account & Set Password', $activationUrl)
             ->line('Security Notice: This activation link will expire in 24 hours and can only be used once.')

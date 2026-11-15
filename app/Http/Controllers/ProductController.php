@@ -128,6 +128,8 @@ class ProductController extends Controller
         $productArray = [
             'id' => $product->id,
             'name' => $product->name,
+            'category' => $product->category?->name ?? 'Electronics',
+            'soldCount' => (int) $product->orderItems()->sum('quantity'),
             'seller' => $product->seller->sellerProfile->business_name ?? $product->seller->full_name,
             'sellerId' => $product->seller_id,
             'price' => (float) $product->price,

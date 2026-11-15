@@ -123,21 +123,29 @@ class AddressController extends Controller
         }
 
         $user = $request->user();
-        $totalAddresses = $user->addresses()->count();
 
-        if ($address->is_default && $totalAddresses > 1) {
-            $nextDefault = $user->addresses()->where('id', '!=', $address->id)->latest('updated_at')->first();
-            if ($nextDefault) {
-                $nextDefault->update(['is_default' => true]);
-            }
+        try {
+            DB::transaction(function () use ($user, $address) {
+                $totalAddresses = $user->addresses()->count();
+
+                if ($address->is_default && $totalAddresses > 1) {
+                    $nextDefault = $user->addresses()->where('id', '!=', $address->id)->latest('updated_at')->first();
+                    if ($nextDefault) {
+                        $nextDefault->update(['is_default' => true]);
+                    }
+                }
+
+                $address->delete();
+            });
+
+            return response()->json([
+                'data' => null,
+                'message' => 'Address removed successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Mobile API failed to delete address {$address->id}: " . $e->getMessage());
+            return response()->json(['message' => 'Unable to remove address at this time. Please try again.'], 500);
         }
-
-        $address->delete();
-
-        return response()->json([
-            'data' => null,
-            'message' => 'Address removed successfully.',
-        ]);
     }
 }
 

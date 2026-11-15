@@ -7,6 +7,7 @@ use App\Models\DeliveryArea;
 use App\Models\DeliveryAttempt;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Zone;
 use App\Services\OrderLogisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class MonitoringController extends Controller
         $sortingCenterId = $request->user()->id;
         $tab = $request->query('tab', 'in_flight');
         $status = $request->query('status');
+        $zoneId = $request->query('zone_id');
         $areaId = $request->query('area_id');
         $courierId = $request->query('courier_id');
         $search = $request->query('q');
@@ -30,6 +32,7 @@ class MonitoringController extends Controller
             ->with([
                 'buyer',
                 'address',
+                'deliveryZone',
                 'deliveryArea',
                 'deliveryCourier.courierProfile',
                 'deliveryAttempts',
@@ -50,7 +53,9 @@ class MonitoringController extends Controller
             $query->where('status', $status);
         }
 
-        if ($areaId) {
+        if ($zoneId) {
+            $query->where('delivery_zone_id', $zoneId);
+        } elseif ($areaId) {
             $query->where('delivery_area_id', $areaId);
         }
 
@@ -78,11 +83,12 @@ class MonitoringController extends Controller
             'all' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed', 'delivery_failed', 'returned'])->count(),
         ];
 
-        $couriers = User::whereIn('role', ['rider', 'courier'])
+        $couriers = User::where('role', 'rider')
             ->where('approval_status', 'approved')
             ->orderBy('first_name')
             ->get();
 
+        $zones = Zone::where('logistics_company_id', $sortingCenterId)->orderBy('name')->get();
         $deliveryAreas = DeliveryArea::where('sorting_center_id', $sortingCenterId)->get();
 
         return view('logistics.deliveries.index', compact(
@@ -90,10 +96,12 @@ class MonitoringController extends Controller
             'counts',
             'tab',
             'status',
+            'zoneId',
             'areaId',
             'courierId',
             'search',
             'couriers',
+            'zones',
             'deliveryAreas'
         ));
     }

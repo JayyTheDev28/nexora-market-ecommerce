@@ -214,57 +214,74 @@
             {{-- Right Column: Delivery Area Assignment & Active Workload --}}
             <div class="lg:col-span-2 flex flex-col gap-6">
 
-                {{-- Delivery Area Assignment Editor --}}
+                {{-- Coverage Zone Assignment Editor --}}
                 <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-6">
                     <div class="flex items-center justify-between mb-4">
                         <div>
                             <h3 class="font-headline-sm text-base font-bold text-on-surface flex items-center gap-2">
-                                <span class="material-symbols-outlined text-secondary text-[20px]">explore</span>
-                                Assigned Delivery Coverage Areas
+                                <span class="material-symbols-outlined text-secondary text-[20px]">share_location</span>
+                                Assigned Coverage Zones
                             </h3>
-                            <p class="text-xs text-on-surface-variant mt-0.5">Select the destination areas this rider is authorized to deliver to.</p>
+                            <p class="text-xs text-on-surface-variant mt-0.5">Select the destination coverage zones this rider is authorized to deliver to. Delivery assignments are automatically routed based on the barangays mapped to these zones.</p>
                         </div>
                     </div>
 
                     @if(! $rider->isApproved() || ! $rider->isActive())
                         <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 text-xs mb-4">
-                            <p class="font-bold">Area Assignment Locked</p>
-                            <p class="mt-0.5">Rider must be both approved and active before delivery areas can be assigned.</p>
+                            <p class="font-bold">Zone Assignment Locked</p>
+                            <p class="mt-0.5">Rider must be both approved and active before coverage zones can be assigned.</p>
                         </div>
                     @else
-                        <form method="POST" action="{{ route('logistics.riders.assign-areas', $rider) }}" class="flex flex-col gap-4">
+                        <form method="POST" action="{{ route('logistics.riders.assign-zones', $rider) }}" class="flex flex-col gap-4">
                             @csrf
-                            @if($availableAreas->isEmpty())
-                                <p class="text-xs text-on-surface-variant italic">No delivery areas configured for this sorting hub yet.</p>
+                            @if($availableZones->isEmpty())
+                                <div class="p-6 rounded-xl bg-surface-container-low text-center">
+                                    <p class="text-xs text-on-surface-variant">No coverage zones configured for this logistics company yet.</p>
+                                    <a href="{{ route('logistics.zones.index') }}" class="text-xs text-primary font-semibold underline mt-2 inline-block">
+                                        Go to Coverage Zones to configure
+                                    </a>
+                                </div>
                             @else
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    @foreach($availableAreas as $area)
+                                    @foreach($availableZones as $zone)
                                         @php
-                                            $isAssignedToThisRider = $area->courier_id === $rider->id;
-                                            $isAssignedToOther = $area->courier_id && $area->courier_id !== $rider->id;
+                                            $isAssignedToThisRider = $rider->assignedZones->contains('id', $zone->id);
+                                            $otherRiders = $zone->riders->where('id', '!=', $rider->id);
                                         @endphp
                                         <label class="flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all {{ $isAssignedToThisRider ? 'bg-secondary/10 border-secondary' : 'bg-surface-container-low border-outline-variant hover:border-outline' }}">
                                             <input
-                                                type="checkbox" name="area_ids[]" value="{{ $area->id }}"
+                                                type="checkbox" name="zone_ids[]" value="{{ $zone->id }}"
                                                 {{ $isAssignedToThisRider ? 'checked' : '' }}
                                                 class="mt-0.5 rounded border-outline-variant text-secondary focus:ring-secondary">
                                             <div class="flex-1 text-xs">
-                                                <p class="font-bold text-on-surface">{{ $area->name }}</p>
-                                                @if($isAssignedToOther)
-                                                    <p class="text-[10px] text-amber-700 mt-0.5">Currently assigned to {{ $area->courier?->full_name }}</p>
-                                                @elseif($isAssignedToThisRider)
-                                                    <p class="text-[10px] text-secondary font-semibold mt-0.5">Assigned to this rider</p>
-                                                @else
-                                                    <p class="text-[10px] text-on-surface-variant mt-0.5">Available for assignment</p>
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <p class="font-bold text-on-surface">{{ $zone->name }}</p>
+                                                    <span class="text-[10px] text-on-surface-variant font-medium bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">
+                                                        {{ $zone->city_name }}
+                                                    </span>
+                                                </div>
+                                                <p class="text-[11px] text-on-surface-variant mt-0.5">{{ $zone->province_name }} &bull; {{ $zone->barangays->count() }} barangays</p>
+                                                @if($zone->hub)
+                                                    <p class="text-[10px] text-on-surface-variant mt-0.5">Hub: {{ $zone->hub->name }}</p>
+                                                @endif
+                                                @if($isAssignedToThisRider)
+                                                    <p class="text-[10px] text-secondary font-semibold mt-1">Assigned to this rider</p>
+                                                @endif
+                                                @if($otherRiders->isNotEmpty())
+                                                    <p class="text-[10px] text-on-surface-variant mt-0.5">Also assigned: {{ $otherRiders->pluck('full_name')->join(', ') }}</p>
                                                 @endif
                                             </div>
                                         </label>
                                     @endforeach
                                 </div>
 
-                                <div class="flex justify-end pt-2">
+                                <div class="flex justify-between items-center pt-2">
+                                    <a href="{{ route('logistics.zones.index') }}" class="text-xs text-primary font-semibold hover:underline inline-flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[14px]">tune</span>
+                                        <span>Configure Zones &amp; Barangays</span>
+                                    </a>
                                     <button type="submit" class="px-5 py-2.5 rounded-full bg-secondary text-on-secondary font-semibold text-xs shadow-xs hover:bg-secondary/90 transition-all cursor-pointer">
-                                        Save Delivery Area Assignments
+                                        Save Zone Assignments
                                     </button>
                                 </div>
                             @endif

@@ -80,24 +80,34 @@ class DashboardController extends Controller
         $sortingCenterId = $request->user()->id;
 
         $stats = [
-            'pendingPickups' => Order::where('status', 'ready_for_pickup')->whereNull('pickup_courier_id')->count(),
-            'scheduledPickups' => Order::where('status', 'ready_for_pickup')->whereNotNull('pickup_courier_id')->count(),
-            'awaitingReceipt' => Order::where('status', 'picked_up')->count(),
+            'pendingPickups' => Order::where('status', 'ready_for_pickup')
+                ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
+                ->whereNull('pickup_courier_id')->count(),
+            'scheduledPickups' => Order::where('status', 'ready_for_pickup')
+                ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
+                ->whereNotNull('pickup_courier_id')->count(),
+            'awaitingReceipt' => Order::where('status', 'picked_up')
+                ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
+                ->count(),
             'receivedUnsorted' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'at_sorting_center')->count(),
             'sortedUnassigned' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'sorted')->count(),
             'assignedToRider' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'assigned_to_rider')->count(),
             'outForDelivery' => Order::where('sorting_center_id', $sortingCenterId)->where('status', 'out_for_delivery')->count(),
             'exceptionsCount' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['delivery_failed', 'returned'])->count(),
-            'pendingRiders' => User::whereIn('role', ['rider', 'courier'])->where('approval_status', 'pending')->count(),
+            'pendingRiders' => User::whereIn('role', ['rider', 'courier'])
+                ->whereHas('courierProfile', fn ($q) => $q->where('logistics_company_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
+                ->where('approval_status', 'pending')->count(),
         ];
 
         $pendingPickups = Order::where('status', 'ready_for_pickup')
+            ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
             ->with(['items.product.seller', 'address', 'pickupCourier'])
             ->latest('placed_at')
             ->limit(5)
             ->get();
 
         $incomingParcels = Order::where('status', 'picked_up')
+            ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
             ->with(['buyer', 'address', 'pickupCourier', 'items.product.seller'])
             ->latest('updated_at')
             ->limit(5)

@@ -54,7 +54,7 @@
             action="{{ route('logistics.resubmit.store') }}"
             enctype="multipart/form-data"
             x-data="resubmitForm()"
-            class="flex flex-col gap-8 bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 sm:p-10 shadow-xs">
+            class="flex flex-col gap-8 bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 sm:10 shadow-xs">
             @csrf
 
             {{-- 1. Company Information --}}
@@ -84,41 +84,85 @@
                 </div>
             </div>
 
-            {{-- 2. Address --}}
+            {{-- 2. Principal Hub & Office Address (Location API) --}}
             <div class="flex flex-col gap-4">
                 <div class="border-b border-outline-variant/60 pb-3">
                     <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
                         <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">2</span>
-                        Principal Address
+                        Principal Hub & Office Address
                     </h2>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Physical dispatch origin and central hub facility location selected via official geographic location (PSGC).</p>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {{-- Province Selector --}}
                     <div class="flex flex-col gap-1">
-                        <label class="text-xs font-semibold text-on-surface-variant">Region <span class="text-rose-500">*</span></label>
-                        <input type="text" name="region" value="{{ old('region', $profile->region) }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <label class="text-xs font-semibold text-on-surface-variant">Province / District <span class="text-rose-500">*</span></label>
+                        <select
+                            x-model="selectedProvinceCode"
+                            @change="onProvinceChange()"
+                            required
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option value="">Select Province</option>
+                            <template x-for="p in provinces" :key="p.code">
+                                <option :value="p.code" x-text="p.name" :selected="p.code === selectedProvinceCode || p.name === selectedProvinceName"></option>
+                            </template>
+                        </select>
+                        <input type="hidden" name="province" :value="selectedProvinceName">
+                        <input type="hidden" name="province_code" :value="selectedProvinceCode">
+                        <input type="hidden" name="region" :value="selectedRegionName">
                     </div>
 
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-semibold text-on-surface-variant">Province <span class="text-rose-500">*</span></label>
-                        <input type="text" name="province" value="{{ old('province', $profile->province) }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
-                    </div>
-
+                    {{-- City / Municipality Selector --}}
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-semibold text-on-surface-variant">City / Municipality <span class="text-rose-500">*</span></label>
-                        <input type="text" name="city_municipality" value="{{ old('city_municipality', $profile->city_municipality) }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <select
+                            x-model="selectedCityCode"
+                            @change="onCityChange()"
+                            :disabled="!selectedProvinceCode"
+                            required
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
+                            <option value="">Select City / Municipality</option>
+                            <template x-for="c in cities" :key="c.code">
+                                <option :value="c.code" x-text="c.name" :selected="c.code === selectedCityCode || c.name === selectedCityName"></option>
+                            </template>
+                        </select>
+                        <input type="hidden" name="city_municipality" :value="selectedCityName">
+                        <input type="hidden" name="city_code" :value="selectedCityCode">
                     </div>
 
+                    {{-- Barangay Selector --}}
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-semibold text-on-surface-variant">Barangay <span class="text-rose-500">*</span></label>
-                        <input type="text" name="barangay" value="{{ old('barangay', $profile->barangay) }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <select
+                            x-model="selectedBarangayCode"
+                            @change="onBarangayChange()"
+                            :disabled="!selectedCityCode"
+                            required
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
+                            <option value="">Select Barangay</option>
+                            <template x-for="b in barangays" :key="b.code">
+                                <option :value="b.code" x-text="b.name" :selected="b.code === selectedBarangayCode || b.name === selectedBarangayName"></option>
+                            </template>
+                        </select>
+                        <input type="hidden" name="barangay" :value="selectedBarangayName">
+                        <input type="hidden" name="barangay_code" :value="selectedBarangayCode">
                     </div>
 
+                    {{-- Auto-derived Region Label --}}
+                    <div class="flex flex-col gap-1 sm:col-span-2 md:col-span-3" x-show="selectedRegionName">
+                        <span class="text-[11px] text-on-surface-variant">
+                            Region: <strong class="text-primary" x-text="selectedRegionName"></strong>
+                        </span>
+                    </div>
+
+                    {{-- Street Address --}}
                     <div class="flex flex-col gap-1 sm:col-span-2">
                         <label class="text-xs font-semibold text-on-surface-variant">Street Address <span class="text-rose-500">*</span></label>
                         <input type="text" name="street_address" value="{{ old('street_address', $profile->street_address) }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
 
+                    {{-- Postal Code --}}
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-semibold text-on-surface-variant">Postal Code <span class="text-rose-500">*</span></label>
                         <input type="text" name="postal_code" value="{{ old('postal_code', $profile->postal_code) }}" required maxlength="4" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary">
@@ -153,60 +197,16 @@
 
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-semibold text-on-surface-variant">Mobile Number <span class="text-rose-500">*</span></label>
-                        <input type="tel" name="mobile_number" value="{{ old('mobile_number', $profile->mobile_number) }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <input type="tel" name="mobile_number" value="{{ old('mobile_number', $profile->mobile_number) }}" required maxlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 11)" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
                 </div>
             </div>
 
-            {{-- 4. Regional Coverage --}}
+            {{-- 4. Re-Upload Compliance Documents --}}
             <div class="flex flex-col gap-4">
                 <div class="border-b border-outline-variant/60 pb-3">
                     <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
                         <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">4</span>
-                        Service Coverage Areas
-                    </h2>
-                </div>
-
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 select-none">
-                    @php
-                        $regionsList = [
-                            'Metro Manila (NCR)',
-                            'Calabarzon (Region IV-A)',
-                            'Central Luzon (Region III)',
-                            'North Luzon (Ilocos & CAR)',
-                            'Cagayan Valley (Region II)',
-                            'Bicol Region (Region V)',
-                            'Western Visayas (Region VI)',
-                            'Central Visayas (Region VII)',
-                            'Eastern Visayas (Region VIII)',
-                            'Northern Mindanao (Region X)',
-                            'Davao Region (Region XI)',
-                            'SOCCSKSARGEN (Region XII)',
-                        ];
-                        $selectedServiceAreas = (array) old('service_areas', $profile->service_areas ?? []);
-                    @endphp
-
-                    @foreach($regionsList as $area)
-                        <label class="flex items-center gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all"
-                            :class="selectedAreas.includes('{{ $area }}') ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs' : 'border-outline-variant/70 bg-surface hover:bg-surface-container-low text-on-surface'">
-                            <input
-                                type="checkbox"
-                                name="service_areas[]"
-                                value="{{ $area }}"
-                                @change="toggleArea('{{ $area }}')"
-                                {{ in_array($area, $selectedServiceAreas) ? 'checked' : '' }}
-                                class="w-4 h-4 rounded text-primary focus:ring-primary border-outline-variant">
-                            <span class="text-xs leading-tight">{{ $area }}</span>
-                        </label>
-                    @endforeach
-                </div>
-            </div>
-
-            {{-- 5. Re-Upload Compliance Documents --}}
-            <div class="flex flex-col gap-4">
-                <div class="border-b border-outline-variant/60 pb-3">
-                    <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">5</span>
                         Compliance Documents
                     </h2>
                     <p class="text-xs text-on-surface-variant mt-0.5">Upload replacement documents if requested in the compliance feedback. Existing documents will be retained if not re-uploaded.</p>
@@ -261,12 +261,12 @@
 
             {{-- Actions --}}
             <div class="pt-4 border-t border-outline-variant/60 flex items-center justify-between gap-4">
-                <form method="POST" action="{{ route('logout') }}" class="inline">
-                    @csrf
-                    <button type="submit" class="text-xs text-on-surface-variant hover:text-error transition-colors cursor-pointer">
-                        Sign Out
-                    </button>
-                </form>
+                <button
+                    type="button"
+                    onclick="document.getElementById('logout-form').submit();"
+                    class="text-xs text-on-surface-variant hover:text-error transition-colors cursor-pointer">
+                    Sign Out
+                </button>
 
                 <button
                     type="submit"
@@ -277,6 +277,11 @@
 
         </form>
 
+        {{-- Standalone Logout Form --}}
+        <form id="logout-form" method="POST" action="{{ route('logout') }}" class="hidden">
+            @csrf
+        </form>
+
     </div>
 </div>
 
@@ -284,14 +289,95 @@
 <script>
     function resubmitForm() {
         return {
-            selectedAreas: @json(old('service_areas', $profile->service_areas ?? [])),
+            provinces: @json($provinces ?? []),
+            cities: [],
+            barangays: [],
+            selectedProvinceCode: '{{ old('province_code', '') }}',
+            selectedProvinceName: '{{ old('province', $profile->province ?? '') }}',
+            selectedCityCode: '{{ old('city_code', '') }}',
+            selectedCityName: '{{ old('city_municipality', $profile->city_municipality ?? '') }}',
+            selectedBarangayCode: '{{ old('barangay_code', '') }}',
+            selectedBarangayName: '{{ old('barangay', $profile->barangay ?? '') }}',
+            selectedRegionName: '{{ old('region', $profile->region ?? '') }}',
 
-            toggleArea(area) {
-                const idx = this.selectedAreas.indexOf(area);
-                if (idx === -1) {
-                    this.selectedAreas.push(area);
-                } else {
-                    this.selectedAreas.splice(idx, 1);
+            async init() {
+                if (!this.selectedProvinceCode && this.selectedProvinceName) {
+                    const found = this.provinces.find(p => p.name.toLowerCase() === this.selectedProvinceName.toLowerCase());
+                    if (found) {
+                        this.selectedProvinceCode = found.code;
+                        this.selectedRegionName = found.region_name || found.name;
+                    }
+                }
+                if (this.selectedProvinceCode) {
+                    const p = this.provinces.find(item => item.code === this.selectedProvinceCode);
+                    if (p && !this.selectedRegionName) {
+                        this.selectedRegionName = p.region_name || p.name;
+                    }
+                    await this.fetchCities(this.selectedProvinceCode);
+                    if (!this.selectedCityCode && this.selectedCityName) {
+                        const foundCity = this.cities.find(c => c.name.toLowerCase() === this.selectedCityName.toLowerCase());
+                        if (foundCity) this.selectedCityCode = foundCity.code;
+                    }
+                    if (this.selectedCityCode) {
+                        await this.fetchBarangays(this.selectedCityCode);
+                        if (!this.selectedBarangayCode && this.selectedBarangayName) {
+                            const foundB = this.barangays.find(b => b.name.toLowerCase() === this.selectedBarangayName.toLowerCase());
+                            if (foundB) this.selectedBarangayCode = foundB.code;
+                        }
+                    }
+                }
+            },
+
+            async onProvinceChange() {
+                const p = this.provinces.find(item => item.code === this.selectedProvinceCode);
+                this.selectedProvinceName = p ? p.name : '';
+                this.selectedRegionName = p ? (p.region_name || p.name) : '';
+                this.selectedCityCode = '';
+                this.selectedCityName = '';
+                this.selectedBarangayCode = '';
+                this.selectedBarangayName = '';
+                this.cities = [];
+                this.barangays = [];
+                if (this.selectedProvinceCode) {
+                    await this.fetchCities(this.selectedProvinceCode);
+                }
+            },
+
+            async onCityChange() {
+                const c = this.cities.find(item => item.code === this.selectedCityCode);
+                this.selectedCityName = c ? c.name : '';
+                this.selectedBarangayCode = '';
+                this.selectedBarangayName = '';
+                this.barangays = [];
+                if (this.selectedCityCode) {
+                    await this.fetchBarangays(this.selectedCityCode);
+                }
+            },
+
+            onBarangayChange() {
+                const b = this.barangays.find(item => item.code === this.selectedBarangayCode);
+                this.selectedBarangayName = b ? b.name : '';
+            },
+
+            async fetchCities(provinceCode) {
+                try {
+                    const res = await fetch(`/locations/provinces/${provinceCode}/cities`);
+                    if (res.ok) {
+                        this.cities = await res.json();
+                    }
+                } catch (e) {
+                    console.error('Failed to load cities:', e);
+                }
+            },
+
+            async fetchBarangays(cityCode) {
+                try {
+                    const res = await fetch(`/locations/cities/${cityCode}/barangays`);
+                    if (res.ok) {
+                        this.barangays = await res.json();
+                    }
+                } catch (e) {
+                    console.error('Failed to load barangays:', e);
                 }
             }
         };
@@ -299,4 +385,3 @@
 </script>
 @endpush
 @endsection
-

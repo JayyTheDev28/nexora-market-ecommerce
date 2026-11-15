@@ -24,7 +24,7 @@ Route::prefix('locations')->group(function () {
 Route::prefix('v1/rider')->group(function () {
     Route::post('/login', [RiderApiController::class, 'login'])->name('api.rider.login');
 
-    Route::middleware(['auth', 'role:rider,courier'])->group(function () {
+    Route::middleware(['auth', 'role:rider'])->group(function () {
         Route::get('/profile', [RiderApiController::class, 'profile'])->name('api.rider.profile');
         Route::post('/availability', [RiderApiController::class, 'toggleAvailability'])->name('api.rider.availability');
         
@@ -132,8 +132,8 @@ Route::prefix('mobile/v1')->group(function () {
         Route::post('/chat/{conversation}/message', [\App\Http\Controllers\Api\Mobile\Buyer\ChatController::class, 'sendMessage'])->whereNumber('conversation')->name('api.mobile.buyer.chat.message');
     });
 
-    // Protected rider routes
-    Route::middleware(['auth:sanctum', 'role:rider,courier'])->prefix('rider')->group(function () {
+    // Protected rider routes (strictly role:rider)
+    Route::middleware(['auth:sanctum', 'role:rider'])->prefix('rider')->group(function () {
         Route::get('/profile', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'profile'])->name('api.mobile.rider.profile');
         Route::post('/availability', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'toggleAvailability'])->name('api.mobile.rider.availability');
         Route::get('/hubs', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'hubs'])->name('api.mobile.rider.hubs');
@@ -155,6 +155,20 @@ Route::prefix('mobile/v1')->group(function () {
         Route::get('/earnings', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'earnings'])->name('api.mobile.rider.earnings');
         Route::post('/remittance', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'submitRemittance'])->name('api.mobile.rider.remittance');
         Route::post('/remittance/remit', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'submitRemittance'])->name('api.mobile.rider.remittance.remit');
+    });
+
+    // Protected transfer courier routes (strictly role:courier)
+    Route::middleware(['auth:sanctum', 'role:courier'])->prefix('transfer-courier')->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'dashboard'])->name('api.mobile.transfer-courier.dashboard');
+        Route::get('/profile', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'profile'])->name('api.mobile.transfer-courier.profile');
+        Route::get('/inventory', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'inventory'])->name('api.mobile.transfer-courier.inventory');
+        Route::get('/manifests', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'manifests'])->name('api.mobile.transfer-courier.manifests.index');
+        Route::get('/manifests/{id}', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'showManifest'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.show');
+        Route::get('/manifests/{id}/inventory', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'manifestInventory'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.inventory');
+        Route::post('/manifests/{id}/scan', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'scanParcel'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.scan');
+        Route::post('/manifests/{id}/depart', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'depart'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.depart');
+        Route::post('/manifests/{id}/arrive', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'arrive'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.arrive');
+        Route::post('/manifests/{id}/report-issue', [\App\Http\Controllers\Api\Mobile\TransferCourier\TransferCourierController::class, 'reportIssue'])->whereNumber('id')->name('api.mobile.transfer-courier.manifests.report-issue');
     });
 });
 

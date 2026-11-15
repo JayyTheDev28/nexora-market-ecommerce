@@ -130,7 +130,7 @@ class RiderController extends Controller
             'province_name' => $h->province_name,
             'street_address' => $h->street_address,
             'full_location' => $h->full_location,
-            'is_selected' => $profile && ($profile->sorting_center_id == $h->id),
+            'is_selected' => $profile && ((int) ($profile->assigned_hub_id ?? 0) === (int) $h->id),
         ]);
 
         return response()->json([
@@ -158,7 +158,7 @@ class RiderController extends Controller
 
         $hub = \App\Models\Hub::findOrFail($validated['hub_id']);
         $profile->update([
-            'sorting_center_id' => $hub->id,
+            'assigned_hub_id' => $hub->id,
         ]);
 
         return response()->json([

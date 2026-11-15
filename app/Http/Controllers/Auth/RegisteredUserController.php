@@ -22,11 +22,11 @@ use Illuminate\View\View;
 class RegisteredUserController extends Controller
 {
     /**
-     * Registerable roles from this public form. Riders/couriers register
-     * through a separate flow (not built yet), and admins are never
-     * self-registered.
+     * Registerable roles from this public form. Logistics/carriers register
+     * through the dedicated logistics portal (/logistics/register), riders register
+     * through the rider mobile app, and admins are never self-registered.
      */
-    private const REGISTERABLE_ROLES = ['buyer', 'seller', 'logistics', 'sorting_center'];
+    private const REGISTERABLE_ROLES = ['buyer', 'seller'];
 
     public function create(): View
     {
@@ -157,9 +157,9 @@ class RegisteredUserController extends Controller
 
             'valid_id' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
-            // Business name: Unique across sellers and unique across sorting centers
+            // Business name: Unique across sellers
             'business_name' => [
-                'required_if:role,seller,sorting_center',
+                'required_if:role,seller',
                 'nullable',
                 'string',
                 'min:2',
@@ -174,18 +174,13 @@ class RegisteredUserController extends Controller
                         if ($exists) {
                             $fail('This seller business name has already been registered.');
                         }
-                    } elseif ($role === 'sorting_center') {
-                        $exists = SortingCenterProfile::whereRaw('LOWER(TRIM(business_name)) = ?', [strtolower($name)])->exists();
-                        if ($exists) {
-                            $fail('This logistics facility name has already been registered.');
-                        }
                     }
                 },
             ],
             'categories' => ['required_if:role,seller', 'nullable', 'array', 'min:1'],
             'categories.*' => ['string'],
             'category' => ['nullable', 'string'],
-            'business_permit' => ['required_if:role,seller,sorting_center', 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'business_permit' => ['required_if:role,seller', 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
             // Required for couriers / riders per ERP specification
             'vehicle_type' => ['required_if:role,courier', 'nullable', 'string', 'max:255'],
@@ -194,6 +189,7 @@ class RegisteredUserController extends Controller
 
             'terms' => ['accepted'],
         ], [
+            'role.in' => 'Logistics partners must register through the dedicated logistics portal at /logistics/register.',
             'categories.required_if' => 'Please select at least one online shopping category for your store.',
             'categories.min' => 'Please select at least one online shopping category for your store.',
             'first_name.regex' => 'First name must contain letters and spaces only, with no special characters.',
@@ -268,23 +264,6 @@ class RegisteredUserController extends Controller
                 'user_id' => $user->id,
                 'business_name' => $validated['business_name'],
                 'category' => $displayCategory ?: 'Retail & General Merchandise',
-                'business_permit_path' => $permitPath,
-            ]);
-        } elseif ($validated['role'] === 'sorting_center' || $validated['role'] === 'logistics') {
-            $permitPath = $request->file('business_permit') ? $request->file('business_permit')->store('permits', 'public') : null;
-            LogisticsProfile::create([
-                'user_id' => $user->id,
-                'company_name' => $validated['business_name'] ?? ($user->full_name . ' Logistics'),
-                'contact_person_first_name' => $user->first_name,
-                'contact_person_last_name' => $user->last_name,
-                'email' => $user->email,
-                'mobile_number' => $user->contact_number,
-                'mayors_permit_path' => $permitPath,
-                'status' => 'pending_approval',
-            ]);
-            SortingCenterProfile::create([
-                'user_id' => $user->id,
-                'business_name' => $validated['business_name'] ?? ($user->full_name . ' Logistics'),
                 'business_permit_path' => $permitPath,
             ]);
         } elseif ($validated['role'] === 'courier' || $validated['role'] === 'rider') {

@@ -28,21 +28,25 @@ class RiderProfileResource extends JsonResource
             ->whereIn('status', ['delivered', 'completed'])
             ->count();
 
+        $isCourier = $this->user?->isCourier() ?? false;
+
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
             'is_online' => (bool) ($this->is_online ?? false),
-            'vehicle_type' => $this->vehicle_type ?? 'Motorcycle',
+            'vehicle_type' => $this->vehicle_type ?? ($isCourier ? null : 'Motorcycle'),
             'plate_number' => $this->plate_number,
             'license_number' => $this->license_number,
             'license_expiry_date' => $this->license_expiry_date?->format('Y-m-d'),
             'vehicle_verification_status' => $this->vehicle_verification_status,
-            'company_name' => $this->logisticsCompany?->full_name ?? 'Logistics Partner',
+            'logistics_company_id' => $this->logistics_company_id ?? $this->sorting_center_id,
+            'company_name' => $this->logisticsCompany?->full_name ?? $this->sortingCenter?->full_name ?? 'Logistics Partner',
             'sorting_center' => $this->sortingCenter?->full_name ?? $this->sortingCenter?->name,
-            'assigned_hub' => $this->sortingCenter?->name ?? $this->sortingCenter?->full_name,
-            'earnings_balance' => (float) ($this->earnings_balance ?? 0),
-            'unremitted_cod_balance' => (float) ($this->unremitted_cod_balance ?? 0),
-            'active_jobs_count' => method_exists($this->resource, 'activeJobsCount') ? $this->activeJobsCount() : 0,
+            'assigned_hub_id' => $this->assigned_hub_id,
+            'assigned_hub' => $this->assignedHub?->name ?? $this->sortingCenter?->name ?? $this->sortingCenter?->full_name,
+            'earnings_balance' => $isCourier ? 0.0 : (float) ($this->earnings_balance ?? 0),
+            'unremitted_cod_balance' => $isCourier ? 0.0 : (float) ($this->unremitted_cod_balance ?? 0),
+            'active_jobs_count' => $isCourier ? 0 : (method_exists($this->resource, 'activeJobsCount') ? $this->activeJobsCount() : 0),
             'rating' => $avgRating,
             'reviews_count' => $reviewsCount,
             'total_deliveries' => $totalDeliveries,

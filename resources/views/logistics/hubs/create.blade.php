@@ -109,9 +109,11 @@
                                        class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-on-surface mb-1.5">Contact Phone</label>
+                                <label class="block text-xs font-medium text-on-surface mb-1.5">Contact Phone (11 Digits)</label>
                                 <input type="text" name="contact_number" value="{{ old('contact_number') }}"
                                        placeholder="e.g. 09171234567"
+                                       maxlength="11"
+                                       oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 11)"
                                        class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
                             </div>
                         </div>

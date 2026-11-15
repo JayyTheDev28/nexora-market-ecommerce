@@ -78,7 +78,7 @@
                             <div class="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider mb-1">Assigned Zones</div>
                             <div class="flex flex-wrap gap-1">
                                 @php
-                                    $allZones = $courier->assignedZones->pluck('name')->merge($courier->deliveryAreas->pluck('name'))->unique();
+                                    $allZones = $courier->assignedZones->pluck('name')->unique();
                                 @endphp
                                 @forelse ($allZones as $zName)
                                     <span class="inline-block px-2 py-0.5 rounded-md bg-secondary/10 text-secondary text-[10px] font-medium truncate max-w-[120px]" title="{{ $zName }}">
@@ -120,11 +120,11 @@
                     {{-- Area filter select --}}
                     <form method="GET" action="{{ route('logistics.assignments.index') }}" class="flex items-center gap-2 w-full md:w-auto">
                         <input type="hidden" name="tab" value="{{ $tab }}">
-                        <select name="area_id" onchange="this.form.submit()" class="px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">
-                            <option value="">All Areas</option>
-                            @foreach ($deliveryAreas as $area)
-                                <option value="{{ $area->id }}" {{ $areaFilter == $area->id ? 'selected' : '' }}>
-                                    {{ $area->name }}
+                        <select name="zone_id" onchange="this.form.submit()" class="px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">
+                            <option value="">All Coverage Zones</option>
+                            @foreach ($zones as $zone)
+                                <option value="{{ $zone->id }}" {{ request('zone_id') == $zone->id ? 'selected' : '' }}>
+                                    {{ $zone->name }} ({{ $zone->city_name }})
                                 </option>
                             @endforeach
                         </select>
@@ -183,13 +183,19 @@
                                 </td>
 
                                 <td class="px-5 py-4">
-                                    @if ($parcel->deliveryArea)
+                                    @if ($parcel->deliveryZone)
                                         <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-secondary/10 text-secondary font-bold text-xs">
-                                            <span class="material-symbols-outlined text-[15px]">near_me</span>
+                                            <span class="material-symbols-outlined text-[15px]">share_location</span>
+                                            <span>{{ $parcel->deliveryZone->name }}</span>
+                                        </div>
+                                        <div class="text-[10px] text-on-surface-variant mt-0.5">{{ $parcel->deliveryZone->city_name }}</div>
+                                    @elseif ($parcel->deliveryArea)
+                                        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-secondary/10 text-secondary font-bold text-xs">
+                                            <span class="material-symbols-outlined text-[15px]">share_location</span>
                                             <span>{{ $parcel->deliveryArea->name }}</span>
                                         </div>
                                     @else
-                                        <span class="text-xs text-rose-600 font-semibold">Unsorted (Needs Area)</span>
+                                        <span class="text-xs text-rose-600 font-semibold">Unsorted (Needs Zone)</span>
                                     @endif
                                 </td>
 
@@ -231,7 +237,7 @@
                                 <td class="px-5 py-4 text-right whitespace-nowrap">
                                     <button
                                         type="button"
-                                        @click="activeOrder = {{ $parcel->toJson() }}; actionUrl = '{{ route('logistics.assignments.assign', $parcel) }}'; targetAreaId = {{ $parcel->delivery_area_id ?? 'null' }}; orderAreaName = '{{ $parcel->deliveryArea?->name ?? 'None' }}'; selectedCourierId = '{{ $parcel->delivery_courier_id ?? ($parcel->deliveryArea?->courier_id ?? '') }}'; assignModal = true;"
+                                        @click="activeOrder = {{ $parcel->toJson() }}; actionUrl = '{{ route('logistics.assignments.assign', $parcel) }}'; targetAreaId = {{ $parcel->delivery_zone_id ?? ($parcel->delivery_area_id ?? 'null') }}; orderAreaName = '{{ addslashes($parcel->deliveryZone?->name ?? ($parcel->deliveryArea?->name ?? 'None')) }}'; selectedCourierId = '{{ $parcel->delivery_courier_id ?? ($parcel->deliveryZone?->riders->first()?->id ?? '') }}'; assignModal = true;"
                                         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-label-md text-xs font-semibold shadow-xs transition-all cursor-pointer {{ $parcel->delivery_courier_id ? 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest' : 'bg-primary text-on-primary hover:bg-primary/90' }}">
                                         <span class="material-symbols-outlined text-[16px]">two_wheeler</span>
                                         <span>{{ $parcel->delivery_courier_id ? 'Reassign Rider' : 'Assign Rider' }}</span>
@@ -299,7 +305,7 @@
                         <option value="">-- Choose Rider --</option>
                         @foreach ($couriers as $c)
                             @php
-                                $zoneNames = $c->assignedZones->pluck('name')->merge($c->deliveryAreas->pluck('name'))->unique()->filter()->implode(', ');
+                                $zoneNames = $c->assignedZones->pluck('name')->unique()->filter()->implode(', ');
                             @endphp
                             <option value="{{ $c->id }}">
                                 {{ $c->full_name }} ({{ $c->workload_count }} active parcels) — Zones: {{ $zoneNames ?: 'None' }}

@@ -94,7 +94,7 @@ class Order extends Model
 
     public function address()
     {
-        return $this->belongsTo(Address::class);
+        return $this->belongsTo(Address::class)->withTrashed();
     }
 
     public function shippingVoucher()
@@ -215,6 +215,26 @@ class Order extends Model
     public function commissions()
     {
         return $this->hasMany(Commission::class);
+    }
+
+    public function remittanceItem()
+    {
+        return $this->hasOne(LogisticsRemittanceItem::class, 'order_id');
+    }
+
+    public function settlementAllocation()
+    {
+        return $this->hasOne(SellerSettlementAllocation::class, 'order_id');
+    }
+
+    public function merchandiseAmount(): float
+    {
+        return max(0.00, (float) $this->subtotal - (float) $this->discount);
+    }
+
+    public function shippingFeeAmount(): float
+    {
+        return (float) $this->shipping_fee;
     }
 
     public function sortingCenter()

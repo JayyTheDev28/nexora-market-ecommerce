@@ -85,7 +85,6 @@ class LogisticsRegistrationWorkflowTest extends TestCase
             'position',
             'email',
             'mobile_number',
-            'service_areas',
             'sec_certificate',
             'bir_2303',
             'mayors_permit',

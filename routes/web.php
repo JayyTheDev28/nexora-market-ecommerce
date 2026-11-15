@@ -219,20 +219,28 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
 
     // Inter-Hub Transfers
     Route::get('/transfers', [Logistics\TransferController::class, 'index'])->name('transfers.index');
+    Route::post('/transfers/manifests', [Logistics\TransferController::class, 'storeManifest'])->name('transfers.manifests.store');
+    Route::get('/transfers/manifests/{manifest}', [Logistics\TransferController::class, 'showManifest'])->name('transfers.manifests.show');
+    Route::post('/transfers/manifests/{manifest}/assign-courier', [Logistics\TransferController::class, 'assignManifestCourier'])->name('transfers.manifests.assign-courier');
+    Route::post('/transfers/manifests/{manifest}/verify-parcel', [Logistics\TransferController::class, 'verifyManifestParcel'])->name('transfers.manifests.verify-parcel');
+    Route::post('/transfers/manifests/{manifest}/cancel', [Logistics\TransferController::class, 'cancelManifest'])->name('transfers.manifests.cancel');
     Route::post('/transfers/{order}/dispatch', [Logistics\TransferController::class, 'dispatch'])->name('transfers.dispatch');
     Route::post('/transfers/{transfer}/confirm-receipt', [Logistics\TransferController::class, 'confirmReceipt'])->name('transfers.confirm-receipt');
     Route::post('/transfers/{transfer}/confirm', [Logistics\TransferController::class, 'confirmReceipt'])->name('transfers.confirm');
 
-    // Rider Management
+    // Rider & Transfer Courier Management
     Route::get('/riders', [Logistics\RiderController::class, 'index'])->name('riders.index');
     Route::get('/riders/create', [Logistics\RiderController::class, 'create'])->name('riders.create');
     Route::post('/riders', [Logistics\RiderController::class, 'store'])->name('riders.store');
+    Route::get('/couriers/create', [Logistics\RiderController::class, 'createCourier'])->name('couriers.create');
+    Route::post('/couriers', [Logistics\RiderController::class, 'storeCourier'])->name('couriers.store');
     Route::get('/riders/{rider}', [Logistics\RiderController::class, 'show'])->name('riders.show');
     Route::post('/riders/{rider}/resend-activation', [Logistics\RiderController::class, 'resendActivation'])->name('riders.resend-activation');
     Route::post('/riders/{rider}/approve', [Logistics\RiderController::class, 'approve'])->name('riders.approve');
     Route::post('/riders/{rider}/disapprove', [Logistics\RiderController::class, 'disapprove'])->name('riders.disapprove');
     Route::post('/riders/{rider}/toggle-status', [Logistics\RiderController::class, 'toggleStatus'])->name('riders.toggle-status');
     Route::post('/riders/{rider}/assign-areas', [Logistics\RiderController::class, 'assignAreas'])->name('riders.assign-areas');
+    Route::post('/riders/{rider}/assign-zones', [Logistics\RiderController::class, 'assignZones'])->name('riders.assign-zones');
 
     // Delivery Areas
     Route::post('/areas', [Logistics\RiderController::class, 'storeArea'])->name('areas.store');
@@ -268,9 +276,15 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     // Reports
     Route::get('/reports', [Logistics\ReportController::class, 'index'])->name('reports.index');
 
-    // COD Remittances Reconciliation
+    // COD Remittances Reconciliation (Riders -> Logistics)
     Route::get('/remittances', [Logistics\RemittanceController::class, 'index'])->name('remittances.index');
     Route::post('/remittances/{remittance}/review', [Logistics\RemittanceController::class, 'review'])->name('remittances.review');
+
+    // COD Remittances to Nexora Admin (Logistics -> Admin)
+    Route::get('/admin-remittances', [Logistics\AdminRemittanceController::class, 'index'])->name('admin-remittances.index');
+    Route::post('/admin-remittances', [Logistics\AdminRemittanceController::class, 'store'])->name('admin-remittances.store');
+    Route::get('/admin-remittances/{remittance}', [Logistics\AdminRemittanceController::class, 'show'])->name('admin-remittances.show');
+
     Route::post('/riders/{rider}/vehicle-verification', [Logistics\RiderController::class, 'verifyVehicle'])->name('riders.verify-vehicle');
     Route::post('/orders/{order}/override-status', [Logistics\RiderController::class, 'overrideStatus'])->name('orders.override-status');
 
@@ -308,6 +322,20 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::get('/commissions', [\App\Http\Controllers\Admin\CommissionController::class, 'index'])->name('commissions.index');
     Route::post('/commissions/{commission}/settle', [\App\Http\Controllers\Admin\CommissionController::class, 'settle'])->name('commissions.settle');
     Route::post('/commissions/batch-settle', [\App\Http\Controllers\Admin\CommissionController::class, 'batchSettle'])->name('commissions.batch-settle');
+
+    // Logistics COD Remittances to Admin (Section 5)
+    Route::get('/logistics-remittances', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'index'])->name('logistics-remittances.index');
+    Route::get('/logistics-remittances/{remittance}', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'show'])->name('logistics-remittances.show');
+    Route::post('/logistics-remittances/{remittance}/verify', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'verify'])->name('logistics-remittances.verify');
+    Route::post('/logistics-remittances/{remittance}/reject', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'reject'])->name('logistics-remittances.reject');
+    Route::post('/logistics-remittances/{remittance}/under-review', [\App\Http\Controllers\Admin\LogisticsRemittanceController::class, 'underReview'])->name('logistics-remittances.under-review');
+
+    // Seller Payout Management (Section 7)
+    Route::get('/seller-payouts', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'index'])->name('seller-payouts.index');
+    Route::get('/seller-payouts/{payout}', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'show'])->name('seller-payouts.show');
+    Route::post('/seller-payouts/{payout}/approve', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'approve'])->name('seller-payouts.approve');
+    Route::post('/seller-payouts/{payout}/disburse', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'disburse'])->name('seller-payouts.disburse');
+    Route::post('/seller-payouts/{payout}/reject', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'reject'])->name('seller-payouts.reject');
 
     // Analytics & Financial Reports
     Route::get('/reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');

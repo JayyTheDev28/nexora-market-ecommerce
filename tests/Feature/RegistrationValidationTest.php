@@ -305,38 +305,17 @@ class RegistrationValidationTest extends TestCase
         $response->assertSessionHasErrors(['business_name']);
     }
 
-    public function test_logistics_business_name_cannot_have_duplicates(): void
+    public function test_logistics_cannot_register_through_regular_form_and_must_use_dedicated_portal(): void
     {
-        $hubName = 'Metro Manila Central Hub ' . mt_rand(100, 999);
-
-        $existingLogisticsUser = User::create([
-            'first_name' => 'Logistics',
-            'last_name' => 'Manager',
-            'sex' => 'male',
-            'birthday' => '1988-04-04',
-            'age' => 37,
-            'email' => 'logistics_' . uniqid() . '@example.com',
-            'contact_number' => '0917' . substr(str_pad((string) mt_rand(1000000, 9999999), 7, '0', STR_PAD_LEFT), 0, 7),
-            'password' => Hash::make('StrongP@ss123!'),
-            'role' => 'sorting_center',
-            'approval_status' => 'approved',
-        ]);
-
-        SortingCenterProfile::create([
-            'user_id' => $existingLogisticsUser->id,
-            'business_name' => $hubName,
-            'business_permit_path' => 'permits/sample.pdf',
-        ]);
-
         $data = $this->validRegistrationData([
             'role' => 'sorting_center',
             'first_name' => 'NewHub',
             'last_name' => 'ManagerTwo',
-            'business_name' => strtolower($hubName), // case-insensitive duplicate
+            'business_name' => 'Metro Manila Central Hub',
             'business_permit' => UploadedFile::fake()->create('permit.pdf', 500, 'application/pdf'),
         ]);
 
         $response = $this->post(route('register.store'), $data);
-        $response->assertSessionHasErrors(['business_name']);
+        $response->assertSessionHasErrors(['role']);
     }
 }

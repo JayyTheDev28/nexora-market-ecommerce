@@ -116,24 +116,31 @@
                         <p class="text-xs text-on-surface-variant mb-3">Select how you will be using Nexora.</p>
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                            <template x-for="option in roleOptions" :key="option.value">
-                                <label
-                                    class="flex flex-col items-center justify-center p-3 rounded-2xl border cursor-pointer transition-all select-none text-center"
-                                    :class="role === option.value ? 'border-primary bg-primary/5 text-primary font-bold shadow-xs ring-1 ring-primary' : 'border-outline-variant text-on-surface-variant hover:border-outline hover:bg-surface-container-low/50'">
-                                    <input type="radio" name="role" :value="option.value" x-model="role" class="sr-only">
-                                    <span class="text-xs font-semibold" x-text="option.label"></span>
-                                </label>
-                            </template>
-                        </div>
+                            {{-- Buyer Button --}}
+                            <label
+                                class="flex flex-col items-center justify-center p-3.5 rounded-2xl border cursor-pointer transition-all select-none text-center"
+                                :class="role === 'buyer' ? 'border-primary bg-primary/5 text-primary font-bold shadow-xs ring-1 ring-primary' : 'border-outline-variant text-on-surface-variant hover:border-outline hover:bg-surface-container-low/50'">
+                                <input type="radio" name="role" value="buyer" x-model="role" class="sr-only">
+                                <span class="text-xs font-semibold">Buyer</span>
+                            </label>
 
-                        {{-- Dedicated Corporate Logistics Portal Link --}}
-                        <div x-show="role === 'sorting_center'" x-cloak class="mt-3 p-3.5 rounded-2xl bg-primary/10 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                            <div class="flex items-center gap-2 text-primary font-medium">
-                                <span class="material-symbols-outlined text-[20px]">local_shipping</span>
-                                <span>Corporate Carrier / Fleet Partner with SEC, BIR 2303, and multi-region coverage?</span>
-                            </div>
-                            <a href="{{ route('logistics.register') }}" class="px-3.5 py-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold hover:bg-primary/90 transition-colors shrink-0 text-center">
-                                Open Dedicated Portal →
+                            {{-- Seller Button --}}
+                            <label
+                                class="flex flex-col items-center justify-center p-3.5 rounded-2xl border cursor-pointer transition-all select-none text-center"
+                                :class="role === 'seller' ? 'border-primary bg-primary/5 text-primary font-bold shadow-xs ring-1 ring-primary' : 'border-outline-variant text-on-surface-variant hover:border-outline hover:bg-surface-container-low/50'">
+                                <input type="radio" name="role" value="seller" x-model="role" class="sr-only">
+                                <span class="text-xs font-semibold">Seller</span>
+                            </label>
+
+                            {{-- Logistics Button (Navigates to Dedicated Portal) --}}
+                            <a
+                                href="{{ route('logistics.register') }}"
+                                class="flex flex-col items-center justify-center p-3.5 rounded-2xl border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-all select-none text-center group"
+                                title="Register via Dedicated Logistics Partner Portal">
+                                <span class="text-xs font-semibold flex items-center justify-center gap-1">
+                                    <span>Logistics</span>
+                                    <span class="material-symbols-outlined text-[14px] text-outline group-hover:text-primary group-hover:translate-x-0.5 transition-all">open_in_new</span>
+                                </span>
                             </a>
                         </div>
                     </div>
@@ -445,11 +452,11 @@
                 {{-- ========================================================================= --}}
                 <div x-show="step === 4" x-cloak class="p-5 md:p-6 flex flex-col gap-5">
 
-                    {{-- Business Information — Seller / Logistics --}}
-                    <div x-show="role === 'seller' || role === 'sorting_center'" x-cloak class="flex flex-col gap-4">
+                    {{-- Business Information — Seller Store --}}
+                    <div x-show="role === 'seller'" x-cloak class="flex flex-col gap-4">
                         <div>
-                            <h2 class="font-headline-sm text-sm font-bold text-on-surface">Business Information</h2>
-                            <p class="text-xs text-on-surface-variant mt-0.5">Required for verified sellers and logistics hubs.</p>
+                            <h2 class="font-headline-sm text-sm font-bold text-on-surface">Seller Store & Business Details</h2>
+                            <p class="text-xs text-on-surface-variant mt-0.5">Required for verified merchant and seller accounts.</p>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -686,7 +693,6 @@
             roleOptions: [
                 { value: 'buyer', label: 'Buyer' },
                 { value: 'seller', label: 'Seller' },
-                { value: 'sorting_center', label: 'Logistics' },
             ],
 
             firstName: @json(old('first_name', '')),
@@ -962,14 +968,14 @@
                 }
 
                 if (s === 4) {
-                    if (this.role === 'seller' || this.role === 'sorting_center') {
+                    if (this.role === 'seller') {
                         const bName = (this.businessName || '').trim();
                         if (!bName) {
                             this.fieldErrors.business_name = 'Business name is required.';
                         } else if (bName.length < 2) {
                             this.fieldErrors.business_name = 'Business name must be at least 2 characters.';
                         }
-                        if (this.role === 'seller' && this.selectedCategories.length === 0 && !this.category) {
+                        if (this.selectedCategories.length === 0 && !this.category) {
                             this.fieldErrors.categories = 'Please select at least one online shopping category for your store.';
                         }
                         const permitInput = document.getElementById('business_permit');

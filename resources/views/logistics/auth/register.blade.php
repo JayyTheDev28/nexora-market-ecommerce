@@ -110,45 +110,88 @@
                 </div>
             </div>
 
-            {{-- 2. Principal Business Address --}}
+            {{-- 2. Principal Hub & Office Address (Powered by Location API) --}}
             <div class="flex flex-col gap-4">
                 <div class="border-b border-outline-variant/60 pb-3">
                     <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
                         <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">2</span>
                         Principal Hub & Office Address
                     </h2>
-                    <p class="text-xs text-on-surface-variant mt-0.5">Physical dispatch origin and central hub facility location.</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Physical dispatch origin and central hub facility location selected via official geographic location (PSGC).</p>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {{-- Province Selector --}}
                     <div class="flex flex-col gap-1">
-                        <label for="region" class="text-xs font-semibold text-on-surface-variant">Region <span class="text-rose-500">*</span></label>
-                        <input type="text" id="region" name="region" value="{{ old('region', 'National Capital Region (NCR)') }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <label class="text-xs font-semibold text-on-surface-variant">Province / District <span class="text-rose-500">*</span></label>
+                        <select
+                            x-model="selectedProvinceCode"
+                            @change="onProvinceChange()"
+                            required
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option value="">Select Province</option>
+                            <template x-for="p in provinces" :key="p.code">
+                                <option :value="p.code" x-text="p.name" :selected="p.code === selectedProvinceCode || p.name === selectedProvinceName"></option>
+                            </template>
+                        </select>
+                        <input type="hidden" name="province" :value="selectedProvinceName">
+                        <input type="hidden" name="province_code" :value="selectedProvinceCode">
+                        <input type="hidden" name="region" :value="selectedRegionName">
                     </div>
 
+                    {{-- City / Municipality Selector --}}
                     <div class="flex flex-col gap-1">
-                        <label for="province" class="text-xs font-semibold text-on-surface-variant">Province / District <span class="text-rose-500">*</span></label>
-                        <input type="text" id="province" name="province" value="{{ old('province', 'Metro Manila') }}" required class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <label class="text-xs font-semibold text-on-surface-variant">City / Municipality <span class="text-rose-500">*</span></label>
+                        <select
+                            x-model="selectedCityCode"
+                            @change="onCityChange()"
+                            :disabled="!selectedProvinceCode"
+                            required
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
+                            <option value="">Select City / Municipality</option>
+                            <template x-for="c in cities" :key="c.code">
+                                <option :value="c.code" x-text="c.name" :selected="c.code === selectedCityCode || c.name === selectedCityName"></option>
+                            </template>
+                        </select>
+                        <input type="hidden" name="city_municipality" :value="selectedCityName">
+                        <input type="hidden" name="city_code" :value="selectedCityCode">
                     </div>
 
+                    {{-- Barangay Selector --}}
                     <div class="flex flex-col gap-1">
-                        <label for="city_municipality" class="text-xs font-semibold text-on-surface-variant">City / Municipality <span class="text-rose-500">*</span></label>
-                        <input type="text" id="city_municipality" name="city_municipality" value="{{ old('city_municipality') }}" required placeholder="e.g. Taguig City" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <label class="text-xs font-semibold text-on-surface-variant">Barangay <span class="text-rose-500">*</span></label>
+                        <select
+                            x-model="selectedBarangayCode"
+                            @change="onBarangayChange()"
+                            :disabled="!selectedCityCode"
+                            required
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
+                            <option value="">Select Barangay</option>
+                            <template x-for="b in barangays" :key="b.code">
+                                <option :value="b.code" x-text="b.name" :selected="b.code === selectedBarangayCode || b.name === selectedBarangayName"></option>
+                            </template>
+                        </select>
+                        <input type="hidden" name="barangay" :value="selectedBarangayName">
+                        <input type="hidden" name="barangay_code" :value="selectedBarangayCode">
                     </div>
 
-                    <div class="flex flex-col gap-1">
-                        <label for="barangay" class="text-xs font-semibold text-on-surface-variant">Barangay <span class="text-rose-500">*</span></label>
-                        <input type="text" id="barangay" name="barangay" value="{{ old('barangay') }}" required placeholder="e.g. Fort Bonifacio" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                    {{-- Auto-derived Region Label --}}
+                    <div class="flex flex-col gap-1 sm:col-span-2 md:col-span-3" x-show="selectedRegionName">
+                        <span class="text-[11px] text-on-surface-variant">
+                            Region: <strong class="text-primary" x-text="selectedRegionName"></strong>
+                        </span>
                     </div>
 
+                    {{-- Street Address --}}
                     <div class="flex flex-col gap-1 sm:col-span-2">
                         <label for="street_address" class="text-xs font-semibold text-on-surface-variant">Street Address / Building / Unit No. <span class="text-rose-500">*</span></label>
                         <input type="text" id="street_address" name="street_address" value="{{ old('street_address') }}" required placeholder="e.g. Unit 402 Logistics Tower, 32nd Street" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
 
+                    {{-- Postal Code --}}
                     <div class="flex flex-col gap-1">
                         <label for="postal_code" class="text-xs font-semibold text-on-surface-variant">Postal Code (4 Digits) <span class="text-rose-500">*</span></label>
-                        <input type="text" id="postal_code" name="postal_code" value="{{ old('postal_code') }}" required maxlength="4" placeholder="1630" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+                        <input type="text" id="postal_code" name="postal_code" value="{{ old('postal_code') }}" required maxlength="4" placeholder="4004" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
                 </div>
             </div>
@@ -180,8 +223,17 @@
                     </div>
 
                     <div class="flex flex-col gap-1">
-                        <label for="mobile_number" class="text-xs font-semibold text-on-surface-variant">Official Mobile Number <span class="text-rose-500">*</span></label>
-                        <input type="tel" id="mobile_number" name="mobile_number" value="{{ old('mobile_number') }}" required placeholder="09171234567" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <label for="mobile_number" class="text-xs font-semibold text-on-surface-variant">Official Mobile Number (11 Digits) <span class="text-rose-500">*</span></label>
+                        <input
+                            type="tel"
+                            id="mobile_number"
+                            name="mobile_number"
+                            value="{{ old('mobile_number') }}"
+                            required
+                            maxlength="11"
+                            @input="$el.value = $el.value.replace(/[^0-9]/g, '').slice(0, 11)"
+                            placeholder="09171234567"
+                            class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                     </div>
 
                     <div class="flex flex-col gap-1 md:col-span-2">
@@ -191,119 +243,174 @@
                 </div>
             </div>
 
-            {{-- 4. Regional Service Coverage Areas --}}
+            {{-- 4. Compliance Documents Upload --}}
             <div class="flex flex-col gap-4">
                 <div class="border-b border-outline-variant/60 pb-3">
                     <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
                         <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">4</span>
-                        Regional Delivery & Service Coverage Areas
-                    </h2>
-                    <p class="text-xs text-on-surface-variant mt-0.5">Select all territories your courier riders and sorting facilities can cover.</p>
-                </div>
-
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 select-none">
-                    @php
-                        $regionsList = [
-                            'Metro Manila (NCR)',
-                            'Calabarzon (Region IV-A)',
-                            'Central Luzon (Region III)',
-                            'North Luzon (Ilocos & CAR)',
-                            'Cagayan Valley (Region II)',
-                            'Bicol Region (Region V)',
-                            'Western Visayas (Region VI)',
-                            'Central Visayas (Region VII)',
-                            'Eastern Visayas (Region VIII)',
-                            'Northern Mindanao (Region X)',
-                            'Davao Region (Region XI)',
-                            'SOCCSKSARGEN (Region XII)',
-                        ];
-                        $oldAreas = (array) old('service_areas', ['Metro Manila (NCR)']);
-                    @endphp
-
-                    @foreach($regionsList as $area)
-                        <label class="flex items-center gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all"
-                            :class="selectedAreas.includes('{{ $area }}') ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs' : 'border-outline-variant/70 bg-surface hover:bg-surface-container-low text-on-surface'">
-                            <input
-                                type="checkbox"
-                                name="service_areas[]"
-                                value="{{ $area }}"
-                                @change="toggleArea('{{ $area }}')"
-                                {{ in_array($area, $oldAreas) ? 'checked' : '' }}
-                                class="w-4 h-4 rounded text-primary focus:ring-primary border-outline-variant">
-                            <span class="text-xs leading-tight">{{ $area }}</span>
-                        </label>
-                    @endforeach
-                </div>
-            </div>
-
-            {{-- 5. Compliance Documents Upload --}}
-            <div class="flex flex-col gap-4">
-                <div class="border-b border-outline-variant/60 pb-3">
-                    <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">5</span>
                         Compliance Documents Upload
                     </h2>
-                    <p class="text-xs text-on-surface-variant mt-0.5">Clear scans or PDF copies (Maximum 2MB per document; Allowed: PDF, JPG, PNG).</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Clear scans or PDF copies (Max 2MB per document; Allowed: PDF, JPG, PNG). Uploaded documents remain saved even if validation fails.</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {{-- SEC Certificate --}}
+                    @php
+                        $cachedSec = old('sec_certificate_cached') ?? session('logistics_temp_docs.sec_certificate.path');
+                        $cachedSecName = session('logistics_temp_docs.sec_certificate.original_name') ?? ($cachedSec ? basename($cachedSec) : null);
+                    @endphp
                     <div class="flex flex-col gap-1.5 p-4 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/40">
                         <div class="flex items-center justify-between">
                             <label class="text-xs font-bold text-on-surface">1. SEC Registration Certificate <span class="text-rose-500">*</span></label>
                             <span class="text-[10px] text-outline">Max 2MB</span>
                         </div>
-                        <input type="file" name="sec_certificate" accept=".pdf,.jpg,.jpeg,.png" required class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedSec)
+                            <div class="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                                    <span class="font-semibold truncate">Attached: {{ $cachedSecName }}</span>
+                                </div>
+                                <span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold uppercase">Saved</span>
+                            </div>
+                            <input type="hidden" name="sec_certificate_cached" value="{{ $cachedSec }}">
+                        @endif
+                        <input type="file" name="sec_certificate" accept=".pdf,.jpg,.jpeg,.png" {{ $cachedSec ? '' : 'required' }} class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedSec)
+                            <span class="text-[10px] text-on-surface-variant">Leave empty to keep attached file, or upload a new file to replace.</span>
+                        @endif
                     </div>
 
                     {{-- BIR Form 2303 --}}
+                    @php
+                        $cachedBir = old('bir_2303_cached') ?? session('logistics_temp_docs.bir_2303.path');
+                        $cachedBirName = session('logistics_temp_docs.bir_2303.original_name') ?? ($cachedBir ? basename($cachedBir) : null);
+                    @endphp
                     <div class="flex flex-col gap-1.5 p-4 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/40">
                         <div class="flex items-center justify-between">
                             <label class="text-xs font-bold text-on-surface">2. BIR Form 2303 Certificate <span class="text-rose-500">*</span></label>
                             <span class="text-[10px] text-outline">Max 2MB</span>
                         </div>
-                        <input type="file" name="bir_2303" accept=".pdf,.jpg,.jpeg,.png" required class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedBir)
+                            <div class="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                                    <span class="font-semibold truncate">Attached: {{ $cachedBirName }}</span>
+                                </div>
+                                <span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold uppercase">Saved</span>
+                            </div>
+                            <input type="hidden" name="bir_2303_cached" value="{{ $cachedBir }}">
+                        @endif
+                        <input type="file" name="bir_2303" accept=".pdf,.jpg,.jpeg,.png" {{ $cachedBir ? '' : 'required' }} class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedBir)
+                            <span class="text-[10px] text-on-surface-variant">Leave empty to keep attached file, or upload a new file to replace.</span>
+                        @endif
                     </div>
 
                     {{-- Mayor's Permit --}}
+                    @php
+                        $cachedPermit = old('mayors_permit_cached') ?? session('logistics_temp_docs.mayors_permit.path');
+                        $cachedPermitName = session('logistics_temp_docs.mayors_permit.original_name') ?? ($cachedPermit ? basename($cachedPermit) : null);
+                    @endphp
                     <div class="flex flex-col gap-1.5 p-4 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/40">
                         <div class="flex items-center justify-between">
                             <label class="text-xs font-bold text-on-surface">3. Mayor's / Business Permit <span class="text-rose-500">*</span></label>
                             <span class="text-[10px] text-outline">Max 2MB</span>
                         </div>
-                        <input type="file" name="mayors_permit" accept=".pdf,.jpg,.jpeg,.png" required class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedPermit)
+                            <div class="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                                    <span class="font-semibold truncate">Attached: {{ $cachedPermitName }}</span>
+                                </div>
+                                <span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold uppercase">Saved</span>
+                            </div>
+                            <input type="hidden" name="mayors_permit_cached" value="{{ $cachedPermit }}">
+                        @endif
+                        <input type="file" name="mayors_permit" accept=".pdf,.jpg,.jpeg,.png" {{ $cachedPermit ? '' : 'required' }} class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedPermit)
+                            <span class="text-[10px] text-on-surface-variant">Leave empty to keep attached file, or upload a new file to replace.</span>
+                        @endif
                     </div>
 
                     {{-- Valid ID --}}
+                    @php
+                        $cachedId = old('valid_id_cached') ?? session('logistics_temp_docs.valid_id.path');
+                        $cachedIdName = session('logistics_temp_docs.valid_id.original_name') ?? ($cachedId ? basename($cachedId) : null);
+                    @endphp
                     <div class="flex flex-col gap-1.5 p-4 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/40">
                         <div class="flex items-center justify-between">
                             <label class="text-xs font-bold text-on-surface">4. Valid Government ID of Signatory <span class="text-rose-500">*</span></label>
                             <span class="text-[10px] text-outline">Max 2MB</span>
                         </div>
-                        <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" required class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedId)
+                            <div class="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                                    <span class="font-semibold truncate">Attached: {{ $cachedIdName }}</span>
+                                </div>
+                                <span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold uppercase">Saved</span>
+                            </div>
+                            <input type="hidden" name="valid_id_cached" value="{{ $cachedId }}">
+                        @endif
+                        <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" {{ $cachedId ? '' : 'required' }} class="text-xs text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-on-primary">
+                        @if($cachedId)
+                            <span class="text-[10px] text-on-surface-variant">Leave empty to keep attached file, or upload a new file to replace.</span>
+                        @endif
                     </div>
                 </div>
             </div>
 
-            {{-- 6. Account Password & Terms --}}
+            {{-- 5. Account Password & Terms --}}
             <div class="flex flex-col gap-4">
                 <div class="border-b border-outline-variant/60 pb-3">
                     <h2 class="font-headline-sm text-sm sm:text-base font-bold text-on-surface flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">6</span>
+                        <span class="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-extrabold flex items-center justify-center">5</span>
                         Account Security & Agreement
                     </h2>
                     <p class="text-xs text-on-surface-variant mt-0.5">Password must be at least 8 characters and include uppercase, lowercase, numbers, and symbols.</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {{-- Password with View Toggle --}}
                     <div class="flex flex-col gap-1">
                         <label for="password" class="text-xs font-semibold text-on-surface-variant">Account Password <span class="text-rose-500">*</span></label>
-                        <input type="password" id="password" name="password" required placeholder="••••••••" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="relative">
+                            <input
+                                :type="showPassword ? 'text' : 'password'"
+                                id="password"
+                                name="password"
+                                required
+                                placeholder="••••••••"
+                                class="w-full rounded-xl border border-outline-variant pl-3.5 pr-10 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                            <button
+                                type="button"
+                                @click="showPassword = !showPassword"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors focus:outline-none"
+                                title="Toggle password visibility">
+                                <span class="material-symbols-outlined text-[18px]" x-text="showPassword ? 'visibility_off' : 'visibility'">visibility</span>
+                            </button>
+                        </div>
                     </div>
 
+                    {{-- Confirm Password with View Toggle --}}
                     <div class="flex flex-col gap-1">
                         <label for="password_confirmation" class="text-xs font-semibold text-on-surface-variant">Confirm Password <span class="text-rose-500">*</span></label>
-                        <input type="password" id="password_confirmation" name="password_confirmation" required placeholder="••••••••" class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="relative">
+                            <input
+                                :type="showConfirmPassword ? 'text' : 'password'"
+                                id="password_confirmation"
+                                name="password_confirmation"
+                                required
+                                placeholder="••••••••"
+                                class="w-full rounded-xl border border-outline-variant pl-3.5 pr-10 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                            <button
+                                type="button"
+                                @click="showConfirmPassword = !showConfirmPassword"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors focus:outline-none"
+                                title="Toggle password visibility">
+                                <span class="material-symbols-outlined text-[18px]" x-text="showConfirmPassword ? 'visibility_off' : 'visibility'">visibility</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -347,8 +454,97 @@
     function logisticsRegisterForm() {
         return {
             isSubmitting: false,
+            showPassword: false,
+            showConfirmPassword: false,
             tin: '{{ old('tin', '') }}',
-            selectedAreas: @json(old('service_areas', ['Metro Manila (NCR)'])),
+
+            provinces: @json($provinces ?? []),
+            cities: [],
+            barangays: [],
+            selectedProvinceCode: '{{ old('province_code', '') }}',
+            selectedProvinceName: '{{ old('province', '') }}',
+            selectedCityCode: '{{ old('city_code', '') }}',
+            selectedCityName: '{{ old('city_municipality', '') }}',
+            selectedBarangayCode: '{{ old('barangay_code', '') }}',
+            selectedBarangayName: '{{ old('barangay', '') }}',
+            selectedRegionName: '{{ old('region', '') }}',
+
+            async init() {
+                if (!this.selectedProvinceCode && this.selectedProvinceName) {
+                    const found = this.provinces.find(p => p.name.toLowerCase() === this.selectedProvinceName.toLowerCase());
+                    if (found) {
+                        this.selectedProvinceCode = found.code;
+                        this.selectedRegionName = found.region_name || found.name;
+                    }
+                }
+                if (this.selectedProvinceCode) {
+                    const p = this.provinces.find(item => item.code === this.selectedProvinceCode);
+                    if (p && !this.selectedRegionName) {
+                        this.selectedRegionName = p.region_name || p.name;
+                    }
+                    await this.fetchCities(this.selectedProvinceCode);
+                    if (!this.selectedCityCode && this.selectedCityName) {
+                        const foundCity = this.cities.find(c => c.name.toLowerCase() === this.selectedCityName.toLowerCase());
+                        if (foundCity) this.selectedCityCode = foundCity.code;
+                    }
+                    if (this.selectedCityCode) {
+                        await this.fetchBarangays(this.selectedCityCode);
+                        if (!this.selectedBarangayCode && this.selectedBarangayName) {
+                            const foundB = this.barangays.find(b => b.name.toLowerCase() === this.selectedBarangayName.toLowerCase());
+                            if (foundB) this.selectedBarangayCode = foundB.code;
+                        }
+                    }
+                }
+            },
+
+            async onProvinceChange() {
+                const p = this.provinces.find(item => item.code === this.selectedProvinceCode);
+                this.selectedProvinceName = p ? p.name : '';
+                this.selectedRegionName = p ? (p.region_name || p.name) : '';
+                this.selectedCityCode = '';
+                this.selectedCityName = '';
+                this.selectedBarangayCode = '';
+                this.selectedBarangayName = '';
+                this.cities = [];
+                this.barangays = [];
+                if (this.selectedProvinceCode) {
+                    await this.fetchCities(this.selectedProvinceCode);
+                }
+            },
+
+            async onCityChange() {
+                const c = this.cities.find(item => item.code === this.selectedCityCode);
+                this.selectedCityName = c ? c.name : '';
+                this.selectedBarangayCode = '';
+                this.selectedBarangayName = '';
+                this.barangays = [];
+                if (this.selectedCityCode) {
+                    await this.fetchBarangays(this.selectedCityCode);
+                }
+            },
+
+            onBarangayChange() {
+                const b = this.barangays.find(item => item.code === this.selectedBarangayCode);
+                this.selectedBarangayName = b ? b.name : '';
+            },
+
+            async fetchCities(provCode) {
+                try {
+                    const res = await fetch(`/locations/provinces/${provCode}/cities`);
+                    this.cities = await res.json();
+                } catch (e) {
+                    console.error('Failed to load cities:', e);
+                }
+            },
+
+            async fetchBarangays(cityCode) {
+                try {
+                    const res = await fetch(`/locations/cities/${cityCode}/barangays`);
+                    this.barangays = await res.json();
+                } catch (e) {
+                    console.error('Failed to load barangays:', e);
+                }
+            },
 
             formatTin(e) {
                 let v = e.target.value.replace(/[^0-9]/g, '').slice(0, 12);
@@ -359,21 +555,7 @@
                 this.tin = parts.join('-');
             },
 
-            toggleArea(area) {
-                const idx = this.selectedAreas.indexOf(area);
-                if (idx === -1) {
-                    this.selectedAreas.push(area);
-                } else {
-                    this.selectedAreas.splice(idx, 1);
-                }
-            },
-
             handleSubmit(e) {
-                if (this.selectedAreas.length === 0) {
-                    e.preventDefault();
-                    alert('Please select at least one regional service area of logistics coverage.');
-                    return;
-                }
                 this.isSubmitting = true;
             }
         };
@@ -381,4 +563,3 @@
 </script>
 @endpush
 @endsection
-

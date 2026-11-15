@@ -3,7 +3,7 @@
 @section('title', 'Rider Management — Nexora Logistics')
 
 @section('content')
-<div class="w-full min-h-screen bg-surface" x-data="{ addAreaModal: false, disapproveModal: false, activeRiderId: null, riderName: '', actionModal: false, actionType: 'deactivate' }">
+<div class="w-full min-h-screen bg-surface" x-data="{ disapproveModal: false, activeRiderId: null, riderName: '', actionModal: false, actionType: 'deactivate' }">
     <div class="flex flex-col lg:flex-row w-full">
 
             <x-logistics-nav active="riders" />
@@ -14,23 +14,44 @@
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
                 <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">Rider Management</h1>
-                <p class="font-body-md text-sm text-on-surface-variant mt-1">Review courier applications, assign delivery coverage areas, and monitor rider workload.</p>
+                <p class="font-body-md text-sm text-on-surface-variant mt-1">Review courier applications, assign delivery coverage zones, and monitor rider workload.</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <a
                     href="{{ route('logistics.riders.create') }}"
                     class="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-full font-label-md text-xs font-semibold shadow-xs hover:bg-primary/90 transition-all cursor-pointer">
                     <span class="material-symbols-outlined text-[18px]">person_add</span>
                     <span>Add Rider</span>
                 </a>
-                <button
-                    type="button"
-                    @click="addAreaModal = true"
-                    class="inline-flex items-center gap-2 bg-secondary text-on-secondary px-4 py-2.5 rounded-full font-label-md text-xs font-semibold shadow-xs hover:bg-secondary/90 transition-all cursor-pointer">
-                    <span class="material-symbols-outlined text-[18px]">add_location_alt</span>
-                    <span>New Delivery Area</span>
-                </button>
+                <a
+                    href="{{ route('logistics.couriers.create') }}"
+                    class="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-full font-label-md text-xs font-semibold shadow-xs hover:bg-indigo-700 transition-all cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">local_shipping</span>
+                    <span>Create Transfer Courier</span>
+                </a>
+                <a
+                    href="{{ route('logistics.zones.index') }}"
+                    class="inline-flex items-center gap-2 bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-4 py-2.5 rounded-full font-label-md text-xs font-semibold border border-outline-variant transition-all cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">share_location</span>
+                    <span>Coverage Zones</span>
+                </a>
             </div>
+        </div>
+
+        {{-- Personnel Category Switcher: Delivery Riders vs Transfer Couriers --}}
+        <div class="flex flex-wrap items-center gap-2 mb-6">
+            <a href="{{ route('logistics.riders.index', ['category' => 'all', 'tab' => $tab, 'q' => $search]) }}"
+               class="px-4 py-2 rounded-full text-xs font-semibold border transition-all {{ ($category ?? 'all') === 'all' ? 'bg-on-surface text-surface border-on-surface' : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:border-primary' }}">
+                All Personnel ({{ $categoryCounts['all'] ?? 0 }})
+            </a>
+            <a href="{{ route('logistics.riders.index', ['category' => 'riders', 'tab' => $tab, 'q' => $search]) }}"
+               class="px-4 py-2 rounded-full text-xs font-semibold border transition-all {{ ($category ?? 'all') === 'riders' ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:border-primary' }}">
+                Delivery Riders ({{ $categoryCounts['riders'] ?? 0 }})
+            </a>
+            <a href="{{ route('logistics.riders.index', ['category' => 'couriers', 'tab' => $tab, 'q' => $search]) }}"
+               class="px-4 py-2 rounded-full text-xs font-semibold border transition-all {{ ($category ?? 'all') === 'couriers' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:border-indigo-500' }}">
+                Transfer Couriers ({{ $categoryCounts['couriers'] ?? 0 }})
+            </a>
         </div>
 
         {{-- Alerts --}}
@@ -94,52 +115,55 @@
                 <span class="text-[11px] text-rose-600 font-medium">Assignments blocked</span>
             </a>
 
-            <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5">
+            <a href="{{ route('logistics.zones.index') }}" class="bg-surface-container-lowest rounded-2xl border border-outline-variant transition-all p-5 hover:border-primary">
                 <div class="flex items-center justify-between">
-                    <span class="font-body-sm text-xs font-medium text-on-surface-variant">Delivery Areas</span>
+                    <span class="font-body-sm text-xs font-medium text-on-surface-variant">Coverage Zones</span>
                     <span class="w-8 h-8 rounded-full bg-blue-500/10 text-blue-700 flex items-center justify-center">
-                        <span class="material-symbols-outlined text-[18px]">map</span>
+                        <span class="material-symbols-outlined text-[18px]">share_location</span>
                     </span>
                 </div>
-                <p class="font-display-lg text-2xl font-bold text-on-surface mt-2">{{ $deliveryAreas->count() }}</p>
-                <span class="text-[11px] text-on-surface-variant">{{ $deliveryAreas->whereNotNull('courier_id')->count() }} assigned with riders</span>
-            </div>
+                <p class="font-display-lg text-2xl font-bold text-on-surface mt-2">{{ $zones->count() }}</p>
+                <span class="text-[11px] text-on-surface-variant">{{ $zones->filter(fn ($z) => $z->riders->isNotEmpty())->count() }} with assigned riders</span>
+            </a>
         </div>
 
-        {{-- Managed Delivery Areas Strip --}}
+        {{-- Hub Delivery Coverage Zones Strip --}}
         <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 mb-8">
             <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary text-[20px]">explore</span>
-                    <h3 class="font-headline-sm text-sm font-bold text-on-surface">Hub Delivery Coverage Areas</h3>
+                    <span class="material-symbols-outlined text-primary text-[20px]">share_location</span>
+                    <h3 class="font-headline-sm text-sm font-bold text-on-surface">Hub Delivery Coverage Zones</h3>
                 </div>
-                <span class="text-xs text-on-surface-variant">Assigned riders handle destination parcels in these areas</span>
+                <a href="{{ route('logistics.zones.index') }}" class="text-xs text-primary font-semibold hover:underline inline-flex items-center gap-1">
+                    <span>Manage Zones &amp; Barangays</span>
+                    <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </a>
             </div>
 
-            @if($deliveryAreas->isEmpty())
+            @if($zones->isEmpty())
                 <div class="p-4 rounded-xl bg-surface-container-low text-center">
-                    <p class="text-xs text-on-surface-variant">No delivery areas configured yet. Click "New Delivery Area" above to define areas (e.g. Area A - Santa Cruz).</p>
+                    <p class="text-xs text-on-surface-variant">No coverage zones configured yet. Visit <a href="{{ route('logistics.zones.index') }}" class="text-primary font-semibold underline">Coverage Zones</a> to configure zones and assign barangays.</p>
                 </div>
             @else
                 <div class="flex flex-wrap gap-2.5">
-                    @foreach($deliveryAreas as $area)
+                    @foreach($zones as $zone)
                         <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-container border border-outline-variant text-xs">
-                            <span class="font-semibold text-on-surface">{{ $area->name }}</span>
-                            @if($area->courier)
-                                <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 text-[10px] font-semibold flex items-center gap-1">
-                                    <span class="material-symbols-outlined text-[12px]">two_wheeler</span>
-                                    {{ $area->courier->full_name }}
-                                </span>
+                            <span class="font-semibold text-on-surface">{{ $zone->name }}</span>
+                            <span class="text-[10px] text-on-surface-variant font-medium bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">
+                                {{ $zone->city_name }}
+                            </span>
+                            @if($zone->riders->isNotEmpty())
+                                <div class="flex items-center gap-1">
+                                    @foreach($zone->riders as $zRider)
+                                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 text-[10px] font-semibold flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[12px]">two_wheeler</span>
+                                            {{ $zRider->full_name }}
+                                        </span>
+                                    @endforeach
+                                </div>
                             @else
                                 <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-800 text-[10px] font-semibold">Unassigned</span>
                             @endif
-                            <form method="POST" action="{{ route('logistics.areas.destroy', $area) }}" onsubmit="return confirm('Remove delivery area \'{{ addslashes($area->name) }}\'?');" class="inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="text-on-surface-variant hover:text-error transition-colors p-0.5" title="Remove Area">
-                                    <span class="material-symbols-outlined text-[14px]">close</span>
-                                </button>
-                            </form>
                         </div>
                     @endforeach
                 </div>
@@ -170,7 +194,7 @@
             <form method="GET" action="{{ route('logistics.riders.index') }}" class="flex items-center gap-2">
                 <input type="hidden" name="tab" value="{{ $tab }}">
                 <div class="relative flex-1 sm:w-64">
-                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant absolute left-3 top-2.5">search</span>
+                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
                     <input
                         type="text" name="q" value="{{ $search }}"
                         placeholder="Search rider, email, plate..."
@@ -200,7 +224,7 @@
                             <tr>
                                 <th class="px-5 py-3.5">Rider Details</th>
                                 <th class="px-5 py-3.5">Vehicle & Plate</th>
-                                <th class="px-5 py-3.5">Assigned Areas</th>
+                                <th class="px-5 py-3.5">Assigned Zones</th>
                                 <th class="px-5 py-3.5">Workload</th>
                                 <th class="px-5 py-3.5">Status</th>
                                 <th class="px-5 py-3.5">Documents</th>
@@ -244,7 +268,15 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-4">
-                                        @if($rider->deliveryAreas->isNotEmpty())
+                                        @if($rider->assignedZones->isNotEmpty())
+                                            <div class="flex flex-wrap gap-1">
+                                                @foreach($rider->assignedZones as $zone)
+                                                    <span class="px-2 py-0.5 rounded-md bg-secondary/10 text-secondary font-semibold text-[10px]" title="{{ $zone->city_name }}, {{ $zone->province_name }} ({{ $zone->barangays->count() }} barangays)">
+                                                        {{ $zone->name }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @elseif($rider->deliveryAreas->isNotEmpty())
                                             <div class="flex flex-wrap gap-1">
                                                 @foreach($rider->deliveryAreas as $area)
                                                     <span class="px-2 py-0.5 rounded-md bg-secondary/10 text-secondary font-semibold text-[10px]">
@@ -253,7 +285,7 @@
                                                 @endforeach
                                             </div>
                                         @else
-                                            <span class="text-[11px] text-on-surface-variant italic">No area assigned</span>
+                                            <span class="text-[11px] text-on-surface-variant italic">No zone assigned</span>
                                         @endif
                                     </td>
                                     <td class="px-5 py-4">
@@ -379,52 +411,6 @@
 </div>
 
 
-    {{-- Modal: Create New Delivery Area --}}
-    <div x-show="addAreaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-        <div @click.outside="addAreaModal = false" class="bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-xl w-full max-w-md p-6 overflow-hidden">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary text-[22px]">add_location_alt</span>
-                    <h3 class="font-headline-sm text-base font-bold text-on-surface">New Hub Delivery Area</h3>
-                </div>
-                <button type="button" @click="addAreaModal = false" class="text-on-surface-variant hover:text-on-surface p-1">
-                    <span class="material-symbols-outlined text-[20px]">close</span>
-                </button>
-            </div>
-
-            <form method="POST" action="{{ route('logistics.areas.store') }}" class="flex flex-col gap-4">
-                @csrf
-                <div class="flex flex-col gap-1.5">
-                    <label for="name" class="font-label-md text-xs font-semibold text-on-surface-variant">Area Name / Coverage</label>
-                    <input
-                        type="text" id="name" name="name" required placeholder="e.g. Area A - Santa Cruz, Laguna"
-                        class="rounded-xl border border-outline-variant px-3.5 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
-                    <span class="text-[11px] text-on-surface-variant">Example: Area A (Santa Cruz), Area B (Pagsanjan), Area C (Los Baños)</span>
-                </div>
-
-                <div class="flex flex-col gap-1.5">
-                    <label for="courier_id" class="font-label-md text-xs font-semibold text-on-surface-variant">Assign Initial Rider (Optional)</label>
-                    <select
-                        id="courier_id" name="courier_id"
-                        class="rounded-xl border border-outline-variant px-3 py-2.5 text-xs text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
-                        <option value="">No rider assigned initially</option>
-                        @foreach($riders->where('approval_status', 'approved')->where('account_status', 'active') as $activeRider)
-                            <option value="{{ $activeRider->id }}">{{ $activeRider->full_name }} ({{ $activeRider->courierProfile?->vehicle_type ?? 'Courier' }})</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="flex items-center justify-end gap-3 mt-2">
-                    <button type="button" @click="addAreaModal = false" class="px-4 py-2 rounded-full border border-outline-variant text-xs font-semibold text-on-surface hover:bg-surface-container">
-                        Cancel
-                    </button>
-                    <button type="submit" class="px-5 py-2 rounded-full bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90">
-                        Create Area
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
 
     {{-- Modal: Disapprove Application --}}
     <div x-show="disapproveModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">

@@ -28,6 +28,7 @@ class AssignmentController extends Controller
             ->with([
                 'buyer',
                 'address',
+                'deliveryZone.riders',
                 'deliveryArea',
                 'deliveryCourier.courierProfile',
                 'items.product',
@@ -43,7 +44,13 @@ class AssignmentController extends Controller
             default => $query->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center']),
         };
 
-        if ($areaFilter) {
+        $zoneFilter = $request->query('zone_id');
+        if ($zoneFilter) {
+            $query->where(function ($q) use ($zoneFilter) {
+                $q->where('delivery_zone_id', $zoneFilter)
+                    ->orWhereHas('deliveryZone', fn ($zq) => $zq->where('id', $zoneFilter));
+            });
+        } elseif ($areaFilter) {
             $query->where('delivery_area_id', $areaFilter);
         }
 
@@ -67,7 +74,7 @@ class AssignmentController extends Controller
         ];
 
         // Active and approved riders with their workload and assigned areas/zones
-        $couriers = User::whereIn('role', ['rider', 'courier'])
+        $couriers = User::where('role', 'rider')
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))
@@ -119,7 +126,7 @@ class AssignmentController extends Controller
             }
 
             $courier = User::where('id', $validated['courier_id'])
-                ->whereIn('role', ['rider', 'courier'])
+                ->where('role', 'rider')
                 ->lockForUpdate()
                 ->firstOrFail();
 

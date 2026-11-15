@@ -17,6 +17,7 @@ class PickupController extends Controller
      */
     public function index(Request $request): View
     {
+        $companyId = $request->user()->id;
         $tab = $request->query('tab', 'pending');
         $search = $request->query('q');
 
@@ -26,7 +27,11 @@ class PickupController extends Controller
             'buyer',
             'address',
             'pickupCourier',
-        ]);
+        ])->where(function ($q) use ($companyId) {
+            $q->where('pickup_logistics_id', $companyId)
+              ->orWhere('current_custody_logistics_id', $companyId)
+              ->orWhere('sorting_center_id', $companyId);
+        });
 
         match ($tab) {
             'pending' => $query->where('status', 'ready_for_pickup')->whereNull('pickup_courier_id'),
@@ -49,15 +54,22 @@ class PickupController extends Controller
 
         $orders = $query->latest('placed_at')->paginate(15)->withQueryString();
 
+        $baseCountQuery = Order::where(function ($q) use ($companyId) {
+            $q->where('pickup_logistics_id', $companyId)
+              ->orWhere('current_custody_logistics_id', $companyId)
+              ->orWhere('sorting_center_id', $companyId);
+        });
+
         $counts = [
-            'pending' => Order::where('status', 'ready_for_pickup')->whereNull('pickup_courier_id')->count(),
-            'scheduled' => Order::where('status', 'ready_for_pickup')->whereNotNull('pickup_courier_id')->count(),
-            'picked_up' => Order::where('status', 'picked_up')->count(),
-            'all' => Order::whereIn('status', ['ready_for_pickup', 'picked_up'])->count(),
+            'pending' => (clone $baseCountQuery)->where('status', 'ready_for_pickup')->whereNull('pickup_courier_id')->count(),
+            'scheduled' => (clone $baseCountQuery)->where('status', 'ready_for_pickup')->whereNotNull('pickup_courier_id')->count(),
+            'picked_up' => (clone $baseCountQuery)->where('status', 'picked_up')->count(),
+            'all' => (clone $baseCountQuery)->whereIn('status', ['ready_for_pickup', 'picked_up'])->count(),
         ];
 
-        // Eligible active couriers for pickup assignment
-        $couriers = User::whereIn('role', ['rider', 'courier'])
+        // Eligible active couriers belonging to this logistics company
+        $couriers = User::where('role', 'rider')
+            ->whereHas('courierProfile', fn ($q) => $q->where('logistics_company_id', $companyId)->orWhere('sorting_center_id', $companyId))
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->with('courierProfile')
@@ -72,6 +84,14 @@ class PickupController extends Controller
      */
     public function show(Request $request, Order $order): View
     {
+        $companyId = $request->user()->id;
+        abort_unless(
+            (int) $order->pickup_logistics_id === (int) $companyId ||
+            (int) $order->sorting_center_id === (int) $companyId ||
+            (int) $order->current_custody_logistics_id === (int) $companyId,
+            403
+        );
+
         $order->load([
             'items.product.seller.sellerProfile',
             'items.product.seller.address',
@@ -81,7 +101,8 @@ class PickupController extends Controller
             'statusHistory.changedBy',
         ]);
 
-        $couriers = User::whereIn('role', ['rider', 'courier'])
+        $couriers = User::where('role', 'rider')
+            ->whereHas('courierProfile', fn ($q) => $q->where('logistics_company_id', $companyId)->orWhere('sorting_center_id', $companyId))
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->with('courierProfile')
@@ -104,7 +125,7 @@ class PickupController extends Controller
         ]);
 
         $courier = User::where('id', $validated['courier_id'])
-            ->whereIn('role', ['rider', 'courier'])
+            ->where('role', 'rider')
             ->where('approval_status', 'approved')
             ->where('account_status', 'active')
             ->firstOrFail();

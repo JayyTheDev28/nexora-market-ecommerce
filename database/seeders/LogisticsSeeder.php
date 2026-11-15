@@ -184,21 +184,5 @@ class LogisticsSeeder extends Seeder
                 'license_path' => null,
             ]
         );
-
-        // 5. Delivery Areas matching the ERP PDF example
-        DeliveryArea::firstOrCreate(
-            ['sorting_center_id' => $sortingCenter->id, 'name' => 'Area A - Santa Cruz'],
-            ['courier_id' => $rider1->id]
-        );
-
-        DeliveryArea::firstOrCreate(
-            ['sorting_center_id' => $sortingCenter->id, 'name' => 'Area B - Pagsanjan'],
-            ['courier_id' => $rider2->id]
-        );
-
-        DeliveryArea::firstOrCreate(
-            ['sorting_center_id' => $sortingCenter->id, 'name' => 'Area C - Los Baños'],
-            ['courier_id' => null]
-        );
     }
 }

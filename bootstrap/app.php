@@ -25,6 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->trustProxies(at: '*');
+        $middleware->web(append: [
+            \App\Http\Middleware\EnforceSingleSession::class,
+        ]);
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
             'admin' => AdminMiddleware::class,

@@ -79,7 +79,7 @@ class RiderApiController extends Controller
     public function profile(Request $request): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $profile = $rider->courierProfile()->with('sortingCenter')->first();
 
@@ -109,7 +109,7 @@ class RiderApiController extends Controller
     public function toggleAvailability(Request $request): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $profile = $rider->courierProfile;
         abort_unless($profile, 400);
@@ -133,7 +133,7 @@ class RiderApiController extends Controller
     public function offers(Request $request): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $offers = JobOffer::where('courier_id', $rider->id)
             ->where('status', 'pending')
@@ -160,7 +160,7 @@ class RiderApiController extends Controller
     public function acceptOffer(Request $request, JobOffer $offer): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
 
@@ -176,7 +176,7 @@ class RiderApiController extends Controller
     public function declineOffer(Request $request, JobOffer $offer): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $result = $this->dispatchService->declineOffer($offer, $rider, true);
         return response()->json($result);
@@ -188,7 +188,7 @@ class RiderApiController extends Controller
     public function confirmPickup(Request $request): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $validated = $request->validate([
             'tracking_number' => ['required', 'string'],
@@ -235,7 +235,7 @@ class RiderApiController extends Controller
     public function completeDelivery(Request $request, Order $order): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         if ((int) $order->delivery_courier_id !== (int) $rider->id) {
             return response()->json(['error' => 'You are not assigned to this delivery.'], 403);
@@ -299,7 +299,7 @@ class RiderApiController extends Controller
     public function failDelivery(Request $request, Order $order): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         if ((int) $order->delivery_courier_id !== (int) $rider->id) {
             return response()->json(['error' => 'You are not assigned to this delivery.'], 403);
@@ -366,7 +366,7 @@ class RiderApiController extends Controller
     public function earnings(Request $request): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $profile = $rider->courierProfile;
 
@@ -394,7 +394,7 @@ class RiderApiController extends Controller
     public function submitRemittance(Request $request): JsonResponse
     {
         $rider = $request->user();
-        abort_unless($rider && $rider->isCourier(), 403);
+        abort_unless($rider && $rider->isRider(), 403);
 
         $profile = $rider->courierProfile;
         $unremitted = (float) ($profile?->unremitted_cod_balance ?? 0);

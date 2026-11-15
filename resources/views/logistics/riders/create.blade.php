@@ -1,6 +1,10 @@
 @extends('layouts.app')
 
-@section('title', 'Add Rider — Nexora Logistics')
+@php
+    $isCourier = ($personnelType ?? 'rider') === 'courier';
+@endphp
+
+@section('title', ($isCourier ? 'Create Transfer Courier' : 'Add Rider') . ' — Nexora Logistics')
 
 @section('content')
 <div class="w-full min-h-screen bg-surface" x-data="{ submitting: false }">
@@ -15,14 +19,20 @@
             <div class="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
                 <a href="{{ route('logistics.riders.index') }}" class="hover:text-primary transition-colors flex items-center gap-1">
                     <span class="material-symbols-outlined text-[16px]">arrow_back</span>
-                    <span>Rider Management</span>
+                    <span>Personnel Management</span>
                 </a>
                 <span>/</span>
-                <span class="text-on-surface font-semibold">Add New Rider</span>
+                <span class="text-on-surface font-semibold">{{ $isCourier ? 'Create Transfer Courier' : 'Add New Rider' }}</span>
             </div>
-            <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">Add New Courier Rider</h1>
+            <h1 class="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface">
+                {{ $isCourier ? 'Create Transfer Courier Account' : 'Add New Delivery Rider' }}
+            </h1>
             <p class="font-body-md text-xs md:text-sm text-on-surface-variant mt-1">
-                Register a new delivery rider under your logistics operations hub. An activation invitation with a secure setup link will be dispatched to the rider's email.
+                @if ($isCourier)
+                    Register a hub-to-hub Transfer Courier under your logistics company. No vehicle registration is required; truck plate numbers are optionally recorded per transfer manifest.
+                @else
+                    Register a new delivery rider under your logistics operations hub. An activation invitation with a secure setup link will be dispatched to the rider's email.
+                @endif
             </p>
         </div>
 
@@ -42,7 +52,7 @@
         @endif
 
         <form
-            action="{{ route('logistics.riders.store') }}"
+            action="{{ $isCourier ? route('logistics.couriers.store') : route('logistics.riders.store') }}"
             method="POST"
             enctype="multipart/form-data"
             @submit="submitting = true"
@@ -194,40 +204,61 @@
                         <span class="text-[10px] text-on-surface-variant mt-1 block">Must be today or a future date.</span>
                     </div>
 
-                    {{-- Vehicle Type --}}
-                    <div>
-                        <label for="vehicle_type" class="block font-label-md text-xs font-semibold text-on-surface mb-1">
-                            Vehicle Type <span class="text-rose-500">*</span>
-                        </label>
-                        <select
-                            id="vehicle_type"
-                            name="vehicle_type"
-                            required
-                            class="w-full rounded-xl border {{ $errors->has('vehicle_type') ? 'border-rose-500 ring-1 ring-rose-500' : 'border-outline-variant' }} bg-surface px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary">
-                            <option value="">Select vehicle type...</option>
-                            <option value="Motorcycle" {{ old('vehicle_type') === 'Motorcycle' ? 'selected' : '' }}>Motorcycle (Standard Delivery)</option>
-                            <option value="Van" {{ old('vehicle_type') === 'Van' ? 'selected' : '' }}>Van (Bulk / Multi-Parcel)</option>
-                            <option value="Sedan" {{ old('vehicle_type') === 'Sedan' ? 'selected' : '' }}>Sedan / Car</option>
-                            <option value="Truck" {{ old('vehicle_type') === 'Truck' ? 'selected' : '' }}>Light Truck / Delivery Van</option>
-                            <option value="Bicycle" {{ old('vehicle_type') === 'Bicycle' ? 'selected' : '' }}>Bicycle (Local Express)</option>
-                        </select>
-                    </div>
+                    @if ($isCourier)
+                        {{-- Assigned Hub (Optional) --}}
+                        <div>
+                            <label for="assigned_hub_id" class="block font-label-md text-xs font-semibold text-on-surface mb-1">
+                                Home / Assigned Hub (Optional)
+                            </label>
+                            <select
+                                id="assigned_hub_id"
+                                name="assigned_hub_id"
+                                class="w-full rounded-xl border border-outline-variant bg-surface px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="">Any company hub</option>
+                                @foreach (($hubs ?? collect()) as $hub)
+                                    <option value="{{ $hub->id }}" {{ (string) old('assigned_hub_id') === (string) $hub->id ? 'selected' : '' }}>
+                                        {{ $hub->name }} ({{ $hub->code }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            <span class="text-[10px] text-on-surface-variant mt-1 block">Truck plate numbers are recorded optionally per manifest trip.</span>
+                        </div>
+                    @else
+                        {{-- Vehicle Type --}}
+                        <div>
+                            <label for="vehicle_type" class="block font-label-md text-xs font-semibold text-on-surface mb-1">
+                                Vehicle Type <span class="text-rose-500">*</span>
+                            </label>
+                            <select
+                                id="vehicle_type"
+                                name="vehicle_type"
+                                required
+                                class="w-full rounded-xl border {{ $errors->has('vehicle_type') ? 'border-rose-500 ring-1 ring-rose-500' : 'border-outline-variant' }} bg-surface px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="">Select vehicle type...</option>
+                                <option value="Motorcycle" {{ old('vehicle_type') === 'Motorcycle' ? 'selected' : '' }}>Motorcycle (Standard Delivery)</option>
+                                <option value="Van" {{ old('vehicle_type') === 'Van' ? 'selected' : '' }}>Van (Bulk / Multi-Parcel)</option>
+                                <option value="Sedan" {{ old('vehicle_type') === 'Sedan' ? 'selected' : '' }}>Sedan / Car</option>
+                                <option value="Truck" {{ old('vehicle_type') === 'Truck' ? 'selected' : '' }}>Light Truck / Delivery Van</option>
+                                <option value="Bicycle" {{ old('vehicle_type') === 'Bicycle' ? 'selected' : '' }}>Bicycle (Local Express)</option>
+                            </select>
+                        </div>
 
-                    {{-- Plate Number --}}
-                    <div>
-                        <label for="plate_number" class="block font-label-md text-xs font-semibold text-on-surface mb-1">
-                            Vehicle Plate Number <span class="text-rose-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="plate_number"
-                            name="plate_number"
-                            value="{{ old('plate_number') }}"
-                            required
-                            placeholder="e.g. ABC 1234 or MC-9876"
-                            class="w-full uppercase rounded-xl border {{ $errors->has('plate_number') ? 'border-rose-500 ring-1 ring-rose-500' : 'border-outline-variant' }} bg-surface px-3.5 py-2.5 text-xs text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
-                        <span class="text-[10px] text-on-surface-variant mt-1 block">Must be unique across the platform.</span>
-                    </div>
+                        {{-- Plate Number --}}
+                        <div>
+                            <label for="plate_number" class="block font-label-md text-xs font-semibold text-on-surface mb-1">
+                                Vehicle Plate Number <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="plate_number"
+                                name="plate_number"
+                                value="{{ old('plate_number') }}"
+                                required
+                                placeholder="e.g. ABC 1234 or MC-9876"
+                                class="w-full uppercase rounded-xl border {{ $errors->has('plate_number') ? 'border-rose-500 ring-1 ring-rose-500' : 'border-outline-variant' }} bg-surface px-3.5 py-2.5 text-xs text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary">
+                            <span class="text-[10px] text-on-surface-variant mt-1 block">Must be unique across the platform.</span>
+                        </div>
+                    @endif
                 </div>
             </div>
 
@@ -261,22 +292,24 @@
                         <span class="text-[10px] text-on-surface-variant mt-2 block">Formats: JPG, PNG, PDF (Max 5MB).</span>
                     </div>
 
-                    {{-- Vehicle OR/CR Upload --}}
-                    <div class="p-4 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/50">
-                        <label for="or_cr_file" class="block font-label-md text-xs font-semibold text-on-surface mb-1 flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-[16px] text-secondary">description</span>
-                            <span>Vehicle OR / CR Document <span class="text-rose-500">*</span></span>
-                        </label>
-                        <p class="text-[11px] text-on-surface-variant mb-3">Official Receipt and Certificate of Registration.</p>
-                        <input
-                            type="file"
-                            id="or_cr_file"
-                            name="or_cr_file"
-                            accept=".jpg,.jpeg,.png,.pdf"
-                            required
-                            class="w-full text-xs text-on-surface-variant file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-secondary/10 file:text-secondary hover:file:bg-secondary/20 cursor-pointer">
-                        <span class="text-[10px] text-on-surface-variant mt-2 block">Formats: JPG, PNG, PDF (Max 5MB).</span>
-                    </div>
+                    @if (! $isCourier)
+                        {{-- Vehicle OR/CR Upload --}}
+                        <div class="p-4 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/50">
+                            <label for="or_cr_file" class="block font-label-md text-xs font-semibold text-on-surface mb-1 flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px] text-secondary">description</span>
+                                <span>Vehicle OR / CR Document <span class="text-rose-500">*</span></span>
+                            </label>
+                            <p class="text-[11px] text-on-surface-variant mb-3">Official Receipt and Certificate of Registration.</p>
+                            <input
+                                type="file"
+                                id="or_cr_file"
+                                name="or_cr_file"
+                                accept=".jpg,.jpeg,.png,.pdf"
+                                required
+                                class="w-full text-xs text-on-surface-variant file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-secondary/10 file:text-secondary hover:file:bg-secondary/20 cursor-pointer">
+                            <span class="text-[10px] text-on-surface-variant mt-2 block">Formats: JPG, PNG, PDF (Max 5MB).</span>
+                        </div>
+                    @endif
                 </div>
             </div>
 

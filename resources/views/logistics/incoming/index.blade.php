@@ -73,7 +73,7 @@
                                     <option value="">Auto-Detect Origin Hub</option>
                                     @foreach ($myHubs as $hub)
                                         <option value="{{ $hub->id }}" {{ old('hub_id', request('hub_id')) == $hub->id ? 'selected' : '' }}>
-                                            📍 {{ $hub->name }} ({{ $hub->city_name }})
+                                            {{ $hub->name }} ({{ $hub->city_name }})
                                         </option>
                                     @endforeach
                                 </select>

@@ -64,7 +64,6 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $this->attributes['role'] = match ($value) {
             'sorting_center' => 'logistics',
-            'courier' => 'rider',
             default => $value,
         };
     }
@@ -208,8 +207,9 @@ class User extends Authenticatable implements MustVerifyEmail
     // --- Role checks ---
     public function isBuyer(): bool { return $this->role === 'buyer'; }
     public function isSeller(): bool { return $this->role === 'seller'; }
-    public function isRider(): bool { return $this->role === 'rider' || $this->role === 'courier'; }
-    public function isCourier(): bool { return $this->isRider(); }
+    public function isRider(): bool { return $this->role === 'rider'; }
+    public function isCourier(): bool { return $this->role === 'courier'; }
+    public function isMobileDeliveryPersonnel(): bool { return $this->isRider() || $this->isCourier(); }
     public function isLogistics(): bool { return $this->role === 'logistics' || $this->role === 'sorting_center'; }
     public function isSortingCenter(): bool { return $this->isLogistics(); }
     public function isAdmin(): bool { return $this->role === 'admin'; }
@@ -309,6 +309,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(HubTransfer::class, 'receiver_logistics_id');
     }
 
+    public function assignedManifests()
+    {
+        return $this->hasMany(TransferManifest::class, 'assigned_courier_id');
+    }
+
     public function products()
     {
         return $this->hasMany(Product::class, 'seller_id');
@@ -405,6 +410,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(CodRemittance::class, 'courier_id');
     }
 
+    public function logisticsAdminRemittances()
+    {
+        return $this->hasMany(LogisticsAdminRemittance::class, 'logistics_id');
+    }
+
+    public function sellerSettlementAllocations()
+    {
+        return $this->hasMany(SellerSettlementAllocation::class, 'seller_id');
+    }
+
     /**
      * Where this user lands after logging in, based on their role.
      */
@@ -414,7 +429,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'buyer' => '/catalog',
             'seller' => '/seller/dashboard',
             'logistics', 'sorting_center' => '/logistics/dashboard',
-            'rider', 'courier' => '/rider/dashboard',
+            'rider' => '/rider/dashboard',
+            'courier' => '/courier/dashboard',
             'admin' => '/admin/dashboard',
             default => '/',
         };
@@ -429,7 +445,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'buyer' => 'Buyer',
             'seller' => 'Seller',
             'logistics', 'sorting_center' => 'Logistics Partner',
-            'rider', 'courier' => 'Rider',
+            'rider' => 'Rider',
+            'courier' => 'Transfer Courier',
             'admin' => 'Administrator',
             default => 'User',
         };

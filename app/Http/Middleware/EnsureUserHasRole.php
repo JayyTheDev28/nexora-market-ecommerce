@@ -99,13 +99,11 @@ class EnsureUserHasRole
         if (! empty($roles)) {
             $normalizedRoles = array_map(fn ($r) => match ($r) {
                 'sorting_center' => 'logistics',
-                'courier' => 'rider',
                 default => $r,
             }, $roles);
 
             $normalizedUserRole = match ($user->role) {
                 'sorting_center' => 'logistics',
-                'courier' => 'rider',
                 default => $user->role,
             };
 

@@ -36,6 +36,13 @@
             </div>
         @endif
 
+        @if (session('warning'))
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
+                <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">warning</span>
+                <p class="font-body-sm text-xs font-semibold text-amber-900 leading-snug">{{ session('warning') }}</p>
+            </div>
+        @endif
+
         {{-- Login Card & Form --}}
         <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 sm:p-8 shadow-xs">
             <form

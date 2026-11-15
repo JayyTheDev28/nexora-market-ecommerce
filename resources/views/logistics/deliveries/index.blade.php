@@ -115,13 +115,21 @@
                 <form method="GET" action="{{ route('logistics.deliveries.index') }}" class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     <input type="hidden" name="tab" value="{{ $tab }}">
 
-                    <select name="area_id" onchange="this.form.submit()" class="px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">
-                        <option value="">All Zones</option>
-                        @foreach ($deliveryAreas as $area)
-                            <option value="{{ $area->id }}" {{ $areaId == $area->id ? 'selected' : '' }}>
-                                {{ $area->name }}
-                            </option>
-                        @endforeach
+                    <select name="zone_id" onchange="this.form.submit()" class="px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">
+                        <option value="">All Coverage Zones</option>
+                        @if (isset($zones) && $zones->isNotEmpty())
+                            @foreach ($zones as $zone)
+                                <option value="{{ $zone->id }}" {{ ($zoneId ?? request('zone_id')) == $zone->id ? 'selected' : '' }}>
+                                    {{ $zone->name }} ({{ $zone->city_name }})
+                                </option>
+                            @endforeach
+                        @else
+                            @foreach ($deliveryAreas as $area)
+                                <option value="{{ $area->id }}" {{ $areaId == $area->id ? 'selected' : '' }}>
+                                    {{ $area->name }}
+                                </option>
+                            @endforeach
+                        @endif
                     </select>
 
                     <select name="courier_id" onchange="this.form.submit()" class="px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">

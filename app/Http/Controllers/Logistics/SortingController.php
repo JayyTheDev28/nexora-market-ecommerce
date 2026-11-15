@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Logistics;
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryArea;
 use App\Models\Order;
+use App\Models\Zone;
 use App\Services\OrderLogisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,9 +21,43 @@ class SortingController extends Controller
         $sortingCenterId = $request->user()->id;
         $tab = $request->query('tab', 'unsorted');
         $areaFilter = $request->query('area_id');
+        $zoneFilter = $request->query('zone_id');
         $search = $request->query('q');
 
-        // Delivery areas managed by this sorting hub
+        // Modern Coverage Zones managed by this sorting hub
+        $zones = Zone::where('logistics_company_id', $sortingCenterId)
+            ->with(['hub', 'riders', 'barangays'])
+            ->orderBy('name')
+            ->get();
+
+        foreach ($zones as $zone) {
+            $bCodes = $zone->barangays->pluck('barangay_code')->all();
+            $cityName = $zone->city_name;
+
+            $zoneOrderQuery = fn ($statusGroup) => Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId))
+                ->where(function ($q) use ($zone, $bCodes, $cityName) {
+                    $q->where('delivery_zone_id', $zone->id)
+                      ->orWhereHas('address', function ($aq) use ($bCodes, $cityName) {
+                          if (! empty($bCodes)) {
+                              $aq->whereIn('barangay_code', $bCodes);
+                          } else {
+                              $aq->where('municipality_name', $cityName);
+                          }
+                      });
+                })
+                ->where(function ($q) use ($statusGroup) {
+                    if ($statusGroup === 'unsorted') {
+                        $q->whereIn('status', ['at_sorting_center', 'received_at_hub']);
+                    } else {
+                        $q->where('status', 'sorted');
+                    }
+                });
+
+            $zone->unsorted_orders_count = $zoneOrderQuery('unsorted')->count();
+            $zone->sorted_orders_count = $zoneOrderQuery('sorted')->count();
+        }
+
+        // Delivery areas managed by this sorting hub (legacy fallback)
         $deliveryAreas = DeliveryArea::where('sorting_center_id', $sortingCenterId)
             ->with('courier')
             ->withCount([
@@ -36,6 +71,7 @@ class SortingController extends Controller
             ->with([
                 'buyer',
                 'address',
+                'deliveryZone.riders',
                 'deliveryArea.courier',
                 'items.product.seller.sellerProfile',
                 'items.product.seller.address',
@@ -48,7 +84,23 @@ class SortingController extends Controller
             default => $query->whereIn('status', ['at_sorting_center', 'received_at_hub']),
         };
 
-        if ($areaFilter) {
+        if ($zoneFilter) {
+            $activeZone = $zones->firstWhere('id', (int) $zoneFilter);
+            if ($activeZone) {
+                $bCodes = $activeZone->barangays->pluck('barangay_code')->all();
+                $cityName = $activeZone->city_name;
+                $query->where(function ($q) use ($activeZone, $bCodes, $cityName) {
+                    $q->where('delivery_zone_id', $activeZone->id)
+                      ->orWhereHas('address', function ($aq) use ($bCodes, $cityName) {
+                          if (! empty($bCodes)) {
+                              $aq->whereIn('barangay_code', $bCodes);
+                          } else {
+                              $aq->where('municipality_name', $cityName);
+                          }
+                      });
+                });
+            }
+        } elseif ($areaFilter) {
             $query->where('delivery_area_id', $areaFilter);
         }
 
@@ -71,11 +123,11 @@ class SortingController extends Controller
             'all' => (clone $baseCountQuery())->whereIn('status', ['at_sorting_center', 'received_at_hub', 'sorted'])->count(),
         ];
 
-        return view('logistics.sorting.index', compact('parcels', 'counts', 'tab', 'deliveryAreas', 'areaFilter', 'search'));
+        return view('logistics.sorting.index', compact('parcels', 'counts', 'tab', 'deliveryAreas', 'zones', 'areaFilter', 'zoneFilter', 'search'));
     }
 
     /**
-     * Confirm delivery area and advance parcel to sorted status.
+     * Confirm delivery coverage zone or area and advance parcel to sorted status.
      */
     public function confirm(Request $request, Order $order): RedirectResponse
     {
@@ -84,15 +136,54 @@ class SortingController extends Controller
         // Guard: parcels requiring a hub transfer must reach their destination hub before local sorting
         if ($order->requiresHubTransfer() && !empty($order->destination_hub_id) && (int) $order->current_hub_id !== (int) $order->destination_hub_id) {
             return back()->withInput()->withErrors([
-                'delivery_area_id' => "This parcel is currently at " . ($order->currentHub?->name ?? 'origin hub') . " and must first be transferred to its destination hub (" . ($order->destinationHub?->name ?? 'destination hub') . ") before local sorting and delivery rider assignment.",
+                'delivery_zone_id' => "This parcel is currently at " . ($order->currentHub?->name ?? 'origin hub') . " and must first be transferred to its destination hub (" . ($order->destinationHub?->name ?? 'destination hub') . ") before local sorting and delivery rider assignment.",
             ]);
         }
 
         $validated = $request->validate([
-            'delivery_area_id' => ['required', 'exists:delivery_areas,id'],
+            'zone_id' => ['nullable', 'exists:zones,id'],
+            'delivery_area_id' => ['nullable', 'exists:delivery_areas,id'],
             'override_reason' => ['nullable', 'string', 'max:500'],
         ]);
 
+        if (empty($validated['zone_id']) && empty($validated['delivery_area_id'])) {
+            return back()->withInput()->withErrors([
+                'zone_id' => 'Please select a destination coverage zone.',
+            ]);
+        }
+
+        // 1. Modern Coverage Zone sorting
+        if (! empty($validated['zone_id'])) {
+            $zone = Zone::where('id', $validated['zone_id'])
+                ->where('logistics_company_id', $request->user()->id)
+                ->firstOrFail();
+
+            $isOverride = $order->delivery_zone_id && $order->delivery_zone_id != $zone->id;
+            if ($isOverride && empty($validated['override_reason'])) {
+                return back()->withInput()->withErrors([
+                    'override_reason' => 'A reason is required when manually overriding an existing assigned coverage zone.',
+                ]);
+            }
+
+            $note = "Sorted to Coverage Zone: {$zone->name}.";
+            if ($isOverride) {
+                $note .= " Manual Override Reason: {$validated['override_reason']}";
+            }
+
+            OrderLogisticsService::transition(
+                order: $order,
+                newStatus: 'sorted',
+                changedBy: $request->user()->id,
+                note: $note,
+                extraAttributes: [
+                    'delivery_zone_id' => $zone->id,
+                ]
+            );
+
+            return back()->with('status', "Parcel {$order->order_number} sorted successfully to '{$zone->name}'. Ready for rider assignment.");
+        }
+
+        // 2. Legacy Delivery Area sorting
         $area = DeliveryArea::where('id', $validated['delivery_area_id'])
             ->where('sorting_center_id', $request->user()->id)
             ->firstOrFail();

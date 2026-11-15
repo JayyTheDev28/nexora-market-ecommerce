@@ -43,7 +43,9 @@ class RegistrationController extends Controller
             }
         }
 
-        return view('logistics.auth.register');
+        $provinces = \App\Models\PsgcProvince::orderBy('name')->get(['code', 'name', 'region_code', 'region_name']);
+
+        return view('logistics.auth.register', compact('provinces'));
     }
 
     /**
@@ -76,7 +78,41 @@ class RegistrationController extends Controller
         $cleanFirstName = trim((string) $request->input('contact_person_first_name', ''));
         $cleanLastName = trim((string) $request->input('contact_person_last_name', ''));
 
-        $inputData = array_merge($request->all(), [
+        // Process uploaded documents and retain temporary copies to survive validation errors
+        $docKeys = [
+            'sec_certificate' => 'sec',
+            'bir_2303' => 'bir',
+            'mayors_permit' => 'permit',
+            'valid_id' => 'id',
+        ];
+
+        $tempDocs = session('logistics_temp_docs', []);
+        $docRules = [];
+        $extraInput = [];
+
+        foreach ($docKeys as $field => $folder) {
+            if ($request->hasFile($field)) {
+                $file = $request->file($field);
+                if ($file->isValid() && in_array(strtolower($file->getClientOriginalExtension()), ['pdf', 'jpg', 'jpeg', 'png']) && $file->getSize() <= 2048 * 1024) {
+                    $storedPath = $file->store("documents/logistics/{$folder}", 'public');
+                    $tempDocs[$field] = [
+                        'path' => $storedPath,
+                        'original_name' => $file->getClientOriginalName(),
+                    ];
+                    $extraInput[$field . '_cached'] = $storedPath;
+                }
+                $docRules[$field] = ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'];
+            } elseif ($request->filled($field . '_cached') && Storage::disk('public')->exists($request->input($field . '_cached'))) {
+                $docRules[$field] = ['nullable'];
+            } elseif (!empty($tempDocs[$field]['path']) && Storage::disk('public')->exists($tempDocs[$field]['path'])) {
+                $extraInput[$field . '_cached'] = $tempDocs[$field]['path'];
+                $docRules[$field] = ['nullable'];
+            } else {
+                $docRules[$field] = ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'];
+            }
+        }
+
+        $inputData = array_merge($request->all(), $extraInput, [
             'email' => $cleanEmail,
             'mobile_number' => $cleanPhone,
             'tin' => $cleanTin,
@@ -90,7 +126,7 @@ class RegistrationController extends Controller
         $nameRegex = '/^[\pL\s\-\'\.ñÑ]+$/u';
         $tinRegex = '/^\d{3}-\d{3}-\d{3}-\d{3}$/';
 
-        $validator = Validator::make($inputData, [
+        $rules = [
             // Company Details
             'company_name' => ['required', 'string', 'min:3', 'max:255', 'unique:logistics_profiles,company_name'],
             'sec_registration_no' => ['required', 'string', 'min:5', 'max:100', 'unique:logistics_profiles,sec_registration_no'],
@@ -111,15 +147,9 @@ class RegistrationController extends Controller
             'email' => ['required', 'string', 'email:rfc', 'max:255', 'unique:users,email', 'unique:logistics_profiles,email'],
             'mobile_number' => ['required', 'string', 'regex:/^09\d{9}$/', 'unique:users,contact_number', 'unique:logistics_profiles,mobile_number'],
 
-            // Service Areas (Multiple Selection)
-            'service_areas' => ['required', 'array', 'min:1'],
-            'service_areas.*' => ['required', 'string', 'max:100'],
-
-            // Compliance Document Uploads (2MB limit per config)
-            'sec_certificate' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-            'bir_2303' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-            'mayors_permit' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-            'valid_id' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+            // Service Areas (Optional when registering, defaulted if not supplied)
+            'service_areas' => ['nullable', 'array'],
+            'service_areas.*' => ['string', 'max:100'],
 
             // Account Password & Terms
             'password' => [
@@ -133,31 +163,42 @@ class RegistrationController extends Controller
                     ->symbols(),
             ],
             'terms' => ['accepted'],
-        ], [
+        ];
+
+        // Merge document rules
+        $rules = array_merge($rules, $docRules);
+
+        $validator = Validator::make($inputData, $rules, [
             'tin.regex' => 'The Taxpayer Identification Number (TIN) must be formatted as XXX-XXX-XXX-XXX.',
             'mobile_number.regex' => 'The mobile number must be a valid 11-digit Philippine mobile number starting with 09 (e.g., 09171234567).',
             'contact_person_first_name.regex' => 'First name may only contain letters, spaces, hyphens, and apostrophes.',
             'contact_person_last_name.regex' => 'Last name may only contain letters, spaces, hyphens, and apostrophes.',
             'postal_code.regex' => 'Postal code must be a valid 4-digit numeric code.',
-            'service_areas.required' => 'Please select at least one regional service area of logistics coverage.',
+            'sec_certificate.required' => 'The SEC Registration Certificate is required.',
             'sec_certificate.max' => 'The SEC Registration Certificate may not be greater than 2MB.',
+            'bir_2303.required' => 'The BIR Certificate of Registration (Form 2303) is required.',
             'bir_2303.max' => 'The BIR Certificate of Registration (Form 2303) may not be greater than 2MB.',
+            'mayors_permit.required' => 'The Mayor\'s Business Permit is required.',
             'mayors_permit.max' => 'The Mayor\'s Business Permit may not be greater than 2MB.',
+            'valid_id.required' => 'The Government-Issued ID is required.',
             'valid_id.max' => 'The Government-Issued ID may not be greater than 2MB.',
             'terms.accepted' => 'You must agree to the Nexora Market Terms of Service and Logistics Partner Service Agreement.',
         ]);
 
         if ($validator->fails()) {
+            session(['logistics_temp_docs' => $tempDocs]);
             return back()->withErrors($validator)->withInput();
         }
 
         $validated = $validator->validated();
 
-        // 3. Store documents securely
-        $secPath = $request->file('sec_certificate')->store('documents/logistics/sec', 'public');
-        $birPath = $request->file('bir_2303')->store('documents/logistics/bir', 'public');
-        $permitPath = $request->file('mayors_permit')->store('documents/logistics/permit', 'public');
-        $idPath = $request->file('valid_id')->store('documents/logistics/id', 'public');
+        // 3. Resolve document paths
+        $secPath = $tempDocs['sec_certificate']['path'] ?? $request->input('sec_certificate_cached') ?? ($request->hasFile('sec_certificate') ? $request->file('sec_certificate')->store('documents/logistics/sec', 'public') : null);
+        $birPath = $tempDocs['bir_2303']['path'] ?? $request->input('bir_2303_cached') ?? ($request->hasFile('bir_2303') ? $request->file('bir_2303')->store('documents/logistics/bir', 'public') : null);
+        $permitPath = $tempDocs['mayors_permit']['path'] ?? $request->input('mayors_permit_cached') ?? ($request->hasFile('mayors_permit') ? $request->file('mayors_permit')->store('documents/logistics/permit', 'public') : null);
+        $idPath = $tempDocs['valid_id']['path'] ?? $request->input('valid_id_cached') ?? ($request->hasFile('valid_id') ? $request->file('valid_id')->store('documents/logistics/id', 'public') : null);
+
+        session()->forget('logistics_temp_docs');
 
         // 4. Create User & LogisticsProfile inside a Database Transaction
         DB::beginTransaction();
@@ -194,7 +235,7 @@ class RegistrationController extends Controller
                 'position' => $validated['position'],
                 'email' => $cleanEmail,
                 'mobile_number' => $cleanPhone,
-                'service_areas' => $validated['service_areas'],
+                'service_areas' => !empty($validated['service_areas']) ? $validated['service_areas'] : (array_values(array_filter([$validated['region'] ?? null, $validated['province'] ?? null])) ?: ['National Capital Region (NCR)']),
                 'sec_certificate_path' => $secPath,
                 'bir_2303_path' => $birPath,
                 'mayors_permit_path' => $permitPath,
@@ -437,9 +478,12 @@ class RegistrationController extends Controller
             return redirect()->route('logistics.dashboard');
         }
 
+        $provinces = \App\Models\PsgcProvince::orderBy('name')->get(['code', 'name', 'region_code', 'region_name']);
+
         return view('logistics.auth.resubmit', [
             'user' => $user,
             'profile' => $profile,
+            'provinces' => $provinces,
         ]);
     }
 
@@ -472,8 +516,8 @@ class RegistrationController extends Controller
             'contact_person_last_name' => ['required', 'string', 'min:2', 'max:50', "regex:{$nameRegex}"],
             'position' => ['required', 'string', 'min:2', 'max:100'],
             'mobile_number' => ['required', 'string', 'regex:/^09\d{9}$/', 'unique:logistics_profiles,mobile_number,' . $profile->id],
-            'service_areas' => ['required', 'array', 'min:1'],
-            'service_areas.*' => ['required', 'string', 'max:100'],
+            'service_areas' => ['nullable', 'array'],
+            'service_areas.*' => ['string', 'max:100'],
 
             // Documents are nullable on resubmit (keep existing if not re-uploaded)
             'sec_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
@@ -510,7 +554,7 @@ class RegistrationController extends Controller
             'contact_person_last_name' => $validated['contact_person_last_name'],
             'position' => $validated['position'],
             'mobile_number' => $validated['mobile_number'],
-            'service_areas' => $validated['service_areas'],
+            'service_areas' => !empty($validated['service_areas']) ? $validated['service_areas'] : ($profile->service_areas ?? [$validated['region']]),
             'status' => 'pending_approval',
             'rejection_reason' => null,
         ])->save();

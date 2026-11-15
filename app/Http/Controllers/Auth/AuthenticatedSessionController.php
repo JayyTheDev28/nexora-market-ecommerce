@@ -35,6 +35,17 @@ class AuthenticatedSessionController extends Controller
 
         $user = Auth::user();
 
+        // Enforce single active session: record this session ID and clear old sessions
+        $newSessionId = $request->session()->getId();
+        \Illuminate\Support\Facades\Cache::forever("user_active_session_{$user->id}", $newSessionId);
+
+        if (config('session.driver') === 'database') {
+            \Illuminate\Support\Facades\DB::table('sessions')
+                ->where('user_id', $user->id)
+                ->where('id', '!=', $newSessionId)
+                ->delete();
+        }
+
         if ($user->isDisapproved()) {
             if ($user->isSortingCenter() && $user->logisticsProfile) {
                 return redirect()->route('logistics.resubmit');
@@ -95,6 +106,10 @@ class AuthenticatedSessionController extends Controller
 
     public function destroy(Request $request): RedirectResponse
     {
+        if ($user = Auth::user()) {
+            \Illuminate\Support\Facades\Cache::forget("user_active_session_{$user->id}");
+        }
+
         Auth::logout();
 
         $request->session()->invalidate();

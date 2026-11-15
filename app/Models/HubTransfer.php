@@ -11,6 +11,7 @@ class HubTransfer extends Model
     use HasFactory;
 
     protected $fillable = [
+        'manifest_id',
         'order_id',
         'tracking_number',
         'sender_logistics_id',
@@ -31,6 +32,11 @@ class HubTransfer extends Model
             'dispatched_at' => 'datetime',
             'received_at' => 'datetime',
         ];
+    }
+
+    public function manifest(): BelongsTo
+    {
+        return $this->belongsTo(TransferManifest::class, 'manifest_id');
     }
 
     public function order(): BelongsTo

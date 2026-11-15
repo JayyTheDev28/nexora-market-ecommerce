@@ -10,6 +10,7 @@ class CourierProfile extends Model
         'user_id',
         'sorting_center_id',
         'logistics_company_id',
+        'assigned_hub_id',
         'is_online',
         'earnings_balance',
         'unremitted_cod_balance',
@@ -75,5 +76,10 @@ class CourierProfile extends Model
     public function logisticsCompany()
     {
         return $this->belongsTo(User::class, 'logistics_company_id');
+    }
+
+    public function assignedHub()
+    {
+        return $this->belongsTo(Hub::class, 'assigned_hub_id');
     }
 }

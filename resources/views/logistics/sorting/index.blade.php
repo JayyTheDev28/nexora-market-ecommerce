@@ -1,9 +1,9 @@
 @extends('layouts.app')
 
-@section('title', 'Parcel Sorting by Delivery Area — Nexora Logistics')
+@section('title', 'Parcel Sorting by Coverage Zone — Nexora Logistics')
 
 @section('content')
-<div class="w-full min-h-screen bg-surface" x-data="{ sortModal: false, activeOrder: null, actionUrl: '', selectedAreaId: '', currentAreaId: '', isOverride: false }">
+<div class="w-full min-h-screen bg-surface" x-data="{ sortModal: false, activeOrder: null, actionUrl: '', selectedZoneId: '', currentZoneId: '', selectedAreaId: '', currentAreaId: '', isOverride: false }">
     <div class="flex flex-col lg:flex-row w-full">
 
             <x-logistics-nav active="sorting" />
@@ -50,46 +50,55 @@
             </div>
         @endif
 
-        {{-- Delivery Areas Overview Row --}}
+        {{-- Coverage Zones Overview Row --}}
         <div class="mb-8">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="font-headline-sm text-sm font-bold text-on-surface flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px] text-primary">map</span>
-                    <span>Facility Delivery Areas & Pipeline</span>
+                    <span class="material-symbols-outlined text-[18px] text-primary">share_location</span>
+                    <span>Facility Coverage Zones &amp; Pipeline</span>
                 </h2>
-                @if ($areaFilter)
+                @if (request('zone_id') || $areaFilter)
                     <a href="{{ route('logistics.sorting.index', ['tab' => $tab, 'q' => $search]) }}" class="font-label-md text-xs text-primary hover:underline flex items-center gap-1">
                         <span class="material-symbols-outlined text-[14px]">clear</span>
-                        <span>Clear Area Filter</span>
+                        <span>Clear Zone Filter</span>
                     </a>
                 @endif
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                @forelse ($deliveryAreas as $area)
-                    <a
-                        href="{{ route('logistics.sorting.index', ['tab' => $tab, 'area_id' => $area->id, 'q' => $search]) }}"
-                        class="bg-surface-container-lowest rounded-2xl border transition-all p-4 hover:border-primary {{ $areaFilter == $area->id ? 'border-primary ring-2 ring-primary/10' : 'border-outline-variant' }}">
-                        <div class="flex items-center justify-between">
-                            <span class="font-bold text-on-surface text-xs truncate max-w-[170px]" title="{{ $area->name }}">{{ $area->name }}</span>
-                            <span class="w-6 h-6 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-[11px] font-bold">
-                                {{ $area->unsorted_orders_count }}
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-1.5 text-[11px] text-on-surface-variant mt-2">
-                            <span class="material-symbols-outlined text-[13px]">two_wheeler</span>
-                            <span class="truncate">{{ $area->courier?->full_name ?? 'No Rider Assigned' }}</span>
-                        </div>
-                        <div class="mt-2.5 pt-2 border-t border-outline-variant/60 flex items-center justify-between text-[11px]">
-                            <span class="text-amber-700 font-medium">{{ $area->unsorted_orders_count }} Awaiting Sort</span>
-                            <span class="text-emerald-700 font-medium">{{ $area->sorted_orders_count }} Sorted</span>
-                        </div>
-                    </a>
-                @empty
+                @if($zones->isNotEmpty())
+                    @foreach ($zones as $zone)
+                        @php
+                            $isZoneActive = request('zone_id') == $zone->id;
+                            $riderNames = $zone->riders->pluck('full_name')->join(', ');
+                        @endphp
+                        <a
+                            href="{{ route('logistics.sorting.index', ['tab' => $tab, 'zone_id' => $zone->id, 'q' => $search]) }}"
+                            class="bg-surface-container-lowest rounded-2xl border transition-all p-4 hover:border-primary {{ $isZoneActive ? 'border-primary ring-2 ring-primary/10' : 'border-outline-variant' }}">
+                            <div class="flex items-center justify-between">
+                                <div class="truncate max-w-[170px]">
+                                    <span class="font-bold text-on-surface text-xs truncate block" title="{{ $zone->name }}">{{ $zone->name }}</span>
+                                    <span class="text-[10px] text-on-surface-variant font-medium">{{ $zone->city_name }}</span>
+                                </div>
+                                <span class="w-6 h-6 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-[11px] font-bold">
+                                    {{ $zone->unsorted_orders_count ?? 0 }}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-[11px] text-on-surface-variant mt-2">
+                                <span class="material-symbols-outlined text-[13px]">two_wheeler</span>
+                                <span class="truncate">{{ $riderNames ?: 'No Rider Assigned' }}</span>
+                            </div>
+                            <div class="mt-2.5 pt-2 border-t border-outline-variant/60 flex items-center justify-between text-[11px]">
+                                <span class="text-amber-700 font-medium">{{ $zone->unsorted_orders_count ?? 0 }} Awaiting Sort</span>
+                                <span class="text-emerald-700 font-medium">{{ $zone->sorted_orders_count ?? 0 }} Sorted</span>
+                            </div>
+                        </a>
+                    @endforeach
+                @else
                     <div class="col-span-full bg-surface-container-lowest rounded-2xl border border-outline-variant p-4 text-center text-xs text-on-surface-variant">
-                        No delivery areas registered. <a href="{{ route('logistics.riders.index') }}" class="text-primary font-semibold hover:underline">Add delivery coverage areas</a> in Rider Management.
+                        No coverage zones registered. <a href="{{ route('logistics.zones.index') }}" class="text-primary font-semibold hover:underline">Configure Coverage Zones</a>.
                     </div>
-                @endforelse
+                @endif
             </div>
         </div>
 
@@ -97,15 +106,15 @@
         <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-4 mb-6">
             <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div class="flex items-center gap-1 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-                    <a href="{{ route('logistics.sorting.index', ['tab' => 'unsorted', 'area_id' => $areaFilter, 'q' => $search]) }}"
+                    <a href="{{ route('logistics.sorting.index', ['tab' => 'unsorted', 'zone_id' => request('zone_id'), 'area_id' => $areaFilter, 'q' => $search]) }}"
                         class="px-3.5 py-1.5 rounded-full font-label-md text-xs font-medium transition-colors whitespace-nowrap {{ $tab === 'unsorted' ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest' }}">
                         Awaiting Sorting ({{ $counts['unsorted'] }})
                     </a>
-                    <a href="{{ route('logistics.sorting.index', ['tab' => 'sorted', 'area_id' => $areaFilter, 'q' => $search]) }}"
+                    <a href="{{ route('logistics.sorting.index', ['tab' => 'sorted', 'zone_id' => request('zone_id'), 'area_id' => $areaFilter, 'q' => $search]) }}"
                         class="px-3.5 py-1.5 rounded-full font-label-md text-xs font-medium transition-colors whitespace-nowrap {{ $tab === 'sorted' ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest' }}">
-                        Sorted & Ready ({{ $counts['sorted'] }})
+                        Sorted &amp; Ready ({{ $counts['sorted'] }})
                     </a>
-                    <a href="{{ route('logistics.sorting.index', ['tab' => 'all', 'area_id' => $areaFilter, 'q' => $search]) }}"
+                    <a href="{{ route('logistics.sorting.index', ['tab' => 'all', 'zone_id' => request('zone_id'), 'area_id' => $areaFilter, 'q' => $search]) }}"
                         class="px-3.5 py-1.5 rounded-full font-label-md text-xs font-medium transition-colors whitespace-nowrap {{ $tab === 'all' ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest' }}">
                         All Parcels ({{ $counts['all'] }})
                     </a>
@@ -113,6 +122,9 @@
 
                 <form method="GET" action="{{ route('logistics.sorting.index') }}" class="w-full md:w-80 flex items-center">
                     <input type="hidden" name="tab" value="{{ $tab }}">
+                    @if (request('zone_id'))
+                        <input type="hidden" name="zone_id" value="{{ request('zone_id') }}">
+                    @endif
                     @if ($areaFilter)
                         <input type="hidden" name="area_id" value="{{ $areaFilter }}">
                     @endif
@@ -173,36 +185,56 @@
                                 </td>
 
                                 <td class="px-5 py-4">
-                                    @if ($parcel->deliveryArea)
+                                    @if ($parcel->deliveryZone)
+                                        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-secondary/10 text-secondary font-bold text-xs">
+                                            <span class="material-symbols-outlined text-[15px]">share_location</span>
+                                            <span>{{ $parcel->deliveryZone->name }}</span>
+                                        </div>
+                                    @elseif ($parcel->deliveryArea)
                                         <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-secondary/10 text-secondary font-bold text-xs">
                                             <span class="material-symbols-outlined text-[15px]">near_me</span>
                                             <span>{{ $parcel->deliveryArea->name }}</span>
                                         </div>
                                     @else
-                                        {{-- Heuristic match suggestion --}}
+                                        {{-- Heuristic match suggestion based on zones first --}}
                                         @php
-                                            $suggested = $deliveryAreas->first(fn ($a) => stripos($a->name, $parcel->address?->municipality_name ?? '') !== false);
+                                            $suggestedZone = $zones->first(function ($z) use ($parcel) {
+                                                $bCode = $parcel->address?->barangay_code;
+                                                $mName = $parcel->address?->municipality_name;
+                                                return ($bCode && $z->barangays->contains('barangay_code', $bCode))
+                                                    || ($mName && stripos($z->city_name, $mName) !== false)
+                                                    || ($mName && stripos($z->name, $mName) !== false);
+                                            });
+                                            $suggestedArea = $deliveryAreas->first(fn ($a) => stripos($a->name, $parcel->address?->municipality_name ?? '') !== false);
                                         @endphp
-                                        @if ($suggested)
+                                        @if ($suggestedZone)
                                             <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-700 text-xs font-medium">
                                                 <span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
-                                                <span>Suggested: {{ $suggested->name }}</span>
+                                                <span>Suggested: {{ $suggestedZone->name }}</span>
+                                            </div>
+                                        @elseif ($suggestedArea)
+                                            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-700 text-xs font-medium">
+                                                <span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
+                                                <span>Suggested: {{ $suggestedArea->name }}</span>
                                             </div>
                                         @else
                                             <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-surface-container-high text-on-surface-variant text-xs">
                                                 <span class="material-symbols-outlined text-[14px]">help</span>
-                                                <span>Unresolved Area</span>
+                                                <span>Unresolved Zone</span>
                                             </div>
                                         @endif
                                     @endif
                                 </td>
 
                                 <td class="px-5 py-4">
-                                    @if ($parcel->deliveryArea?->courier)
+                                    @if ($parcel->deliveryZone && $parcel->deliveryZone->riders->isNotEmpty())
+                                        <div class="font-medium text-on-surface">{{ $parcel->deliveryZone->riders->pluck('full_name')->join(', ') }}</div>
+                                        <div class="text-[11px] text-on-surface-variant">Zone Rider(s)</div>
+                                    @elseif ($parcel->deliveryArea?->courier)
                                         <div class="font-medium text-on-surface">{{ $parcel->deliveryArea->courier->full_name }}</div>
                                         <div class="text-[11px] text-on-surface-variant">{{ $parcel->deliveryArea->courier->courierProfile?->plate_number ?? 'Rider' }}</div>
                                     @else
-                                        <span class="text-on-surface-variant italic text-xs">No area rider</span>
+                                        <span class="text-on-surface-variant italic text-xs">No rider assigned</span>
                                     @endif
                                 </td>
 
@@ -232,8 +264,19 @@
                                 <td class="px-5 py-4 text-right whitespace-nowrap">
                                     <div class="inline-flex items-center gap-2">
                                         @if (in_array($parcel->status, ['at_sorting_center', 'received_at_hub']))
-                                            {{-- If already has area, quick 1-click confirm --}}
-                                            @if ($parcel->delivery_area_id)
+                                            {{-- If already has zone or area, quick 1-click confirm --}}
+                                            @if ($parcel->delivery_zone_id)
+                                                <form method="POST" action="{{ route('logistics.sorting.confirm', $parcel) }}" class="inline">
+                                                    @csrf
+                                                    <input type="hidden" name="zone_id" value="{{ $parcel->delivery_zone_id }}">
+                                                    <button
+                                                        type="submit"
+                                                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-label-md text-xs font-semibold hover:bg-emerald-700 transition-all cursor-pointer">
+                                                        <span class="material-symbols-outlined text-[15px]">check</span>
+                                                        <span>Confirm Sort</span>
+                                                    </button>
+                                                </form>
+                                            @elseif ($parcel->delivery_area_id)
                                                 <form method="POST" action="{{ route('logistics.sorting.confirm', $parcel) }}" class="inline">
                                                     @csrf
                                                     <input type="hidden" name="delivery_area_id" value="{{ $parcel->delivery_area_id }}">
@@ -248,10 +291,10 @@
 
                                             <button
                                                 type="button"
-                                                @click="activeOrder = {{ $parcel->toJson() }}; actionUrl = '{{ route('logistics.sorting.confirm', $parcel) }}'; selectedAreaId = '{{ $parcel->delivery_area_id ?? ($suggested->id ?? '') }}'; currentAreaId = '{{ $parcel->delivery_area_id }}'; isOverride = (currentAreaId !== ''); sortModal = true;"
+                                                @click="activeOrder = {{ $parcel->toJson() }}; actionUrl = '{{ route('logistics.sorting.confirm', $parcel) }}'; selectedZoneId = '{{ $parcel->delivery_zone_id ?? ($suggestedZone->id ?? '') }}'; currentZoneId = '{{ $parcel->delivery_zone_id }}'; selectedAreaId = '{{ $parcel->delivery_area_id ?? ($suggestedArea->id ?? '') }}'; currentAreaId = '{{ $parcel->delivery_area_id }}'; isOverride = (currentZoneId !== '' || currentAreaId !== ''); sortModal = true;"
                                                 class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-xs font-semibold hover:bg-primary/90 transition-all cursor-pointer">
                                                 <span class="material-symbols-outlined text-[15px]">sort</span>
-                                                <span>{{ $parcel->delivery_area_id ? 'Change Area' : 'Assign Area' }}</span>
+                                                <span>{{ ($parcel->delivery_zone_id || $parcel->delivery_area_id) ? 'Change Zone' : 'Assign Zone' }}</span>
                                             </button>
                                         @elseif ($parcel->status === 'sorted')
                                             <a
@@ -292,7 +335,7 @@
 </div>
 
 
-    {{-- Assign / Override Delivery Area Modal --}}
+    {{-- Assign / Override Delivery Zone Modal --}}
     <div
         x-show="sortModal"
         x-cloak
@@ -301,8 +344,8 @@
         <div class="bg-surface-container-lowest rounded-2xl max-w-md w-full p-6 shadow-xl border border-outline-variant" @click.outside="sortModal = false">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary text-[22px]">near_me</span>
-                    <h3 class="font-headline-sm text-base font-bold text-on-surface">Destination Area Sorting</h3>
+                    <span class="material-symbols-outlined text-primary text-[22px]">share_location</span>
+                    <h3 class="font-headline-sm text-base font-bold text-on-surface">Destination Coverage Zone Sorting</h3>
                 </div>
                 <button @click="sortModal = false" class="text-on-surface-variant hover:text-on-surface">
                     <span class="material-symbols-outlined text-[20px]">close</span>
@@ -310,36 +353,45 @@
             </div>
 
             <p class="font-body-sm text-xs text-on-surface-variant mb-4">
-                Select the delivery coverage area for this package based on the buyer's destination municipality and barangay.
+                Select the delivery coverage zone for this package based on the buyer's destination municipality and barangay.
             </p>
 
             <form :action="actionUrl" method="POST">
                 @csrf
                 <div class="mb-4">
-                    <label class="block font-label-md text-xs font-semibold text-on-surface mb-1">Select Delivery Area</label>
-                    <select
-                        name="delivery_area_id"
-                        x-model="selectedAreaId"
-                        required
-                        class="w-full px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">
-                        <option value="">-- Choose Delivery Area --</option>
-                        @foreach ($deliveryAreas as $area)
-                            <option value="{{ $area->id }}">
-                                {{ $area->name }} (Rider: {{ $area->courier?->full_name ?? 'None' }})
-                            </option>
-                        @endforeach
-                    </select>
+                    @if($zones->isNotEmpty())
+                        <label class="block font-label-md text-xs font-semibold text-on-surface mb-1">Select Coverage Zone</label>
+                        <select
+                            name="zone_id"
+                            x-model="selectedZoneId"
+                            required
+                            class="w-full px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary">
+                            <option value="">-- Choose Coverage Zone --</option>
+                            @foreach ($zones as $zone)
+                                @php
+                                    $zRiderNames = $zone->riders->pluck('full_name')->join(', ');
+                                @endphp
+                                <option value="{{ $zone->id }}">
+                                    {{ $zone->name }} ({{ $zone->city_name }}) — Rider: {{ $zRiderNames ?: 'Unassigned' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    @else
+                        <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-800 text-xs">
+                            No coverage zones configured. <a href="{{ route('logistics.zones.index') }}" class="font-bold underline">Create a zone</a> to sort parcels.
+                        </div>
+                    @endif
                 </div>
 
                 {{-- Override reason required if reassigning --}}
-                <div class="mb-5" x-show="isOverride && selectedAreaId !== currentAreaId">
+                <div class="mb-5" x-show="isOverride && ((selectedZoneId && selectedZoneId !== currentZoneId) || (selectedAreaId && selectedAreaId !== currentAreaId))">
                     <label class="block font-label-md text-xs font-semibold text-on-surface mb-1">
                         Reason for Manual Override <span class="text-rose-600">*</span>
                     </label>
                     <textarea
                         name="override_reason"
                         rows="2"
-                        placeholder="Explain reason for overriding default area (e.g. boundary adjustment, road closure)..."
+                        placeholder="Explain reason for overriding default zone (e.g. boundary adjustment, road closure)..."
                         class="w-full px-3 py-2 bg-surface-container-high border-none rounded-xl font-body-sm text-xs text-on-surface focus:ring-2 focus:ring-primary"></textarea>
                 </div>
 
@@ -347,7 +399,7 @@
                     <button type="button" @click="sortModal = false" class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-label-md text-xs font-semibold hover:bg-surface-container-highest transition-colors">
                         Cancel
                     </button>
-                    <button type="submit" class="px-4 py-2 rounded-xl bg-primary text-on-primary font-label-md text-xs font-semibold hover:bg-primary/90 transition-all">
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-primary text-on-primary font-label-md text-xs font-semibold hover:bg-primary/90 transition-all cursor-pointer">
                         Save Sorting Decision
                     </button>
                 </div>

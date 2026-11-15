@@ -8,6 +8,7 @@ use App\Models\CourierProfile;
 use App\Models\DeliveryArea;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Zone;
 use App\Notifications\ApplicationDecision;
 use App\Notifications\RiderActivationNotification;
 use Illuminate\Http\RedirectResponse;
@@ -27,15 +28,25 @@ class RiderController extends Controller
     {
         $sortingCenterId = $request->user()->id;
         $tab = $request->query('tab', 'active');
+        $category = $request->query('category', 'all'); // all | riders | couriers
         $search = $request->query('q');
 
-        // Tenant isolation: Only riders belonging to this logistics company
+        // Tenant isolation: Only riders & transfer couriers belonging to this logistics company
         $query = User::whereIn('role', ['rider', 'courier'])
+            ->when($category === 'riders', fn ($q) => $q->where('role', 'rider'))
+            ->when($category === 'couriers', fn ($q) => $q->where('role', 'courier'))
             ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))
-            ->with(['courierProfile', 'address', 'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId)])
+            ->with([
+                'courierProfile.assignedHub',
+                'address',
+                'assignedZones.barangays',
+                'assignedZones.hub',
+                'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId),
+            ])
             ->withCount([
                 'activeDeliveries as active_deliveries_count',
                 'completedDeliveries as completed_deliveries_count',
+                'assignedManifests as active_manifests_count' => fn ($q) => $q->whereIn('status', \App\Models\TransferManifest::ACTIVE_STATUSES),
             ]);
 
         if ($search) {
@@ -60,7 +71,15 @@ class RiderController extends Controller
         $riders = $query->latest()->paginate(15)->withQueryString();
 
         $baseCount = fn () => User::whereIn('role', ['rider', 'courier'])
+            ->when($category === 'riders', fn ($q) => $q->where('role', 'rider'))
+            ->when($category === 'couriers', fn ($q) => $q->where('role', 'courier'))
             ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId));
+
+        $categoryCounts = [
+            'all' => User::whereIn('role', ['rider', 'courier'])->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))->count(),
+            'riders' => User::where('role', 'rider')->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))->count(),
+            'couriers' => User::where('role', 'courier')->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))->count(),
+        ];
 
         $counts = [
             'pending_activation' => (clone $baseCount())->where('account_status', 'pending_activation')->count(),
@@ -71,21 +90,120 @@ class RiderController extends Controller
             'all' => (clone $baseCount())->count(),
         ];
 
-        // Delivery areas managed by this sorting center
+        // Coverage zones managed by this logistics company
+        $zones = Zone::where('logistics_company_id', $sortingCenterId)
+            ->with(['hub', 'riders', 'barangays'])
+            ->withCount(['riders', 'barangays'])
+            ->orderBy('name')
+            ->get();
+
+        // Delivery areas managed by this sorting center (legacy)
         $deliveryAreas = DeliveryArea::where('sorting_center_id', $sortingCenterId)
             ->with('courier')
             ->orderBy('name')
             ->get();
 
-        return view('logistics.riders.index', compact('riders', 'counts', 'tab', 'search', 'deliveryAreas'));
+        return view('logistics.riders.index', compact('riders', 'counts', 'categoryCounts', 'category', 'tab', 'search', 'deliveryAreas', 'zones'));
     }
 
     /**
-     * Show the Add Rider form.
+     * Show the Add Rider or Add Transfer Courier form.
      */
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('logistics.riders.create');
+        $personnelType = $request->query('type') === 'courier' ? 'courier' : 'rider';
+        $hubs = \App\Models\Hub::where('logistics_company_id', $request->user()->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        return view('logistics.riders.create', compact('personnelType', 'hubs'));
+    }
+
+    /**
+     * Show the Create Transfer Courier form.
+     */
+    public function createCourier(Request $request): View
+    {
+        $personnelType = 'courier';
+        $hubs = \App\Models\Hub::where('logistics_company_id', $request->user()->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        return view('logistics.riders.create', compact('personnelType', 'hubs'));
+    }
+
+    /**
+     * Store a newly created Transfer Courier and dispatch activation email.
+     */
+    public function storeCourier(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'min:2', 'max:50', 'regex:/^[a-zA-Z\s]+$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:50', 'regex:/^[a-zA-Z\s]+$/'],
+            'birthday' => ['required', 'date', 'before_or_equal:' . now()->subYears(18)->format('Y-m-d')],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'contact_number' => ['required', 'string', 'regex:/^09\d{9}$/', 'unique:users,contact_number'],
+            'license_number' => ['required', 'string', 'regex:/^[A-Z]\d{2}-\d{2}-\d{6}$/i', 'unique:courier_profiles,license_number'],
+            'license_expiry_date' => ['required', 'date', 'after_or_equal:today'],
+            'license_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'assigned_hub_id' => ['nullable', 'integer', 'exists:hubs,id'],
+            'account_status' => ['nullable', 'string', 'in:pending_activation,active'],
+        ]);
+
+        if (! empty($validated['assigned_hub_id'])) {
+            \App\Models\Hub::where('id', $validated['assigned_hub_id'])
+                ->where('logistics_company_id', $request->user()->id)
+                ->firstOrFail();
+        }
+
+        $licensePath = $request->file('license_file')->store('documents/courier/licenses', 'public');
+        $activationToken = Str::random(64);
+
+        $courier = DB::transaction(function () use ($validated, $licensePath, $activationToken, $request) {
+            $user = User::create([
+                'first_name' => trim($validated['first_name']),
+                'last_name' => trim($validated['last_name']),
+                'sex' => 'other',
+                'birthday' => $validated['birthday'],
+                'age' => \Carbon\Carbon::parse($validated['birthday'])->age,
+                'email' => strtolower(trim($validated['email'])),
+                'contact_number' => trim($validated['contact_number']),
+                'password' => Hash::make(Str::random(32)),
+                'role' => 'courier',
+                'approval_status' => 'approved',
+                'account_status' => 'pending_activation',
+                'email_verified_at' => null,
+                'valid_id_path' => $licensePath,
+                'activation_token' => $activationToken,
+                'activation_token_expires_at' => now()->addHours(24),
+            ]);
+
+            CourierProfile::create([
+                'user_id' => $user->id,
+                'sorting_center_id' => $request->user()->id,
+                'logistics_company_id' => $request->user()->id,
+                'assigned_hub_id' => $validated['assigned_hub_id'] ?? null,
+                'vehicle_type' => null,
+                'plate_number' => null,
+                'license_number' => strtoupper(trim($validated['license_number'])),
+                'license_expiry_date' => $validated['license_expiry_date'],
+                'license_path' => $licensePath,
+                'or_cr_path' => null,
+            ]);
+
+            return $user;
+        });
+
+        try {
+            $courier->notify(new RiderActivationNotification($activationToken));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send transfer courier activation notification: ' . $e->getMessage());
+        }
+
+        return redirect()->route('logistics.riders.index', ['tab' => 'pending_activation', 'category' => 'couriers'])
+            ->with('status', "Transfer Courier {$courier->full_name} registered successfully. An activation email has been sent to {$courier->email}.");
     }
 
     /**
@@ -207,17 +325,24 @@ class RiderController extends Controller
         $rider->load([
             'courierProfile',
             'address',
+            'assignedZones.barangays',
+            'assignedZones.hub',
             'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId),
             'activeDeliveries.buyer',
             'activeDeliveries.address',
             'completedDeliveries' => fn ($q) => $q->latest()->limit(10),
         ]);
 
+        $availableZones = Zone::where('logistics_company_id', $sortingCenterId)
+            ->with(['hub', 'barangays', 'riders'])
+            ->orderBy('name')
+            ->get();
+
         $availableAreas = DeliveryArea::where('sorting_center_id', $sortingCenterId)
             ->orderBy('name')
             ->get();
 
-        return view('logistics.riders.show', compact('rider', 'availableAreas'));
+        return view('logistics.riders.show', compact('rider', 'availableAreas', 'availableZones'));
     }
 
     /**
@@ -369,40 +494,59 @@ class RiderController extends Controller
     }
 
     /**
-     * Assign delivery areas to a courier.
+     * Assign coverage zones (and legacy delivery areas) to a courier.
      */
+    public function assignZones(Request $request, User $rider): RedirectResponse
+    {
+        return $this->assignAreas($request, $rider);
+    }
+
     public function assignAreas(Request $request, User $rider): RedirectResponse
     {
         $this->authorizeRiderBelongsToCenter($request, $rider);
 
         // Prevent deactivated, pending activation, or unapproved riders from receiving new assignments
-        abort_unless($rider->isApproved(), 422, 'Unapproved riders cannot be assigned delivery areas.');
-        abort_unless($rider->isActive(), 422, 'Only active riders can be assigned delivery areas.');
+        abort_unless($rider->isApproved(), 422, 'Unapproved riders cannot be assigned delivery coverage.');
+        abort_unless($rider->isActive(), 422, 'Only active riders can be assigned delivery coverage.');
 
         $validated = $request->validate([
+            'zone_ids' => ['nullable', 'array'],
+            'zone_ids.*' => ['integer', 'exists:zones,id'],
             'area_ids' => ['nullable', 'array'],
             'area_ids.*' => ['integer', 'exists:delivery_areas,id'],
         ]);
 
         $sortingCenterId = $request->user()->id;
-        $selectedAreaIds = $validated['area_ids'] ?? [];
 
-        DB::transaction(function () use ($sortingCenterId, $rider, $selectedAreaIds) {
-            // Unassign areas owned by this sorting center previously assigned to this rider but not selected
-            DeliveryArea::where('sorting_center_id', $sortingCenterId)
-                ->where('courier_id', $rider->id)
-                ->whereNotIn('id', $selectedAreaIds)
-                ->update(['courier_id' => null]);
+        DB::transaction(function () use ($sortingCenterId, $rider, $validated, $request) {
+            // 1. Coverage Zones (modern zone system)
+            if ($request->has('zone_ids')) {
+                $rawZoneIds = $validated['zone_ids'] ?? [];
+                $validZoneIds = Zone::where('logistics_company_id', $sortingCenterId)
+                    ->whereIn('id', $rawZoneIds)
+                    ->pluck('id')
+                    ->all();
 
-            // Assign newly selected areas to this rider
-            if (! empty($selectedAreaIds)) {
+                $rider->assignedZones()->sync($validZoneIds);
+            }
+
+            // 2. Legacy DeliveryArea assignment (if area_ids provided)
+            if ($request->has('area_ids')) {
+                $selectedAreaIds = $validated['area_ids'] ?? [];
                 DeliveryArea::where('sorting_center_id', $sortingCenterId)
-                    ->whereIn('id', $selectedAreaIds)
-                    ->update(['courier_id' => $rider->id]);
+                    ->where('courier_id', $rider->id)
+                    ->whereNotIn('id', $selectedAreaIds)
+                    ->update(['courier_id' => null]);
+
+                if (! empty($selectedAreaIds)) {
+                    DeliveryArea::where('sorting_center_id', $sortingCenterId)
+                        ->whereIn('id', $selectedAreaIds)
+                        ->update(['courier_id' => $rider->id]);
+                }
             }
         });
 
-        return back()->with('status', "Updated delivery areas for rider {$rider->full_name}.");
+        return back()->with('status', "Updated delivery coverage assignments for rider {$rider->full_name}.");
     }
 
     /**
@@ -410,16 +554,19 @@ class RiderController extends Controller
      */
     protected function authorizeRiderBelongsToCenter(Request $request, User $rider, int $notFoundStatus = 400): void
     {
-        abort_unless($rider->isCourier(), $notFoundStatus, 'User is not a courier.');
+        abort_unless($rider->isRider() || $rider->isCourier(), $notFoundStatus, 'User is not a rider or transfer courier.');
 
-        $assignedCenter = $rider->courierProfile?->sorting_center_id;
-        if ($assignedCenter !== null && $assignedCenter !== $request->user()->id) {
-            abort(403, 'Unauthorized access to this rider.');
+        $assignedCenter = $rider->courierProfile?->logistics_company_id ?? $rider->courierProfile?->sorting_center_id;
+        if ($assignedCenter !== null && (int) $assignedCenter !== (int) $request->user()->id) {
+            abort(403, 'Unauthorized access to this personnel.');
         }
 
         // Auto-link legacy unassigned courier profile if applicable
         if ($rider->courierProfile && $rider->courierProfile->sorting_center_id === null) {
-            $rider->courierProfile->update(['sorting_center_id' => $request->user()->id]);
+            $rider->courierProfile->update([
+                'sorting_center_id' => $request->user()->id,
+                'logistics_company_id' => $request->user()->id,
+            ]);
         }
     }
 
@@ -436,7 +583,7 @@ class RiderController extends Controller
         // If courier assigned, ensure approved and active
         if (! empty($validated['courier_id'])) {
             $courier = User::find($validated['courier_id']);
-            abort_unless($courier && $courier->isCourier() && $courier->isApproved() && $courier->isActive(), 422, 'Assigned rider must be an approved and active courier.');
+            abort_unless($courier && $courier->isRider() && $courier->isApproved() && $courier->isActive(), 422, 'Assigned rider must be an approved and active delivery rider.');
         }
 
         DeliveryArea::create([
