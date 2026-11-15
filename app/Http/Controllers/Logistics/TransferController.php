@@ -96,8 +96,9 @@ class TransferController extends Controller
             'completed' => HubTransfer::where(fn ($q) => $q->where('receiver_logistics_id', $companyId)->orWhere('sender_logistics_id', $companyId))->where('status', 'received')->count(),
         ];
 
-        // Parcels in this company currently awaiting hub dispatch (both internal and cross-company!)
-        $awaitingDispatch = Order::where(function ($q) use ($companyId) {
+        // Eligible parcels physically at an origin hub of this company, needing hub transfer,
+        // not in transit, and not assigned to any active manifest.
+        $candidateOrders = Order::where(function ($q) use ($companyId) {
                 $q->where('current_custody_logistics_id', $companyId)
                   ->orWhere(function ($sub) use ($companyId) {
                       $sub->whereNull('current_custody_logistics_id')
@@ -106,14 +107,31 @@ class TransferController extends Controller
             })
             ->whereIn('status', ['received_at_hub', 'at_sorting_center', 'sorted'])
             ->whereDoesntHave('transfers', fn ($t) => $t->where('status', 'in_transit'))
+            ->whereDoesntHave('manifestItems', fn ($mi) => $mi->whereHas('manifest', fn ($mq) => $mq->whereIn('status', TransferManifest::ACTIVE_STATUSES)))
+            ->whereDoesntHave('manifestItems', fn ($mi) => $mi->where('receiving_status', TransferManifestItem::RECEIVING_RECEIVED)
+                ->whereHas('manifest', fn ($mq) => $mq->where('status', TransferManifest::STATUS_COMPLETED)
+                    ->whereColumn('transfer_manifests.destination_hub_id', 'orders.current_hub_id')))
             ->where(function ($q) {
-                $q->whereColumn('origin_hub_id', '!=', 'destination_hub_id')
-                  ->orWhereColumn('current_hub_id', '!=', 'destination_hub_id')
-                  ->orWhereNull('origin_hub_id')
-                  ->orWhereNull('destination_hub_id');
+                $q->whereNull('current_hub_id')
+                  ->orWhereNull('destination_hub_id')
+                  ->orWhereColumn('current_hub_id', '!=', 'destination_hub_id');
             })
-            ->with(['buyer', 'address', 'currentHub', 'originHub', 'destinationHub.logisticsCompany', 'pickupLogistics', 'deliveryLogistics'])
+            ->with(['buyer', 'address', 'currentHub.logisticsCompany', 'originHub.logisticsCompany', 'destinationHub.logisticsCompany', 'pickupLogistics', 'deliveryLogistics'])
+            ->orderByDesc('updated_at')
             ->get();
+
+        // Separate cleanly routed parcels from parcels requiring routing review
+        $eligibleForManifest = $candidateOrders
+            ->filter(fn (Order $order) => $order->hasValidTransferRouting()
+                && (int) $order->currentHub->logistics_company_id === (int) $companyId)
+            ->values();
+
+        $routingReviewParcels = $candidateOrders
+            ->reject(fn (Order $order) => $order->hasValidTransferRouting()
+                && (int) $order->currentHub->logistics_company_id === (int) $companyId)
+            ->values();
+
+        $awaitingDispatch = $eligibleForManifest;
 
         $myHubs = Hub::where('logistics_company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
         $allDestinationHubs = Hub::where('is_active', true)->with('logisticsCompany')->orderBy('name')->get();
@@ -128,12 +146,17 @@ class TransferController extends Controller
             ->limit(25)
             ->get();
 
-        // Eligible parcels not already in an active manifest
-        $eligibleForManifest = $awaitingDispatch->filter(function ($order) {
-            return ! TransferManifestItem::where('order_id', $order->id)
-                ->whereHas('manifest', fn ($q) => $q->whereIn('status', TransferManifest::ACTIVE_STATUSES))
-                ->exists();
-        })->values();
+        // Editable pre-dispatch manifests owned by this company (for "Add to Existing Draft Manifest")
+        $editableManifests = TransferManifest::where('sender_logistics_id', $companyId)
+            ->whereNull('dispatched_at')
+            ->whereIn('status', [
+                TransferManifest::STATUS_DRAFT,
+                TransferManifest::STATUS_LOADING,
+                TransferManifest::STATUS_READY_TO_DISPATCH,
+            ])
+            ->with(['originHub', 'destinationHub', 'assignedCourier'])
+            ->latest()
+            ->get();
 
         // Approved active Transfer Couriers belonging to this company
         $transferCouriers = User::where('role', 'courier')
@@ -150,22 +173,23 @@ class TransferController extends Controller
             'tab',
             'search',
             'awaitingDispatch',
+            'routingReviewParcels',
             'myHubs',
             'allDestinationHubs',
             'manifests',
+            'editableManifests',
             'eligibleForManifest',
             'transferCouriers'
         ));
     }
 
     /**
-     * Dispatch an inter-hub or internal transfer to the destination hub.
+     * Legacy individual-parcel dispatch endpoint.
+     * Blocked from bypassing the Transfer Manifest workflow.
      */
     public function dispatch(Request $request, Order $order): RedirectResponse
     {
         $companyId = $request->user()->id;
-
-        // Custody check with robust fallback
         $currentCustody = $order->current_custody_logistics_id ?? ($order->pickup_logistics_id ?? $order->sorting_center_id);
         abort_unless(
             (int) $currentCustody === (int) $companyId,
@@ -173,49 +197,10 @@ class TransferController extends Controller
             'Parcel is not in the custody of your logistics company.'
         );
 
-        // Ensure order is physically at facility to be transferred
-        abort_unless(
-            in_array($order->status, ['received_at_hub', 'at_sorting_center', 'sorted']),
+        abort(
             422,
-            "Order cannot be dispatched in status '" . ucwords(str_replace('_', ' ', $order->status)) . "'."
+            'Direct individual parcel dispatch is disabled. Create and dispatch a Transfer Manifest to transfer parcels between hubs.'
         );
-
-        // Prevent duplicate concurrent active transfers
-        abort_if(
-            $order->transfers()->where('status', 'in_transit')->exists(),
-            422,
-            'This parcel already has an active hub transfer in transit.'
-        );
-
-        $validated = $request->validate([
-            'sender_hub_id' => ['required', 'exists:hubs,id'],
-            'receiver_hub_id' => ['required', 'exists:hubs,id'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $senderHub = Hub::where('id', $validated['sender_hub_id'])->where('logistics_company_id', $companyId)->firstOrFail();
-        $receiverHub = Hub::where('id', $validated['receiver_hub_id'])->firstOrFail();
-
-        abort_if((int) $senderHub->id === (int) $receiverHub->id, 422, 'Origin and destination hubs cannot be the same hub.');
-
-        // If parcel current_hub_id is null or belongs to this company, align to senderHub
-        if (empty($order->current_hub_id) || (int) ($order->currentHub?->logistics_company_id ?? $companyId) === (int) $companyId) {
-            $order->update([
-                'current_hub_id' => $senderHub->id,
-                'current_custody_logistics_id' => $companyId,
-            ]);
-        }
-
-        $transfer = $this->logisticsService->dispatchHubTransfer(
-            $order,
-            $senderHub,
-            $receiverHub,
-            $request->user(),
-            $validated['notes'] ?? null
-        );
-
-        $transferType = $transfer->is_internal ? 'internal hub transfer' : 'inter-company transfer';
-        return back()->with('status', "Parcel #{$order->order_number} dispatched in {$transferType} to {$receiverHub->name}. Custody remains with your company until receipt.");
     }
 
     /**
@@ -252,12 +237,14 @@ class TransferController extends Controller
     {
         $validated = $request->validate([
             'origin_hub_id' => ['required', 'integer', 'exists:hubs,id'],
-            'destination_hub_id' => ['required', 'integer', 'exists:hubs,id'],
+            'destination_hub_id' => ['required', 'integer', 'exists:hubs,id', 'different:origin_hub_id'],
             'order_ids' => ['required', 'array', 'min:1'],
             'order_ids.*' => ['integer', 'exists:orders,id'],
             'assigned_courier_id' => ['nullable', 'integer', 'exists:users,id'],
             'vehicle_plate_number' => ['nullable', 'string', 'max:30'],
             'notes' => ['nullable', 'string', 'max:500'],
+        ], [
+            'destination_hub_id.different' => 'Destination hub cannot be the same as the origin or current hub.',
         ]);
 
         $manifest = $this->manifestService->createManifest($request->user(), $validated);
@@ -363,6 +350,36 @@ class TransferController extends Controller
 
         return redirect()->route('logistics.transfers.index')
             ->with('status', "Manifest {$manifest->manifest_number} cancelled.");
+    }
+
+    /**
+     * Append selected compatible parcels to an existing editable pre-dispatch manifest.
+     */
+    public function addParcelsToManifest(Request $request, TransferManifest $manifest): RedirectResponse
+    {
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ]);
+
+        $updated = $this->manifestService->addParcelsToManifest(
+            $manifest,
+            $validated['order_ids'],
+            $request->user()
+        );
+
+        return redirect()->route('logistics.transfers.manifests.show', $updated)
+            ->with('status', "Added " . count($validated['order_ids']) . " parcel(s) to manifest {$updated->manifest_number}. Total: {$updated->total_parcels}.");
+    }
+
+    /**
+     * Remove a parcel from an editable pre-dispatch manifest.
+     */
+    public function removeManifestParcel(Request $request, TransferManifest $manifest, TransferManifestItem $item): RedirectResponse
+    {
+        $updated = $this->manifestService->removeParcelFromManifest($manifest, $item, $request->user());
+
+        return back()->with('status', "Parcel {$item->tracking_number} removed from manifest {$updated->manifest_number} and returned to available staging if eligible.");
     }
 }
 

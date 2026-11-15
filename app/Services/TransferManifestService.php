@@ -63,6 +63,12 @@ class TransferManifestService
                     "Parcel #{$order->order_number} cannot be added in status '{$order->status}'."
                 );
 
+                abort_unless(
+                    ! empty($order->current_hub_id) && (int) $order->current_hub_id === (int) $originHub->id,
+                    422,
+                    "Parcel #{$order->order_number} is not physically recorded at {$originHub->name}."
+                );
+
                 abort_if(
                     $order->transfers()->where('status', 'in_transit')->exists(),
                     422,
@@ -102,13 +108,6 @@ class TransferManifestService
             ]);
 
             foreach ($orders as $order) {
-                if (empty($order->current_hub_id) || (int) ($order->currentHub?->logistics_company_id ?? $companyId) === (int) $companyId) {
-                    $order->update([
-                        'current_hub_id' => $originHub->id,
-                        'current_custody_logistics_id' => $companyId,
-                    ]);
-                }
-
                 TransferManifestItem::create([
                     'manifest_id' => $manifest->id,
                     'order_id' => $order->id,
@@ -436,26 +435,34 @@ class TransferManifestService
                 'You are not assigned to this transfer manifest.'
             );
 
-            if ($manifest->status === TransferManifest::STATUS_ARRIVED) {
+            if ($manifest->status === TransferManifest::STATUS_ARRIVED || ($manifest->status === TransferManifest::STATUS_EXCEPTION && $manifest->arrived_at !== null)) {
                 return $manifest;
             }
 
             abort_unless(
-                $manifest->status === TransferManifest::STATUS_IN_TRANSIT,
+                in_array($manifest->status, [
+                    TransferManifest::STATUS_IN_TRANSIT,
+                    TransferManifest::STATUS_EXCEPTION,
+                ], true) && $manifest->dispatched_at !== null,
                 422,
                 "Manifest cannot be marked arrived from status '{$manifest->status}'."
             );
 
+            $previousStatus = $manifest->status;
+            $nextStatus = $previousStatus === TransferManifest::STATUS_EXCEPTION
+                ? TransferManifest::STATUS_EXCEPTION
+                : TransferManifest::STATUS_ARRIVED;
+
             $manifest->update([
-                'status' => TransferManifest::STATUS_ARRIVED,
+                'status' => $nextStatus,
                 'arrived_at' => $manifest->arrived_at ?? now(),
             ]);
 
             AuditLog::log(
                 'transfer_manifest_arrived',
                 $manifest,
-                ['status' => TransferManifest::STATUS_IN_TRANSIT],
-                ['status' => TransferManifest::STATUS_ARRIVED, 'arrived_at' => $manifest->arrived_at?->toIso8601String()],
+                ['status' => $previousStatus],
+                ['status' => $nextStatus, 'arrived_at' => $manifest->arrived_at?->toIso8601String()],
                 null,
                 $courier->id
             );
@@ -616,11 +623,37 @@ class TransferManifestService
                 return $this->buildReceivingSummary($manifest, $item, true);
             }
 
+            abort_if(
+                $item->receiving_status === TransferManifestItem::RECEIVING_RECEIVED
+                    && $classification !== TransferManifestItem::RECEIVING_RECEIVED,
+                422,
+                "Parcel #{$item->tracking_number} has already been received and cannot be reclassified as '{$classification}' without a controlled correction."
+            );
+
             if ($classification === TransferManifestItem::RECEIVING_RECEIVED) {
                 $hubTransfer = $item->hubTransfer
                     ?? HubTransfer::where('manifest_id', $manifest->id)->where('order_id', $item->order_id)->first();
 
-                if ($hubTransfer && $hubTransfer->status === 'in_transit') {
+                $alreadyReceivedForThisManifest = $hubTransfer !== null
+                    && $hubTransfer->status === 'received'
+                    && (int) $hubTransfer->manifest_id === (int) $manifest->id
+                    && (int) $hubTransfer->receiver_hub_id === (int) $manifest->destination_hub_id
+                    && (int) $hubTransfer->receiver_logistics_id === (int) $operator->id;
+
+                abort_unless(
+                    $hubTransfer !== null && ($hubTransfer->status === 'in_transit' || $alreadyReceivedForThisManifest),
+                    422,
+                    "Parcel #{$item->tracking_number} does not have a valid active in-transit hub transfer."
+                );
+
+                abort_unless(
+                    (int) $hubTransfer->receiver_hub_id === (int) $manifest->destination_hub_id
+                        && (int) $hubTransfer->receiver_logistics_id === (int) $operator->id,
+                    403,
+                    "Parcel #{$item->tracking_number} transfer destination does not match this receiving hub/company."
+                );
+
+                if ($hubTransfer->status === 'in_transit') {
                     $this->interRegionLogisticsService->confirmHubTransferReceipt($hubTransfer, $operator, $notes);
                 }
 
@@ -754,6 +787,170 @@ class TransferManifestService
             );
 
             return $manifest->fresh();
+        });
+    }
+
+    /**
+     * Append compatible parcels to an existing editable pre-dispatch manifest.
+     */
+    public function addParcelsToManifest(TransferManifest $manifest, array $orderIds, User $operator): TransferManifest
+    {
+        return DB::transaction(function () use ($manifest, $orderIds, $operator) {
+            $manifest = TransferManifest::whereKey($manifest->id)
+                ->with(['originHub', 'destinationHub'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $companyId = $operator->id;
+
+            abort_unless(
+                (int) $manifest->sender_logistics_id === (int) $companyId,
+                403,
+                'Only the sending logistics company can add parcels to this manifest.'
+            );
+
+            abort_unless(
+                $manifest->dispatched_at === null && in_array($manifest->status, [
+                    TransferManifest::STATUS_DRAFT,
+                    TransferManifest::STATUS_LOADING,
+                    TransferManifest::STATUS_READY_TO_DISPATCH,
+                ], true),
+                422,
+                "Cannot add parcels to manifest {$manifest->manifest_number} in status '{$manifest->status}'."
+            );
+
+            $cleanOrderIds = array_values(array_unique(array_map('intval', $orderIds)));
+            abort_if(empty($cleanOrderIds), 422, 'Select at least one eligible parcel to add.');
+
+            $orders = Order::whereIn('id', $cleanOrderIds)->lockForUpdate()->get();
+            abort_if($orders->count() !== count($cleanOrderIds), 422, 'One or more selected parcels could not be found.');
+
+            foreach ($orders as $order) {
+                $currentCustody = $order->current_custody_logistics_id ?? ($order->pickup_logistics_id ?? $order->sorting_center_id);
+                abort_unless(
+                    (int) $currentCustody === (int) $companyId,
+                    403,
+                    "Parcel #{$order->order_number} is not in the custody of your logistics company."
+                );
+
+                abort_unless(
+                    in_array($order->status, ['received_at_hub', 'at_sorting_center', 'sorted'], true),
+                    422,
+                    "Parcel #{$order->order_number} cannot be added in status '{$order->status}'."
+                );
+
+                abort_unless(
+                    ! empty($order->current_hub_id) && (int) $order->current_hub_id === (int) $manifest->origin_hub_id,
+                    422,
+                    "Parcel #{$order->order_number} is not physically recorded at {$manifest->originHub->name}."
+                );
+
+                abort_if(
+                    ! empty($order->destination_hub_id) && (int) $order->destination_hub_id !== (int) $manifest->destination_hub_id,
+                    422,
+                    "Parcel #{$order->order_number} is routed to a different destination hub than manifest {$manifest->manifest_number}."
+                );
+
+                abort_if(
+                    $order->transfers()->where('status', 'in_transit')->exists(),
+                    422,
+                    "Parcel #{$order->order_number} already has an active hub transfer in transit."
+                );
+
+                $alreadyInActiveManifest = TransferManifestItem::where('order_id', $order->id)
+                    ->whereHas('manifest', fn ($q) => $q->whereIn('status', TransferManifest::ACTIVE_STATUSES))
+                    ->exists();
+                abort_if(
+                    $alreadyInActiveManifest,
+                    422,
+                    "Parcel #{$order->order_number} is already assigned to an active transfer manifest."
+                );
+            }
+
+            foreach ($orders as $order) {
+                TransferManifestItem::create([
+                    'manifest_id' => $manifest->id,
+                    'order_id' => $order->id,
+                    'tracking_number' => $order->tracking_number ?: $order->order_number,
+                    'loading_status' => TransferManifestItem::LOADING_PENDING,
+                    'receiving_status' => TransferManifestItem::RECEIVING_PENDING,
+                ]);
+            }
+
+            $newTotal = $manifest->items()->count();
+            $nextStatus = $manifest->status === TransferManifest::STATUS_READY_TO_DISPATCH
+                ? TransferManifest::STATUS_LOADING
+                : $manifest->status;
+
+            $manifest->update([
+                'total_parcels' => $newTotal,
+                'status' => $nextStatus,
+            ]);
+
+            AuditLog::log(
+                'transfer_manifest_parcels_added',
+                $manifest,
+                null,
+                [
+                    'added_order_ids' => $cleanOrderIds,
+                    'total_parcels' => $newTotal,
+                    'status' => $nextStatus,
+                ],
+                null,
+                $operator->id
+            );
+
+            return $manifest->fresh(['originHub', 'destinationHub', 'assignedCourier', 'items']);
+        });
+    }
+
+    /**
+     * Remove a parcel from an editable pre-dispatch manifest so it returns to eligible staging.
+     */
+    public function removeParcelFromManifest(TransferManifest $manifest, TransferManifestItem $item, User $operator): TransferManifest
+    {
+        return DB::transaction(function () use ($manifest, $item, $operator) {
+            $manifest = TransferManifest::whereKey($manifest->id)->lockForUpdate()->firstOrFail();
+
+            abort_unless(
+                (int) $manifest->sender_logistics_id === (int) $operator->id,
+                403,
+                'Only the sending logistics company can remove parcels from this manifest.'
+            );
+
+            abort_unless(
+                (int) $item->manifest_id === (int) $manifest->id,
+                404,
+                'Manifest item does not belong to this manifest.'
+            );
+
+            abort_unless(
+                $manifest->dispatched_at === null && in_array($manifest->status, [
+                    TransferManifest::STATUS_DRAFT,
+                    TransferManifest::STATUS_LOADING,
+                    TransferManifest::STATUS_READY_TO_DISPATCH,
+                ], true),
+                422,
+                "Cannot remove parcels from manifest {$manifest->manifest_number} in status '{$manifest->status}'."
+            );
+
+            $tracking = $item->tracking_number;
+            $orderId = $item->order_id;
+            $item->delete();
+
+            $newTotal = $manifest->items()->count();
+            $manifest->update(['total_parcels' => $newTotal]);
+
+            AuditLog::log(
+                'transfer_manifest_parcel_removed',
+                $manifest,
+                ['order_id' => $orderId, 'tracking_number' => $tracking],
+                ['total_parcels' => $newTotal],
+                null,
+                $operator->id
+            );
+
+            return $manifest->fresh(['originHub', 'destinationHub', 'assignedCourier', 'items']);
         });
     }
 

@@ -162,17 +162,61 @@ class Order extends Model
         return $this->belongsTo(Hub::class, 'current_hub_id');
     }
 
+    public function manifestItems()
+    {
+        return $this->hasMany(TransferManifestItem::class);
+    }
+
     public function requiresHubTransfer(): bool
     {
-        return !empty($this->origin_hub_id) &&
+        $activeHubId = $this->current_hub_id ?: $this->origin_hub_id;
+
+        return !empty($activeHubId) &&
                !empty($this->destination_hub_id) &&
-               (int) $this->origin_hub_id !== (int) $this->destination_hub_id;
+               (int) $activeHubId !== (int) $this->destination_hub_id;
     }
 
     public function isInternalTransfer(): bool
     {
-        return $this->requiresHubTransfer() &&
-               (int) $this->pickup_logistics_id === (int) $this->delivery_logistics_id;
+        if (! $this->requiresHubTransfer()) {
+            return false;
+        }
+
+        $originCompanyId = $this->currentHub?->logistics_company_id
+            ?? $this->originHub?->logistics_company_id
+            ?? $this->current_custody_logistics_id
+            ?? $this->pickup_logistics_id;
+        $destCompanyId = $this->destinationHub?->logistics_company_id
+            ?? $this->delivery_logistics_id;
+
+        return !empty($originCompanyId) &&
+               !empty($destCompanyId) &&
+               (int) $originCompanyId === (int) $destCompanyId;
+    }
+
+    public function hasValidTransferRouting(): bool
+    {
+        return !empty($this->current_hub_id)
+            && !empty($this->destination_hub_id)
+            && (int) $this->current_hub_id !== (int) $this->destination_hub_id
+            && $this->currentHub !== null
+            && $this->destinationHub !== null
+            && !empty($this->currentHub->logistics_company_id)
+            && !empty($this->destinationHub->logistics_company_id);
+    }
+
+    public function getFormattedDestinationAttribute(): string
+    {
+        $snapshot = is_array($this->address_snapshot) ? $this->address_snapshot : [];
+        $barangay = trim((string) ($this->address?->barangay_name ?? $snapshot['barangay_name'] ?? $this->shipping_barangay ?? ''));
+        $city = trim((string) ($this->address?->municipality_name ?? $snapshot['municipality_name'] ?? $this->shipping_city ?? ''));
+        $province = trim((string) ($this->address?->province_name ?? $snapshot['province_name'] ?? $this->shipping_province ?? ''));
+
+        $parts = array_values(array_filter([$barangay, $city, $province], fn ($v) => $v !== ''));
+
+        return !empty($parts)
+            ? implode(', ', $parts)
+            : 'Destination Unavailable — Requires Review';
     }
 
     public function isSameHub(): bool

@@ -223,6 +223,8 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::get('/transfers/manifests/{manifest}', [Logistics\TransferController::class, 'showManifest'])->name('transfers.manifests.show');
     Route::post('/transfers/manifests/{manifest}/assign-courier', [Logistics\TransferController::class, 'assignManifestCourier'])->name('transfers.manifests.assign-courier');
     Route::post('/transfers/manifests/{manifest}/verify-parcel', [Logistics\TransferController::class, 'verifyManifestParcel'])->name('transfers.manifests.verify-parcel');
+    Route::post('/transfers/manifests/{manifest}/parcels', [Logistics\TransferController::class, 'addParcelsToManifest'])->name('transfers.manifests.add-parcels');
+    Route::delete('/transfers/manifests/{manifest}/items/{item}', [Logistics\TransferController::class, 'removeManifestParcel'])->name('transfers.manifests.remove-parcel');
     Route::post('/transfers/manifests/{manifest}/cancel', [Logistics\TransferController::class, 'cancelManifest'])->name('transfers.manifests.cancel');
     Route::post('/transfers/{order}/dispatch', [Logistics\TransferController::class, 'dispatch'])->name('transfers.dispatch');
     Route::post('/transfers/{transfer}/confirm-receipt', [Logistics\TransferController::class, 'confirmReceipt'])->name('transfers.confirm-receipt');
@@ -357,7 +359,7 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::post('/account/password', [\App\Http\Controllers\Admin\AccountController::class, 'updatePassword'])->name('account.password');
 });
 
-Route::middleware('role:rider,courier')->prefix('rider')->name('rider.')->group(function () {
+Route::middleware('role:rider')->prefix('rider')->name('rider.')->group(function () {
     Route::get('/dashboard', [Courier\DashboardController::class, 'index'])->name('dashboard');
     Route::post('/toggle-online', [Courier\DashboardController::class, 'toggleOnline'])->name('toggle-online');
     Route::post('/vehicle/update', [Courier\DashboardController::class, 'updateVehicle'])->name('vehicle.update');
@@ -372,7 +374,7 @@ Route::middleware('role:rider,courier')->prefix('rider')->name('rider.')->group(
 });
 
 // Backward compatibility alias for courier prefix and named routes
-Route::middleware('role:rider,courier')->prefix('courier')->name('courier.')->group(function () {
+Route::middleware('role:rider')->prefix('courier')->name('courier.')->group(function () {
     Route::get('/dashboard', [Courier\DashboardController::class, 'index'])->name('dashboard');
     Route::post('/toggle-online', [Courier\DashboardController::class, 'toggleOnline'])->name('toggle-online');
     Route::post('/vehicle/update', [Courier\DashboardController::class, 'updateVehicle'])->name('vehicle.update');

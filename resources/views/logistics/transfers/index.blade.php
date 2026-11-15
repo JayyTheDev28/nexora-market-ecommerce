@@ -5,56 +5,102 @@
 @section('content')
 <div
     x-data="{
-        modalOpen: false,
-        selectedOrderId: '',
-        senderHubId: '',
-        receiverHubId: '',
-        notes: '',
-        stagedOrders: @js($awaitingDispatch->map(fn($o) => [
+        searchQuery: '',
+        filterOriginHubId: '',
+        filterDestHubId: '',
+        filterCompanyId: '',
+        filterRouteType: 'all',
+        selectedIds: [],
+        actionChoiceModalOpen: false,
+        selectedExistingManifestId: '',
+        eligibleParcels: @js(($eligibleForManifest ?? collect())->map(fn($o) => [
             'id' => (string) $o->id,
             'order_number' => $o->order_number,
-            'status' => str_replace('_', ' ', $o->status),
-            'destination' => $o->shipping_barangay ? ($o->shipping_barangay . ', ' . $o->shipping_city) : ($o->shipping_city ?? 'Destination'),
-            'current_hub_id' => (string) ($o->current_hub_id ?: $o->origin_hub_id),
-            'current_hub_name' => $o->currentHub?->name ?? ($o->originHub?->name ?? 'Origin Hub'),
+            'tracking_number' => $o->tracking_number ?: $o->order_number,
+            'status_label' => ucwords(str_replace('_', ' ', $o->status)),
+            'destination' => $o->formatted_destination,
+            'current_hub_id' => (string) ($o->current_hub_id ?? ''),
+            'current_hub_name' => $o->currentHub?->name ?? 'Origin Hub',
             'destination_hub_id' => (string) ($o->destination_hub_id ?? ''),
             'destination_hub_name' => $o->destinationHub?->name ?? 'Destination Hub',
+            'sender_logistics_id' => (string) ($o->currentHub?->logistics_company_id ?? ''),
+            'receiver_logistics_id' => (string) ($o->destinationHub?->logistics_company_id ?? ''),
+            'receiver_company_name' => $o->destinationHub?->logisticsCompany?->full_name ?? 'Internal',
             'is_internal' => $o->isInternalTransfer(),
-            'partner_name' => $o->destinationHub?->logisticsCompany?->full_name,
-        ])),
-        openModal(orderId = null) {
-            if (orderId) {
-                this.selectedOrderId = String(orderId);
-                const order = this.stagedOrders.find(o => String(o.id) === String(orderId));
-                if (order) {
-                    this.senderHubId = order.current_hub_id || '';
-                    this.receiverHubId = (order.destination_hub_id && String(order.destination_hub_id) !== String(this.senderHubId))
-                        ? order.destination_hub_id
-                        : '';
+        ])->values()),
+        editableManifests: @js(($editableManifests ?? collect())->map(fn($m) => [
+            'id' => (string) $m->id,
+            'manifest_number' => $m->manifest_number,
+            'status' => strtoupper(str_replace('_', ' ', $m->status)),
+            'origin_hub_id' => (string) $m->origin_hub_id,
+            'destination_hub_id' => (string) $m->destination_hub_id,
+            'origin_hub_name' => $m->originHub?->name ?? '',
+            'destination_hub_name' => $m->destinationHub?->name ?? '',
+            'total_parcels' => $m->total_parcels,
+            'courier_name' => $m->assignedCourier?->full_name ?? 'Unassigned',
+        ])->values()),
+        get filteredAvailableParcels() {
+            return this.eligibleParcels.filter(p => {
+                if (this.filterOriginHubId && p.current_hub_id !== String(this.filterOriginHubId)) return false;
+                if (this.filterDestHubId && p.destination_hub_id !== String(this.filterDestHubId)) return false;
+                if (this.filterCompanyId && p.receiver_logistics_id !== String(this.filterCompanyId)) return false;
+                if (this.filterRouteType === 'internal' && !p.is_internal) return false;
+                if (this.filterRouteType === 'inter_company' && p.is_internal) return false;
+                if (this.searchQuery.trim() !== '') {
+                    const q = this.searchQuery.trim().toLowerCase();
+                    if (!p.tracking_number.toLowerCase().includes(q) && !p.order_number.toLowerCase().includes(q)) return false;
                 }
-            } else if (this.stagedOrders.length > 0) {
-                this.selectedOrderId = String(this.stagedOrders[0].id);
-                this.senderHubId = this.stagedOrders[0].current_hub_id || '';
-                this.receiverHubId = (this.stagedOrders[0].destination_hub_id && String(this.stagedOrders[0].destination_hub_id) !== String(this.senderHubId))
-                    ? this.stagedOrders[0].destination_hub_id
-                    : '';
+                return true;
+            });
+        },
+        get selectedParcelObjects() {
+            return this.eligibleParcels.filter(p => this.selectedIds.includes(p.id));
+        },
+        get selectionCompatibilityError() {
+            const list = this.selectedParcelObjects;
+            if (list.length <= 1) return '';
+            const first = list[0];
+            for (const p of list) {
+                if (p.current_hub_id !== first.current_hub_id || p.destination_hub_id !== first.destination_hub_id) {
+                    return 'Selected parcels belong to different origin/destination hub routes. Please group compatible parcels into separate manifests.';
+                }
+                if (p.sender_logistics_id !== first.sender_logistics_id || p.receiver_logistics_id !== first.receiver_logistics_id) {
+                    return 'Selected parcels belong to different logistics companies. Please group compatible parcels into separate manifests.';
+                }
             }
-            this.modalOpen = true;
+            return '';
         },
-        onOrderChange() {
-            const order = this.stagedOrders.find(o => String(o.id) === String(this.selectedOrderId));
-            if (order) {
-                if (order.current_hub_id) this.senderHubId = order.current_hub_id;
-                this.receiverHubId = (order.destination_hub_id && String(order.destination_hub_id) !== String(this.senderHubId))
-                    ? order.destination_hub_id
-                    : '';
-            }
+        get compatibleExistingManifests() {
+            const list = this.selectedParcelObjects;
+            if (list.length === 0 || this.selectionCompatibilityError !== '') return [];
+            const first = list[0];
+            return this.editableManifests.filter(m =>
+                m.origin_hub_id === first.current_hub_id &&
+                m.destination_hub_id === first.destination_hub_id
+            );
         },
-        get selectedOrder() {
-            return this.stagedOrders.find(o => String(o.id) === String(this.selectedOrderId)) || null;
+        selectAllFiltered() {
+            const ids = this.filteredAvailableParcels.map(p => p.id);
+            this.selectedIds = Array.from(new Set([...this.selectedIds, ...ids]));
         },
-        get formAction() {
-            return this.selectedOrderId ? ('/logistics/transfers/' + this.selectedOrderId + '/dispatch') : '';
+        deselectAll() {
+            this.selectedIds = [];
+        },
+        openActionChoiceModal() {
+            if (this.selectedIds.length === 0 || this.selectionCompatibilityError !== '') return;
+            const compat = this.compatibleExistingManifests;
+            this.selectedExistingManifestId = compat.length > 0 ? compat[0].id : '';
+            this.actionChoiceModalOpen = true;
+        },
+        proceedToCreateNewManifest() {
+            const list = this.selectedParcelObjects;
+            const first = list[0] || null;
+            this.actionChoiceModalOpen = false;
+            this.$dispatch('open-manifest-modal', {
+                originHubId: first ? first.current_hub_id : '',
+                destinationHubId: first ? first.destination_hub_id : '',
+                orderIds: [...this.selectedIds],
+            });
         }
     }"
     class="w-full min-h-screen bg-surface">
@@ -91,18 +137,6 @@
                                 </span>
                             @endif
                         </button>
-                        @if ($awaitingDispatch->isNotEmpty())
-                            <button
-                                type="button"
-                                @click="openModal()"
-                                class="px-4 py-2.5 rounded-2xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 shadow-xs flex items-center gap-2 transition-all cursor-pointer">
-                                <span class="material-symbols-outlined text-[18px]">local_shipping</span>
-                                <span>Single Parcel Dispatch</span>
-                                <span class="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold">
-                                    {{ $awaitingDispatch->count() }}
-                                </span>
-                            </button>
-                        @endif
                     </div>
                 </div>
 
@@ -141,15 +175,19 @@
                                         <th class="px-4 py-3">Manifest #</th>
                                         <th class="px-4 py-3">Route</th>
                                         <th class="px-4 py-3">Courier</th>
-                                        <th class="px-4 py-3">Parcels</th>
-                                        <th class="px-4 py-3">Status</th>
+                                        <th class="px-4 py-3">Parcels (Loaded)</th>
+                                        <th class="px-4 py-3">Status &amp; Timestamps</th>
                                         <th class="px-4 py-3 text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-outline-variant/60">
                                     @foreach ($manifests as $manifest)
+                                        @php $loadedCount = $manifest->items->where('loading_status', 'loaded')->count(); @endphp
                                         <tr class="hover:bg-surface-container-low/40">
-                                            <td class="px-4 py-3 font-mono font-bold text-on-surface">{{ $manifest->manifest_number }}</td>
+                                            <td class="px-4 py-3">
+                                                <div class="font-mono font-bold text-on-surface">{{ $manifest->manifest_number }}</div>
+                                                <div class="text-[10px] text-on-surface-variant">{{ $manifest->created_at?->format('M d, Y H:i') }}</div>
+                                            </td>
                                             <td class="px-4 py-3">
                                                 <div class="font-semibold text-on-surface">{{ $manifest->originHub?->name }} → {{ $manifest->destinationHub?->name }}</div>
                                                 <div class="text-[11px] text-on-surface-variant">{{ $manifest->is_internal ? 'Internal' : 'Inter-Company' }}</div>
@@ -160,11 +198,20 @@
                                                     <div class="text-[10px] text-on-surface-variant">Plate: {{ $manifest->vehicle_plate_number }}</div>
                                                 @endif
                                             </td>
-                                            <td class="px-4 py-3 font-semibold">{{ $manifest->total_parcels }}</td>
+                                            <td class="px-4 py-3 font-semibold">
+                                                {{ $manifest->total_parcels }}
+                                                <span class="text-[11px] font-normal text-on-surface-variant">({{ $loadedCount }}/{{ $manifest->total_parcels }} loaded)</span>
+                                            </td>
                                             <td class="px-4 py-3">
                                                 <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase bg-primary/10 text-primary">
                                                     {{ str_replace('_', ' ', $manifest->status) }}
                                                 </span>
+                                                @if ($manifest->dispatched_at)
+                                                    <div class="text-[10px] text-on-surface-variant mt-1">Dep: {{ $manifest->dispatched_at->format('M d, H:i') }}</div>
+                                                @endif
+                                                @if ($manifest->arrived_at)
+                                                    <div class="text-[10px] text-on-surface-variant">Arr: {{ $manifest->arrived_at->format('M d, H:i') }}</div>
+                                                @endif
                                             </td>
                                             <td class="px-4 py-3 text-right">
                                                 <a href="{{ route('logistics.transfers.manifests.show', $manifest) }}" class="px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface text-[11px] font-semibold hover:bg-primary hover:text-on-primary transition-colors">
@@ -179,57 +226,134 @@
                     </div>
                 @endif
 
-                {{-- Staged Parcels Strip (Clean & Uncluttered) --}}
-                @if ($awaitingDispatch->isNotEmpty())
-                    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 sm:p-5 shadow-xs">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-outline-variant/60">
-                            <div class="flex items-center gap-2">
-                                <span class="material-symbols-outlined text-amber-600 text-[20px]">swap_horizontal_circle</span>
-                                <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider">
-                                    Parcels Staged for Hub Dispatch ({{ $awaitingDispatch->count() }})
-                                </h2>
-                            </div>
-                            <span class="text-[11px] text-on-surface-variant">Click any parcel below to configure origin and destination hub</span>
+                {{-- Available Parcels for Transfer Section --}}
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-outline-variant/60">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-[20px]">inventory_2</span>
+                            <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider">
+                                AVAILABLE PARCELS FOR TRANSFER ({{ ($eligibleForManifest ?? collect())->count() }})
+                            </h2>
                         </div>
-
-                        <div class="divide-y divide-outline-variant/40 mt-1">
-                            @foreach ($awaitingDispatch as $order)
-                                <div class="py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container-low/30 px-2 rounded-xl transition-colors">
-                                    <div class="min-w-0">
-                                        <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="font-mono text-xs font-bold text-primary">#{{ $order->order_number }}</span>
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-container text-on-surface-variant uppercase">
-                                                {{ str_replace('_', ' ', $order->status) }}
-                                            </span>
-                                            @if ($order->isInternalTransfer())
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-700 border border-blue-500/20">
-                                                    Internal Move
-                                                </span>
-                                            @else
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20">
-                                                    Inter-Company Linehaul
-                                                </span>
-                                            @endif
-                                        </div>
-                                        <div class="text-[11px] text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                            <span>Destination: <strong class="text-on-surface">{{ $order->shipping_city }}, {{ $order->shipping_province }}</strong></span>
-                                            <span class="text-outline-variant">•</span>
-                                            <span>Route: <strong>{{ $order->currentHub?->name ?? ($order->originHub?->name ?? 'Origin Hub') }}</strong> → <strong>{{ $order->destinationHub?->name ?? 'Destination Hub' }}</strong></span>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        @click="openModal({{ $order->id }})"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary font-semibold text-xs hover:bg-primary/90 transition-all cursor-pointer shadow-2xs shrink-0 self-start md:self-auto">
-                                        <span class="material-symbols-outlined text-[15px]">local_shipping</span>
-                                        <span>Pick & Dispatch</span>
-                                    </button>
-                                </div>
-                            @endforeach
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" @click="selectAllFiltered()" :disabled="filteredAvailableParcels.length === 0" class="px-3 py-1.5 rounded-xl border border-outline-variant text-[11px] font-semibold text-on-surface hover:bg-surface-container disabled:opacity-40 cursor-pointer">
+                                Select All Eligible
+                            </button>
+                            <button type="button" @click="deselectAll()" :disabled="selectedIds.length === 0" class="px-3 py-1.5 rounded-xl border border-outline-variant text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-40 cursor-pointer">
+                                Deselect All
+                            </button>
                         </div>
                     </div>
-                @endif
+
+                    {{-- Search & Filters --}}
+                    @if (($eligibleForManifest ?? collect())->isNotEmpty())
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                            <input type="text" x-model="searchQuery" placeholder="Search tracking or order #..." class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
+                            <select x-model="filterOriginHubId" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface">
+                                <option value="">All Origin Hubs</option>
+                                @foreach ($myHubs as $mHub)
+                                    <option value="{{ $mHub->id }}">{{ $mHub->name }}</option>
+                                @endforeach
+                            </select>
+                            <select x-model="filterDestHubId" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface">
+                                <option value="">All Destination Hubs</option>
+                                @foreach ($allDestinationHubs as $dHub)
+                                    <option value="{{ $dHub->id }}">{{ $dHub->name }}</option>
+                                @endforeach
+                            </select>
+                            <select x-model="filterCompanyId" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface">
+                                <option value="">All Logistics Companies</option>
+                                @foreach ($allDestinationHubs->pluck('logisticsCompany')->filter()->unique('id') as $comp)
+                                    <option value="{{ $comp->id }}">{{ $comp->full_name }}</option>
+                                @endforeach
+                            </select>
+                            <select x-model="filterRouteType" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface">
+                                <option value="all">All Route Types</option>
+                                <option value="internal">Internal Move</option>
+                                <option value="inter_company">Inter-Company Linehaul</option>
+                            </select>
+                        </div>
+
+                        {{-- Multi-Select Sticky Action Bar --}}
+                        <div x-show="selectedIds.length > 0" x-cloak class="sticky top-2 z-20 rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                             :class="selectionCompatibilityError ? 'bg-rose-500/10 border-rose-500/30' : 'bg-primary/10 border-primary/30'">
+                            <div class="space-y-0.5">
+                                <div class="text-xs font-bold text-on-surface">
+                                    <span x-text="selectedIds.length"></span> Parcel(s) Selected
+                                </div>
+                                <div x-show="selectionCompatibilityError" class="text-[11px] font-semibold text-rose-700" x-text="selectionCompatibilityError"></div>
+                            </div>
+                            <button
+                                type="button"
+                                @click="openActionChoiceModal()"
+                                :disabled="selectionCompatibilityError !== ''"
+                                class="px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 cursor-pointer shrink-0 flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">assignment_add</span>
+                                <span>Add Selected to Manifest</span>
+                            </button>
+                        </div>
+
+                        {{-- Eligible Parcels List --}}
+                        <div class="divide-y divide-outline-variant/40">
+                            <template x-for="parcel in filteredAvailableParcels" :key="parcel.id">
+                                <label class="py-3 flex items-start sm:items-center justify-between gap-3 hover:bg-surface-container-low/40 px-2.5 rounded-xl transition-colors cursor-pointer">
+                                    <div class="flex items-start gap-3 min-w-0">
+                                        <input type="checkbox" :value="parcel.id" x-model="selectedIds" class="mt-0.5 sm:mt-0 rounded border-outline-variant text-primary focus:ring-primary">
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="font-mono text-xs font-bold text-primary" x-text="parcel.tracking_number"></span>
+                                                <span class="text-[11px] text-on-surface-variant" x-text="'(#' + parcel.order_number + ')'"></span>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-container text-on-surface-variant uppercase" x-text="parcel.status_label"></span>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold border"
+                                                      :class="parcel.is_internal ? 'bg-blue-500/10 text-blue-700 border-blue-500/20' : 'bg-amber-500/10 text-amber-700 border-amber-500/20'"
+                                                      x-text="parcel.is_internal ? 'Internal Move' : 'Inter-Company Linehaul'"></span>
+                                            </div>
+                                            <div class="text-[11px] text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                <span>Destination: <strong class="text-on-surface" x-text="parcel.destination"></strong></span>
+                                                <span class="text-outline-variant">•</span>
+                                                <span>Route: <strong x-text="parcel.current_hub_name"></strong> → <strong x-text="parcel.destination_hub_name"></strong></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </template>
+                            <div x-show="filteredAvailableParcels.length === 0" class="py-6 text-center text-xs text-on-surface-variant">
+                                No parcels match your current search or filter criteria.
+                            </div>
+                        </div>
+                    @else
+                        <div class="py-8 text-center space-y-1">
+                            <span class="material-symbols-outlined text-[32px] text-on-surface-variant/50">check_circle</span>
+                            <p class="text-xs font-bold text-on-surface">No Parcels Available for Transfer</p>
+                            <p class="text-[11px] text-on-surface-variant">All eligible parcels have already been assigned to manifests, or there are currently no parcels requiring hub transfer.</p>
+                        </div>
+                    @endif
+
+                    {{-- Routing Review Required Subsection --}}
+                    @if (($routingReviewParcels ?? collect())->isNotEmpty())
+                        <div class="mt-4 pt-4 border-t border-outline-variant/60 space-y-2">
+                            <div class="flex items-center gap-2 text-amber-700 text-xs font-bold">
+                                <span class="material-symbols-outlined text-[18px]">warning</span>
+                                <span>Routing Review Required ({{ $routingReviewParcels->count() }})</span>
+                            </div>
+                            <div class="divide-y divide-outline-variant/40 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3">
+                                @foreach ($routingReviewParcels as $reviewOrder)
+                                    <div class="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                                        <div>
+                                            <span class="font-mono font-bold text-on-surface">{{ $reviewOrder->tracking_number ?: $reviewOrder->order_number }}</span>
+                                            <span class="ml-2 px-2 py-0.5 rounded bg-amber-500/15 text-amber-800 text-[10px] font-bold uppercase">Routing Review Required</span>
+                                            <div class="text-[11px] text-on-surface-variant mt-0.5">
+                                                Destination: <strong>{{ $reviewOrder->formatted_destination }}</strong> •
+                                                Origin: <strong>{{ $reviewOrder->currentHub?->name ?? 'Missing' }}</strong> →
+                                                Dest: <strong>{{ $reviewOrder->destinationHub?->name ?? 'Missing' }}</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                </div>
 
                 {{-- Transfers Management Table Card --}}
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 shadow-xs">
@@ -384,183 +508,53 @@
         </div>
     </div>
 
-    {{-- Dispatch Hub Transfer Modal --}}
+    {{-- Option A / Option B Choice Modal for Selected Parcels --}}
     <div
-        x-show="modalOpen"
+        x-show="actionChoiceModalOpen"
         x-cloak
-        class="fixed inset-0 z-50 overflow-y-auto"
-        role="dialog"
-        aria-modal="true"
-        @keydown.escape.window="modalOpen = false">
-
-        {{-- Backdrop --}}
-        <div
-            x-show="modalOpen"
-            x-transition:enter="transition ease-out duration-200"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100"
-            x-transition:leave="transition ease-in duration-150"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            @click="modalOpen = false"
-            class="fixed inset-0 bg-black/50 backdrop-blur-xs"></div>
-
-        {{-- Modal Dialog --}}
-        <div class="flex min-h-full items-center justify-center p-4">
-            <div
-                x-show="modalOpen"
-                x-transition:enter="transition ease-out duration-200"
-                x-transition:enter-start="opacity-0 scale-95 translate-y-2"
-                x-transition:enter-end="opacity-100 scale-100 translate-y-0"
-                x-transition:leave="transition ease-in duration-150"
-                x-transition:leave-start="opacity-100 scale-100 translate-y-0"
-                x-transition:leave-end="opacity-0 scale-95 translate-y-2"
-                class="relative w-full max-w-lg bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-2xl overflow-hidden">
-
-                {{-- Modal Header --}}
-                <div class="p-5 border-b border-outline-variant/60 bg-surface-container-low/30 flex items-center justify-between">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                            <span class="material-symbols-outlined text-[20px]">local_shipping</span>
-                        </div>
-                        <div>
-                            <h3 class="font-headline-sm text-sm font-bold text-on-surface">Dispatch Hub Transfer</h3>
-                            <p class="text-[11px] text-on-surface-variant">Select parcel and configure linehaul routing</p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        @click="modalOpen = false"
-                        class="w-8 h-8 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer"
-                        aria-label="Close modal">
-                        <span class="material-symbols-outlined text-[20px]">close</span>
-                    </button>
+        class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.outside="actionChoiceModalOpen = false" class="bg-surface-container-lowest border border-outline-variant rounded-3xl w-full max-w-lg p-6 shadow-xl space-y-5">
+            <div class="flex items-center justify-between border-b border-outline-variant pb-3">
+                <div>
+                    <h3 class="text-base font-bold text-on-surface">Add <span x-text="selectedIds.length"></span> Selected Parcel(s) to Manifest</h3>
+                    <p class="text-xs text-on-surface-variant">Create a new manifest or append to an existing pre-dispatch draft manifest.</p>
                 </div>
+                <button type="button" @click="actionChoiceModalOpen = false" class="p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant cursor-pointer">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
 
-                {{-- Modal Form --}}
-                <form method="POST" :action="formAction" class="p-5 space-y-4">
-                    @csrf
+            {{-- Option A: Create New Manifest --}}
+            <div class="p-4 rounded-2xl border border-outline-variant bg-surface space-y-2">
+                <div class="text-xs font-bold text-on-surface">Option A — Create New Manifest</div>
+                <p class="text-[11px] text-on-surface-variant">Auto-fills origin &amp; destination hubs and preselects your <span x-text="selectedIds.length"></span> parcel(s).</p>
+                <button type="button" @click="proceedToCreateNewManifest()" class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 cursor-pointer">
+                    Create New Manifest with Selected
+                </button>
+            </div>
 
-                    {{-- 1. Select Staged Parcel --}}
-                    <div>
-                        <label class="block text-xs font-bold text-on-surface mb-1">
-                            Select Staged Parcel <span class="text-error">*</span>
-                        </label>
-                        <select
-                            x-model="selectedOrderId"
-                            @change="onOrderChange()"
-                            required
-                            class="w-full px-3 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
-                            <option value="">Choose a parcel to transfer...</option>
-                            <template x-for="order in stagedOrders" :key="order.id">
-                                <option
-                                    :value="order.id"
-                                    x-text="'#' + order.order_number + ' — ' + order.destination + ' (' + (order.is_internal ? 'Internal Move' : 'Partner Linehaul') + ')'">
-                                </option>
+            {{-- Option B: Add to Existing Draft Manifest --}}
+            <div class="p-4 rounded-2xl border border-outline-variant bg-surface space-y-3">
+                <div class="text-xs font-bold text-on-surface">Option B — Add to Existing Draft / Pre-Dispatch Manifest</div>
+                <template x-if="compatibleExistingManifests.length > 0">
+                    <form :action="'/logistics/transfers/manifests/' + selectedExistingManifestId + '/parcels'" method="POST" class="space-y-3">
+                        @csrf
+                        <template x-for="id in selectedIds" :key="'append-' + id">
+                            <input type="hidden" name="order_ids[]" :value="id">
+                        </template>
+                        <select x-model="selectedExistingManifestId" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface-container-lowest text-xs">
+                            <template x-for="m in compatibleExistingManifests" :key="m.id">
+                                <option :value="m.id" x-text="m.manifest_number + ' (' + m.status + ' — ' + m.total_parcels + ' parcels, ' + m.courier_name + ')'"></option>
                             </template>
                         </select>
-                    </div>
-
-                    {{-- Selected Order Summary Strip --}}
-                    <template x-if="selectedOrder">
-                        <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/60 text-xs space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="font-semibold text-on-surface">Target Delivery:</span>
-                                <span class="font-medium text-on-surface-variant" x-text="selectedOrder.destination"></span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="font-semibold text-on-surface">Transfer Category:</span>
-                                <span
-                                    class="px-2 py-0.5 rounded text-[10px] font-bold"
-                                    :class="selectedOrder.is_internal ? 'bg-blue-500/10 text-blue-700' : 'bg-amber-500/10 text-amber-700'"
-                                    x-text="selectedOrder.is_internal ? 'Company Internal' : 'Partner Logistics Handoff'">
-                                </span>
-                            </div>
-                        </div>
-                    </template>
-
-                    {{-- 2. Sender / Origin Facility --}}
-                    <div>
-                        <label class="block text-xs font-bold text-on-surface mb-1">
-                            Dispatching Facility (Origin) <span class="text-error">*</span>
-                        </label>
-                        <select
-                            name="sender_hub_id"
-                            x-model="senderHubId"
-                            required
-                            class="w-full px-3 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
-                            <option value="">Select dispatching facility...</option>
-                            @foreach ($myHubs as $mHub)
-                                <option value="{{ $mHub->id }}">
-                                    {{ $mHub->name }} ({{ $mHub->city_name }})
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    {{-- 3. Receiver / Destination Facility --}}
-                    <div>
-                        <label class="block text-xs font-bold text-on-surface mb-1">
-                            Receiving Facility (Destination) <span class="text-error">*</span>
-                        </label>
-                        <select
-                            name="receiver_hub_id"
-                            x-model="receiverHubId"
-                            required
-                            class="w-full px-3 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
-                            <option value="">Select receiving facility...</option>
-                            <optgroup label="Internal Facilities (Your Company)">
-                                @foreach ($myHubs as $mHub)
-                                    <option value="{{ $mHub->id }}">
-                                        {{ $mHub->name }} (Internal)
-                                    </option>
-                                @endforeach
-                            </optgroup>
-                            @if ($allDestinationHubs->where('logistics_company_id', '!=', auth()->id())->isNotEmpty())
-                                <optgroup label="Partner Logistics Hubs">
-                                    @foreach ($allDestinationHubs->where('logistics_company_id', '!=', auth()->id()) as $pHub)
-                                        <option value="{{ $pHub->id }}">
-                                            {{ $pHub->name }} ({{ $pHub->logisticsCompany?->full_name }})
-                                        </option>
-                                    @endforeach
-                                </optgroup>
-                            @endif
-                        </select>
-                    </div>
-
-                    {{-- 4. Dispatch Notes --}}
-                    <div>
-                        <label class="block text-xs font-bold text-on-surface mb-1">
-                            Linehaul Notes <span class="text-on-surface-variant font-normal">(Optional)</span>
-                        </label>
-                        <input
-                            type="text"
-                            name="notes"
-                            x-model="notes"
-                            maxlength="500"
-                            placeholder="Vehicle plate #, driver name, or manifest code..."
-                            class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs text-on-surface focus:outline-none focus:border-primary">
-                    </div>
-
-                    {{-- Modal Footer --}}
-                    <div class="pt-3 border-t border-outline-variant/60 flex items-center justify-end gap-2.5">
-                        <button
-                            type="button"
-                            @click="modalOpen = false"
-                            class="px-4 py-2 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer">
-                            Cancel
+                        <button type="submit" :disabled="!selectedExistingManifestId" class="w-full py-2.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 cursor-pointer">
+                            Append to Selected Manifest
                         </button>
-
-                        <button
-                            type="submit"
-                            :disabled="!selectedOrderId || !senderHubId || !receiverHubId"
-                            class="px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                            <span class="material-symbols-outlined text-[16px]">local_shipping</span>
-                            <span>Confirm & Dispatch</span>
-                        </button>
-                    </div>
-                </form>
-
+                    </form>
+                </template>
+                <div x-show="compatibleExistingManifests.length === 0" class="text-[11px] text-on-surface-variant">
+                    No compatible draft/pre-dispatch manifests found for this route. Use Option A to create a new manifest.
+                </div>
             </div>
         </div>
     </div>
@@ -580,16 +574,42 @@
                 'id' => (string) $o->id,
                 'order_number' => $o->order_number,
                 'tracking_number' => $o->tracking_number ?: $o->order_number,
-                'destination' => $o->shipping_barangay ? ($o->shipping_barangay . ', ' . $o->shipping_city) : ($o->shipping_city ?? 'Destination'),
+                'current_hub_id' => (string) ($o->current_hub_id ?? ''),
+                'current_hub_name' => $o->currentHub?->name ?? 'Unassigned Hub',
+                'destination' => $o->formatted_destination,
                 'dest_hub' => $o->destinationHub?->name ?? 'Unrouted',
             ])->values()),
+            get isSameHub() {
+                return Boolean(this.originHubId && this.destinationHubId && String(this.originHubId) === String(this.destinationHubId));
+            },
             get filteredParcels() {
-                if (!this.parcelSearch) return this.eligibleParcels;
-                const q = this.parcelSearch.toLowerCase();
-                return this.eligibleParcels.filter(p => p.tracking_number.toLowerCase().includes(q) || p.order_number.toLowerCase().includes(q));
+                return this.eligibleParcels.filter(p => {
+                    if (this.originHubId && p.current_hub_id && String(p.current_hub_id) !== String(this.originHubId)) {
+                        return false;
+                    }
+                    if (!this.parcelSearch) return true;
+                    const q = this.parcelSearch.toLowerCase();
+                    return p.tracking_number.toLowerCase().includes(q) || p.order_number.toLowerCase().includes(q);
+                });
             }
         }"
-        @open-manifest-modal.window="manifestModalOpen = true"
+        @open-manifest-modal.window="
+            manifestModalOpen = true;
+            if ($event.detail?.originHubId) {
+                originHubId = String($event.detail.originHubId);
+            }
+            if ($event.detail?.destinationHubId) {
+                destinationHubId = String($event.detail.destinationHubId);
+            }
+            if (Array.isArray($event.detail?.orderIds)) {
+                selectedOrderIds = $event.detail.orderIds.map(String);
+            } else if ($event.detail?.orderId && !selectedOrderIds.includes(String($event.detail.orderId))) {
+                selectedOrderIds.push(String($event.detail.orderId));
+            }
+            if (String(destinationHubId) === String(originHubId)) {
+                destinationHubId = '';
+            }
+        "
         x-show="manifestModalOpen"
         x-cloak
         class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
@@ -611,7 +631,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-on-surface mb-1">1. Origin Hub <span class="text-rose-500">*</span></label>
-                        <select name="origin_hub_id" x-model="originHubId" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs">
+                        <select name="origin_hub_id" x-model="originHubId" @change="selectedOrderIds = []; if (String(destinationHubId) === String(originHubId)) destinationHubId = '';" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs">
                             @foreach ($myHubs as $mHub)
                                 <option value="{{ $mHub->id }}">{{ $mHub->name }} ({{ $mHub->code }})</option>
                             @endforeach
@@ -622,12 +642,17 @@
                         <select name="destination_hub_id" x-model="destinationHubId" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs">
                             <option value="">Select destination hub...</option>
                             @foreach ($allDestinationHubs as $dHub)
-                                <option value="{{ $dHub->id }}">
+                                <option value="{{ $dHub->id }}" :disabled="String(originHubId) === '{{ $dHub->id }}'">
                                     {{ $dHub->name }} ({{ (int) $dHub->logistics_company_id === (int) auth()->id() ? 'Internal' : $dHub->logisticsCompany?->full_name }})
                                 </option>
                             @endforeach
                         </select>
                     </div>
+                </div>
+
+                <div x-show="isSameHub" x-cloak class="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-700 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[16px]">warning</span>
+                    <span>Destination hub cannot be the same as the origin/current hub. Please select a different hub.</span>
                 </div>
 
                 {{-- Step 2: Search & Multi-Select Eligible Parcels --}}
@@ -684,7 +709,7 @@
                     <button type="button" @click="manifestModalOpen = false" class="px-4 py-2 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface-variant cursor-pointer">
                         Cancel
                     </button>
-                    <button type="submit" :disabled="!originHubId || !destinationHubId || selectedOrderIds.length === 0" class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 cursor-pointer">
+                    <button type="submit" :disabled="!originHubId || !destinationHubId || isSameHub || selectedOrderIds.length === 0" class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 cursor-pointer">
                         Create Manifest (<span x-text="selectedOrderIds.length"></span> parcels)
                     </button>
                 </div>

@@ -556,9 +556,9 @@ class InterRegionLogisticsTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Hub Transfers & Cross-Docking');
-        $response->assertSee('Dispatch Hub Transfer');
-        $response->assertSee('modalOpen');
-        $response->assertSee('stagedOrders');
+        $response->assertSee('Create Transfer Manifest');
+        $response->assertSee('AVAILABLE PARCELS FOR TRANSFER');
+        $response->assertSee('eligibleParcels');
     }
 
     /**
@@ -609,14 +609,45 @@ class InterRegionLogisticsTest extends TestCase
             'shipping_barangay' => 'Alima',
         ]);
 
-        // Hop 1 (First Dispatch): Laguna Santa Cruz Hub -> Calamba Intermediate Hub
-        $dispatch1Response = $this->post(route('logistics.transfers.dispatch', $order), [
+        // Direct individual dispatch bypass must be blocked (must use Transfer Manifest workflow)
+        $this->post(route('logistics.transfers.dispatch', $order), [
             'sender_hub_id' => $this->lagunaHub->id,
             'receiver_hub_id' => $intermediateHub->id,
-            'notes' => 'Feeder leg 1: Santa Cruz to Calamba Sorting Hub',
+        ])->assertStatus(422);
+
+        $transferCourier = User::create([
+            'first_name' => 'TwoHop',
+            'last_name' => 'Courier',
+            'email' => 'twohop_' . uniqid() . '@nexora.test',
+            'contact_number' => '0917' . random_int(1000000, 9999999),
+            'birthday' => '1993-01-01',
+            'age' => 32,
+            'sex' => 'male',
+            'password' => Hash::make('Password123!'),
+            'role' => 'courier',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+        \App\Models\CourierProfile::create([
+            'user_id' => $transferCourier->id,
+            'sorting_center_id' => $this->lagunaCompany->id,
+            'logistics_company_id' => $this->lagunaCompany->id,
+            'assigned_hub_id' => $this->lagunaHub->id,
         ]);
 
-        $dispatch1Response->assertRedirect();
+        $manifestService = app(\App\Services\TransferManifestService::class);
+
+        // Hop 1 (First Dispatch via Manifest): Laguna Santa Cruz Hub -> Calamba Intermediate Hub
+        $manifest1 = $manifestService->createManifest($this->lagunaCompany, [
+            'origin_hub_id' => $this->lagunaHub->id,
+            'destination_hub_id' => $intermediateHub->id,
+            'order_ids' => [$order->id],
+            'assigned_courier_id' => $transferCourier->id,
+        ]);
+        $manifestService->scanLoadingParcel($manifest1, $order->tracking_number, $transferCourier);
+        $manifestService->confirmDeparture($manifest1, $transferCourier);
+
         $order->refresh();
         $this->assertEquals('in_transit_hub', $order->status);
 
@@ -626,10 +657,13 @@ class InterRegionLogisticsTest extends TestCase
         $this->assertEquals($intermediateHub->id, $transfer1->receiver_hub_id);
 
         // Receive at intermediate hub (Calamba Hub)
-        $this->service->confirmHubTransferReceipt(
-            transfer: $transfer1,
-            actor: $this->lagunaCompany,
-            notes: 'Parcel arrived at Calamba intermediate hub'
+        $manifestService->markArrived($manifest1, $transferCourier);
+        $manifestService->verifyReceivingParcel(
+            $manifest1,
+            $order->tracking_number,
+            \App\Models\TransferManifestItem::RECEIVING_RECEIVED,
+            $this->lagunaCompany,
+            'Parcel arrived at Calamba intermediate hub'
         );
 
         $order->refresh();
@@ -637,15 +671,16 @@ class InterRegionLogisticsTest extends TestCase
         $this->assertEquals($intermediateHub->id, $order->current_hub_id);
         $this->assertEquals($this->caviteHub->id, $order->destination_hub_id);
 
-        // Hop 2 (Second Dispatch): Calamba Hub -> Cavite Bacoor Hub (Final Destination Hub)
-        // This was previously throwing 422 before the fix!
-        $dispatch2Response = $this->post(route('logistics.transfers.dispatch', $order), [
-            'sender_hub_id' => $intermediateHub->id,
-            'receiver_hub_id' => $this->caviteHub->id,
-            'notes' => 'Linehaul leg 2: Calamba to Bacoor Hub',
+        // Hop 2 (Second Dispatch via Manifest): Calamba Hub -> Cavite Bacoor Hub (Final Destination Hub)
+        $manifest2 = $manifestService->createManifest($this->lagunaCompany, [
+            'origin_hub_id' => $intermediateHub->id,
+            'destination_hub_id' => $this->caviteHub->id,
+            'order_ids' => [$order->id],
+            'assigned_courier_id' => $transferCourier->id,
         ]);
+        $manifestService->scanLoadingParcel($manifest2, $order->tracking_number, $transferCourier);
+        $manifestService->confirmDeparture($manifest2, $transferCourier);
 
-        $dispatch2Response->assertRedirect();
         $order->refresh();
         $this->assertEquals('in_transit_hub', $order->status);
 
@@ -655,10 +690,13 @@ class InterRegionLogisticsTest extends TestCase
         $this->assertEquals($this->caviteHub->id, $transfer2->receiver_hub_id);
 
         // Cavite receives at final hub
-        $this->service->confirmHubTransferReceipt(
-            transfer: $transfer2,
-            actor: $this->caviteCompany,
-            notes: 'Arrived at final Cavite destination hub'
+        $manifestService->markArrived($manifest2, $transferCourier);
+        $manifestService->verifyReceivingParcel(
+            $manifest2,
+            $order->tracking_number,
+            \App\Models\TransferManifestItem::RECEIVING_RECEIVED,
+            $this->caviteCompany,
+            'Arrived at final Cavite destination hub'
         );
 
         $order->refresh();

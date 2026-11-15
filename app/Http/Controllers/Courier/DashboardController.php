@@ -19,13 +19,24 @@ use App\Services\ShipmentStateMachineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
-class DashboardController extends Controller
+class DashboardController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware(function (Request $request, \Closure $next) {
+                abort_unless($request->user()?->isRider(), 403, 'Access restricted to last-mile delivery riders.');
+                return $next($request);
+            }),
+        ];
+    }
     public function __construct(
         protected JobDispatchService $dispatchService,
         protected RiderPayoutService $payoutService,

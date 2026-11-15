@@ -358,6 +358,8 @@ class InterRegionLogisticsService
         ?int $manifestId = null
     ): HubTransfer {
         return DB::transaction(function () use ($order, $senderHub, $receiverHub, $actor, $notes, $manifestId) {
+            $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
             // Validate sender custody
             abort_unless(
                 (int) $order->current_custody_logistics_id === (int) $senderHub->logistics_company_id,
@@ -370,6 +372,23 @@ class InterRegionLogisticsService
                 422,
                 'Origin and destination hubs cannot be the same.'
             );
+
+            abort_if(
+                $order->transfers()->where('status', 'in_transit')->exists(),
+                422,
+                "Parcel #{$order->order_number} already has an active hub transfer in transit."
+            );
+
+            if ($manifestId === null) {
+                $inActiveManifest = \App\Models\TransferManifestItem::where('order_id', $order->id)
+                    ->whereHas('manifest', fn ($q) => $q->whereIn('status', \App\Models\TransferManifest::ACTIVE_STATUSES))
+                    ->exists();
+                abort_if(
+                    $inActiveManifest,
+                    422,
+                    "Parcel #{$order->order_number} is assigned to an active transfer manifest."
+                );
+            }
 
             $isInternal = (int) $senderHub->logistics_company_id === (int) $receiverHub->logistics_company_id;
 
@@ -422,6 +441,8 @@ class InterRegionLogisticsService
         ?string $notes = null
     ): Order {
         return DB::transaction(function () use ($transfer, $actor, $notes) {
+            $transfer = HubTransfer::whereKey($transfer->id)->lockForUpdate()->firstOrFail();
+
             abort_unless(
                 $transfer->status === 'in_transit',
                 422,
@@ -438,14 +459,14 @@ class InterRegionLogisticsService
                 'Only authorized staff of the receiving logistics company can confirm parcel receipt.'
             );
 
+            $order = Order::whereKey($transfer->order_id)->lockForUpdate()->firstOrFail();
+
             $transfer->update([
                 'status' => 'received',
                 'received_at' => now(),
                 'received_by' => $actor->id,
                 'notes' => $notes ? trim("{$transfer->notes} | Receipt note: {$notes}") : $transfer->notes,
             ]);
-
-            $order = $transfer->order;
 
             $buyerBarangayCode = $order->address?->barangay_code ?? ($order->address_snapshot['barangay_code'] ?? null);
             $buyerCityCode = $order->address?->municipality_code ?? ($order->address_snapshot['municipality_code'] ?? null);

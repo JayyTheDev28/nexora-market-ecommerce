@@ -376,17 +376,252 @@ class UnifiedRiderAndTransferManifestTest extends TestCase
         $manifest = TransferManifest::firstOrFail();
         $this->assertTrue($manifest->is_internal);
 
-        // 20. Historical single-parcel dispatch & receipt remains operational
+        // 20. Direct HTTP single-parcel dispatch bypass is blocked (422), while historical transfers remain receivable
         $this->actingAs($company)->post("/logistics/transfers/{$orderLegacy->id}/dispatch", [
             'sender_hub_id' => $hubA->id,
             'receiver_hub_id' => $hubB->id,
-        ])->assertRedirect();
+        ])->assertStatus(422);
 
-        $transfer = HubTransfer::where('order_id', $orderLegacy->id)->firstOrFail();
-        $this->assertSame('in_transit', $transfer->status);
+        $transfer = HubTransfer::create([
+            'order_id' => $orderLegacy->id,
+            'tracking_number' => $orderLegacy->tracking_number,
+            'sender_logistics_id' => $company->id,
+            'sender_hub_id' => $hubA->id,
+            'receiver_logistics_id' => $company->id,
+            'receiver_hub_id' => $hubB->id,
+            'status' => 'in_transit',
+            'dispatched_at' => now()->subHour(),
+            'dispatched_by' => $company->id,
+        ]);
+        $orderLegacy->update(['status' => 'in_transit_hub', 'current_hub_id' => null]);
+
+        $this->actingAs($company)->get('/logistics/transfers?tab=incoming')->assertOk();
 
         $this->actingAs($company)->post("/logistics/transfers/{$transfer->id}/confirm-receipt")
             ->assertRedirect();
         $this->assertSame('received', $transfer->fresh()->status);
+    }
+
+    public function test_security_origin_validation_exception_arrival_and_custody_protections(): void
+    {
+        $company = $this->createLogisticsCompany('Delta', 'delta@logistics.test');
+        $hubA = $this->createHub($company, 'Hub A', 'DEL-A');
+        $hubB = $this->createHub($company, 'Hub B', 'DEL-B');
+        $courier = $this->createPersonnel($company, 'courier', 'courier.delta@test.com');
+
+        // 1. Transfer courier cannot access Rider-only web routes (redirects on web, 403 on JSON)
+        $this->actingAs($courier)->get('/rider/dashboard')->assertRedirect();
+        $this->actingAs($courier)->getJson('/rider/dashboard')->assertStatus(403);
+        $this->actingAs($courier)->get('/courier/dashboard')->assertRedirect();
+        $this->actingAs($courier)->getJson('/courier/dashboard')->assertStatus(403);
+
+        // 2. Origin hub mismatch is rejected (422) and parcel current_hub_id is NOT overwritten
+        $orderAtHubB = $this->createOrderAtHub($company, $hubB, $hubA, 'TRK-MISMATCH-1');
+        $this->actingAs($company)->post('/logistics/transfers/manifests', [
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubB->id,
+            'order_ids' => [$orderAtHubB->id],
+            'assigned_courier_id' => $courier->id,
+        ])->assertStatus(422);
+        $this->assertSame($hubB->id, $orderAtHubB->fresh()->current_hub_id);
+
+        // 3. Exception-state manifest during transit can still report arrival and receive valid parcels
+        $order1 = $this->createOrderAtHub($company, $hubA, $hubB, 'TRK-EXC-1');
+        $order2 = $this->createOrderAtHub($company, $hubA, $hubB, 'TRK-EXC-2');
+
+        $manifestService = app(\App\Services\TransferManifestService::class);
+        $manifest = $manifestService->createManifest($company, [
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubB->id,
+            'order_ids' => [$order1->id, $order2->id],
+            'assigned_courier_id' => $courier->id,
+        ]);
+
+        Sanctum::actingAs($courier);
+        $this->postJson("/api/mobile/v1/transfer-courier/manifests/{$manifest->id}/scan", [
+            'tracking_number' => 'TRK-EXC-1',
+        ])->assertOk();
+        $this->postJson("/api/mobile/v1/transfer-courier/manifests/{$manifest->id}/scan", [
+            'tracking_number' => 'TRK-EXC-2',
+        ])->assertOk();
+        $this->postJson("/api/mobile/v1/transfer-courier/manifests/{$manifest->id}/depart")->assertOk();
+
+        // Courier reports TRK-EXC-2 missing during transit -> manifest status = exception
+        $this->postJson("/api/mobile/v1/transfer-courier/manifests/{$manifest->id}/report-issue", [
+            'tracking_number' => 'TRK-EXC-2',
+            'issue_type' => 'missing',
+            'notes' => 'Parcel missing in transit',
+        ])->assertOk();
+        $this->assertSame('exception', $manifest->fresh()->status);
+
+        // Courier can still report arrival while manifest is in exception state
+        $this->postJson("/api/mobile/v1/transfer-courier/manifests/{$manifest->id}/arrive")
+            ->assertOk();
+        $this->assertNotNull($manifest->fresh()->arrived_at);
+
+        // Receiving hub receives TRK-EXC-1 and cannot reclassify it as missing
+        $manifestService->verifyReceivingParcel(
+            $manifest->fresh(),
+            'TRK-EXC-1',
+            \App\Models\TransferManifestItem::RECEIVING_RECEIVED,
+            $company
+        );
+        $this->assertSame('received_at_hub', $order1->fresh()->status);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $manifestService->verifyReceivingParcel(
+            $manifest->fresh(),
+            'TRK-EXC-1',
+            \App\Models\TransferManifestItem::RECEIVING_MISSING,
+            $company,
+            'Should be blocked'
+        );
+    }
+
+    public function test_staging_eligibility_destination_formatting_and_draft_manifest_append_remove(): void
+    {
+        $senderCompany = $this->createLogisticsCompany('Echo', 'echo@logistics.test');
+        $receiverCompany = $this->createLogisticsCompany('Foxtrot', 'foxtrot@logistics.test');
+        $hubA = $this->createHub($senderCompany, 'Echo Hub A', 'ECH-A');
+        $hubB = $this->createHub($senderCompany, 'Echo Hub B', 'ECH-B');
+        $hubC = $this->createHub($receiverCompany, 'Foxtrot Hub C', 'FOX-C');
+        $courier = $this->createPersonnel($senderCompany, 'courier', 'courier.echo@test.com');
+
+        $order1 = $this->createOrderAtHub($senderCompany, $hubA, $hubB, 'TRK-STG-1');
+        $order2 = $this->createOrderAtHub($senderCompany, $hubA, $hubB, 'TRK-STG-2');
+        $orderDiffRoute = $this->createOrderAtHub($senderCompany, $hubA, $hubC, 'TRK-STG-3');
+
+        // Same-hub parcel already at destination must NOT appear in transfer queue
+        $orderAlreadyAtDest = $this->createOrderAtHub($senderCompany, $hubB, $hubB, 'TRK-AT-DEST');
+
+        // Parcel with missing destination address & missing destination hub -> Routing Review Required
+        $orderMissingRouting = $this->createOrderAtHub($senderCompany, $hubA, $hubB, 'TRK-REVIEW-1');
+        $orderMissingRouting->address->update([
+            'barangay_name' => '',
+            'municipality_name' => '',
+            'province_name' => '',
+        ]);
+        $orderMissingRouting->update([
+            'destination_hub_id' => null,
+            'shipping_city' => null,
+            'shipping_province' => null,
+        ]);
+        $this->assertSame('Destination Unavailable — Requires Review', $orderMissingRouting->fresh()->formatted_destination);
+
+        // 1. Unassigned eligible parcels appear, already-at-dest & incomplete-routing are excluded from eligibleForManifest
+        $indexRes = $this->actingAs($senderCompany)->get('/logistics/transfers');
+        $indexRes->assertOk();
+        $indexRes->assertSee('AVAILABLE PARCELS FOR TRANSFER (3)');
+        $indexRes->assertSee('TRK-STG-1');
+        $indexRes->assertSee('TRK-STG-2');
+        $indexRes->assertSee('Routing Review Required');
+        $indexRes->assertDontSee('TRK-AT-DEST');
+
+        // 2. Create draft manifest with order1 -> order1 disappears from eligible list
+        $this->actingAs($senderCompany)->post('/logistics/transfers/manifests', [
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubB->id,
+            'order_ids' => [$order1->id],
+        ])->assertRedirect();
+
+        $manifest = TransferManifest::firstOrFail();
+        $this->assertSame('draft', $manifest->status);
+
+        $afterDraftRes = $this->actingAs($senderCompany)->get('/logistics/transfers');
+        $afterDraftRes->assertSee('AVAILABLE PARCELS FOR TRANSFER (2)');
+        $eligibleIds = $afterDraftRes->viewData('eligibleForManifest')->pluck('id')->all();
+        $this->assertNotContains($order1->id, $eligibleIds);
+        $this->assertContains($order2->id, $eligibleIds);
+
+        // 3. Duplicate manifest assignment for order1 is rejected (422)
+        $this->actingAs($senderCompany)->post('/logistics/transfers/manifests', [
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubB->id,
+            'order_ids' => [$order1->id],
+        ])->assertStatus(422);
+
+        // 4. Incompatible route parcel cannot be appended to draft manifest (422)
+        $this->actingAs($senderCompany)->post("/logistics/transfers/manifests/{$manifest->id}/parcels", [
+            'order_ids' => [$orderDiffRoute->id],
+        ])->assertStatus(422);
+
+        // 5. Compatible parcel (order2) CAN be appended to draft manifest
+        $this->actingAs($senderCompany)->post("/logistics/transfers/manifests/{$manifest->id}/parcels", [
+            'order_ids' => [$order2->id],
+        ])->assertRedirect();
+        $this->assertSame(2, $manifest->fresh()->total_parcels);
+
+        // 6. Removing order2 from draft manifest returns it to eligible list
+        $item2 = $manifest->items()->where('order_id', $order2->id)->firstOrFail();
+        $this->actingAs($senderCompany)->delete("/logistics/transfers/manifests/{$manifest->id}/items/{$item2->id}")
+            ->assertRedirect();
+        $this->assertSame(1, $manifest->fresh()->total_parcels);
+
+        $afterRemoveIds = $this->actingAs($senderCompany)->get('/logistics/transfers')
+            ->viewData('eligibleForManifest')->pluck('id')->all();
+        $this->assertContains($order2->id, $afterRemoveIds);
+
+        // 7. Assign courier, load, depart, arrive, complete -> order1 does NOT reappear
+        $manifestService = app(\App\Services\TransferManifestService::class);
+        $manifestService->assignCourier($manifest->fresh(), $courier->id, $senderCompany);
+        $manifestService->scanLoadingParcel($manifest->fresh(), $order1->tracking_number, $courier);
+        $manifestService->confirmDeparture($manifest->fresh(), $courier);
+
+        // Dispatched manifest cannot accept additional parcels
+        $this->actingAs($senderCompany)->post("/logistics/transfers/manifests/{$manifest->id}/parcels", [
+            'order_ids' => [$order2->id],
+        ])->assertStatus(422);
+
+        $manifestService->markArrived($manifest->fresh(), $courier);
+        $manifestService->verifyReceivingParcel(
+            $manifest->fresh(),
+            $order1->tracking_number,
+            \App\Models\TransferManifestItem::RECEIVING_RECEIVED,
+            $senderCompany
+        );
+        $this->assertSame('completed', $manifest->fresh()->status);
+
+        $afterCompleteIds = $this->actingAs($senderCompany)->get('/logistics/transfers')
+            ->viewData('eligibleForManifest')->pluck('id')->all();
+        $this->assertNotContains($order1->id, $afterCompleteIds);
+    }
+
+    public function test_accepting_missing_parcel_with_already_received_hub_transfer_on_same_manifest_succeeds(): void
+    {
+        $company = $this->createLogisticsCompany('Delta', 'delta@logistics.test');
+        $hubA = $this->createHub($company, 'Calamba Hub', 'DEL-CAL');
+        $hubB = $this->createHub($company, 'Sta Cruz Hub', 'DEL-STC');
+        $courier = $this->createPersonnel($company, 'courier', 'courier@delta.test');
+        $order = $this->createOrderAtHub($company, $hubA, $hubB, 'TRK-RECV-SYNC-1');
+
+        $manifestService = app(\App\Services\TransferManifestService::class);
+        $manifest = $manifestService->createManifest($company, [
+            'origin_hub_id' => $hubA->id,
+            'destination_hub_id' => $hubB->id,
+            'order_ids' => [$order->id],
+            'assigned_courier_id' => $courier->id,
+        ]);
+
+        $manifestService->scanLoadingParcel($manifest, $order->tracking_number, $courier);
+        $manifestService->confirmDeparture($manifest->fresh(), $courier);
+        $manifestService->markArrived($manifest->fresh(), $courier);
+
+        // Simulate a parcel marked missing on the manifest while its HubTransfer for this manifest was already received
+        $item = $manifest->items()->firstOrFail();
+        $item->hubTransfer->update([
+            'status' => 'received',
+            'received_at' => now(),
+            'received_by' => $company->id,
+        ]);
+        $item->update(['receiving_status' => \App\Models\TransferManifestItem::RECEIVING_MISSING]);
+        $manifest->update(['status' => \App\Models\TransferManifest::STATUS_EXCEPTION]);
+
+        $this->actingAs($company)->post("/logistics/transfers/manifests/{$manifest->id}/verify-parcel", [
+            'tracking_number' => $order->tracking_number,
+            'classification' => 'received',
+        ])->assertRedirect();
+
+        $this->assertSame('received', $item->fresh()->receiving_status);
+        $this->assertSame('completed', $manifest->fresh()->status);
     }
 }
