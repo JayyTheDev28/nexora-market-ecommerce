@@ -67,6 +67,7 @@
             'items' => [
                 'reports' => ['label' => 'Finances & Payouts', 'icon' => 'account_balance_wallet', 'url' => route('seller.reports.index'), 'badge' => null],
                 'store' => ['label' => 'Store profile', 'icon' => 'storefront', 'url' => route('seller.store.edit'), 'badge' => null],
+                'safety' => ['label' => 'Safety & Reports', 'icon' => 'shield', 'url' => route('safety-reports.index'), 'badge' => null],
             ],
         ],
     ];

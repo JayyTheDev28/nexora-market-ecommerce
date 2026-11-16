@@ -301,6 +301,103 @@ class AdminGovernanceAndSafetyTest extends TestCase
         $log->update(['reason' => 'tampered']);
     }
 
+    public function test_navigation_integration_across_admin_seller_logistics_and_buyer_websites(): void
+    {
+        Storage::fake('local');
+
+        $admin = $this->createUser('admin', 'nav-admin@nexora.test');
+        $seller = $this->createUser('seller', 'nav-seller@nexora.test');
+        \App\Models\SellerProfile::create([
+            'user_id' => $seller->id,
+            'business_name' => 'Nav Test Store',
+            'category' => 'General Merchandise',
+            'description' => 'Store description for safety navigation testing.',
+        ]);
+        $logistics = $this->createUser('sorting_center', 'nav-logistics@nexora.test');
+        $buyer = $this->createUser('buyer', 'nav-buyer@nexora.test');
+
+        $category = \App\Models\Category::create([
+            'name' => 'Safety Nav Category',
+            'slug' => 'safety-nav-category',
+            'is_active' => true,
+        ]);
+
+        $product = \App\Models\Product::create([
+            'seller_id' => $seller->id,
+            'category_id' => $category->id,
+            'name' => 'Test Widget Alpha',
+            'slug' => 'test-widget-alpha',
+            'description' => 'Sample product for safety report navigation testing.',
+            'price' => 499.00,
+            'stock' => 10,
+            'status' => 'active',
+        ]);
+
+        // 1. Admin sidebar includes all required monitoring, safety, fraud, health & reports links
+        $adminDash = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
+        $adminDash->assertSee(route('admin.safety.index'), false);
+        $adminDash->assertSee(route('admin.logistics-monitoring.index'), false);
+        $adminDash->assertSee(route('admin.financial-monitoring.index'), false);
+        $adminDash->assertSee(route('admin.fraud-alerts.index'), false);
+        $adminDash->assertSee(route('admin.system-health.index'), false);
+        $adminDash->assertSee(route('admin.reports.index'), false);
+
+        // 2. Seller sidebar includes Safety & Reports and /safety-reports renders cleanly
+        $this->actingAs($seller)->get(route('seller.dashboard'))
+            ->assertOk()
+            ->assertSee(route('safety-reports.index'), false);
+        $this->actingAs($seller)->get(route('safety-reports.index'))
+            ->assertOk()
+            ->assertSee('Safety Reports');
+
+        // 3. Logistics sidebar includes Safety & Reports and /safety-reports renders cleanly
+        $this->actingAs($logistics)->get(route('logistics.dashboard'))
+            ->assertOk()
+            ->assertSee(route('safety-reports.index'), false);
+        $this->actingAs($logistics)->get(route('safety-reports.index'))
+            ->assertOk()
+            ->assertSee('Safety Reports');
+
+        // 4. Buyer Website navigation, contextual Report Product / Report Seller links, prefill, evidence upload & appeals
+        $this->actingAs($buyer)->get(route('buyer.dashboard'))
+            ->assertOk()
+            ->assertSee(route('safety-reports.index'), false);
+
+        $this->actingAs($buyer)->get(route('products.show', $product->id))
+            ->assertOk()
+            ->assertSee('Report Product');
+
+        $this->actingAs($buyer)->get(route('stores.show', $seller->id))
+            ->assertOk()
+            ->assertSee('Report Seller');
+
+        $this->actingAs($buyer)->get(route('safety-reports.index', [
+            'category' => 'fake_misleading_product',
+            'title' => 'Report product: Test Widget Alpha',
+            'product_id' => $product->id,
+            'reported_user_id' => $seller->id,
+            'subject_type' => 'product',
+            'subject_id' => $product->id,
+        ]))->assertOk()->assertSee('Context linked');
+
+        $evidence = UploadedFile::fake()->create('proof.pdf', 120, 'application/pdf');
+        $this->actingAs($buyer)->post(route('safety-reports.store'), [
+            'category' => 'fake_misleading_product',
+            'title' => 'Report product: Test Widget Alpha',
+            'description' => 'Misleading listing specs compared to delivered item.',
+            'reported_user_id' => $seller->id,
+            'product_id' => $product->id,
+            'subject_type' => 'product',
+            'subject_id' => $product->id,
+            'evidence' => [$evidence],
+        ])->assertRedirect();
+
+        $submitted = SafetyReport::where('reporter_id', $buyer->id)->latest()->firstOrFail();
+        $this->assertSame($product->id, $submitted->product_id);
+        $this->assertNotEmpty($submitted->evidence_paths);
+        Storage::disk('local')->assertExists($submitted->evidence_paths[0]);
+    }
+
     private function createUser(string $role, string $email): User
     {
         return User::create([

@@ -84,6 +84,10 @@
                                     Chat
                                 </button>
                             </form>
+                            <a href="{{ route('safety-reports.index', ['category' => 'seller_misconduct', 'title' => 'Report seller: ' . ($profile->business_name ?? $seller->full_name), 'reported_user_id' => $seller->id, 'subject_type' => 'user', 'subject_id' => $seller->id]) }}" class="px-4 py-2.5 rounded-full font-label-md text-sm font-bold border border-rose-200 text-rose-700 bg-rose-50/70 hover:bg-rose-100 transition-colors flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[18px]">flag</span>
+                                Report Seller
+                            </a>
                         @endif
                     @else
                         <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-full font-label-md text-sm font-bold bg-primary text-on-primary hover:bg-primary/90 transition-colors">

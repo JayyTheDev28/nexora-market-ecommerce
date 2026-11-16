@@ -70,6 +70,7 @@
             'title' => 'SETTINGS',
             'items' => [
                 'account' => ['label' => 'Facility Settings', 'icon' => 'settings', 'url' => route('logistics.account.show'), 'badge' => null],
+                'safety' => ['label' => 'Safety & Reports', 'icon' => 'shield', 'url' => route('safety-reports.index'), 'badge' => null],
             ],
         ],
     ];

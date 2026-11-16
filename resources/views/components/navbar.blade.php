@@ -73,6 +73,10 @@
                         <a href="{{ route('buyer.orders') }}" class="hover:text-primary transition-colors">
                             Track My Order
                         </a>
+                        <span class="text-outline-variant">•</span>
+                        <a href="{{ route('safety-reports.index') }}" class="hover:text-primary transition-colors">
+                            Help &amp; Safety
+                        </a>
                     @endif
                 @else
                     <a href="{{ url('/register') }}" class="hover:text-primary transition-colors">
@@ -281,6 +285,10 @@
                                 <a href="{{ route('buyer.account') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
                                     <span class="material-symbols-outlined text-[18px] text-primary">manage_accounts</span>
                                     Account Settings
+                                </a>
+                                <a href="{{ route('safety-reports.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">shield</span>
+                                    Safety &amp; Reports
                                 </a>
                             @elseif(auth()->user()->isSeller())
                                 <a href="{{ route('seller.dashboard') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-on-surface hover:bg-surface-container transition-colors">
@@ -528,6 +536,10 @@
                             <a href="{{ route('buyer.account') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
                                 <span class="material-symbols-outlined text-[20px] text-primary">person</span>
                                 My Account
+                            </a>
+                            <a href="{{ route('safety-reports.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-primary">shield</span>
+                                Safety &amp; Reports
                             </a>
                         @elseif(auth()->user()->isSeller())
                             <a href="{{ route('seller.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors">

@@ -8,6 +8,7 @@
         'vouchers' => ['label' => 'My Vouchers', 'url' => route('buyer.vouchers'), 'icon' => 'confirmation_number'],
         'chat' => ['label' => 'Messages', 'url' => route('buyer.chat.index'), 'icon' => 'chat'],
         'account' => ['label' => 'My Account', 'url' => route('buyer.account'), 'icon' => 'person'],
+        'safety' => ['label' => 'Safety & Reports', 'url' => route('safety-reports.index'), 'icon' => 'shield'],
     ];
 @endphp
 

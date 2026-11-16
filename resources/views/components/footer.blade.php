@@ -72,21 +72,21 @@
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('seller.products.index') }}">My Inventory</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('seller.orders.index') }}">Store Orders</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('seller.reports.index') }}">Sales Reports</a>
-                    <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="#">Merchant FAQs</a>
+                    <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('safety-reports.index') }}">Safety &amp; Reports</a>
                 @elseif(auth()->check() && auth()->user()->isSortingCenter())
                     <h4 class="font-label-md text-xs font-bold text-on-surface uppercase tracking-wider">Logistics Portal</h4>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('logistics.dashboard') }}">Logistics Hub</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('logistics.riders.index') }}">Rider Fleet</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('logistics.sorting.index') }}">Sorting Center</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('logistics.deliveries.index') }}">Deliveries</a>
-                    <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="#">Logistics Support</a>
+                    <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ route('safety-reports.index') }}">Safety &amp; Reports</a>
                 @else
                     <h4 class="font-label-md text-xs font-bold text-on-surface uppercase tracking-wider">Customer Care</h4>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ url('/buyer/orders') }}">Track Order</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ url('/cart') }}">My Cart</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ url('/buyer/account') }}">Account Settings</a>
                     <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ url('/catalog') }}">Browse Catalog</a>
-                    <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="#">Help & FAQs</a>
+                    <a class="text-xs text-on-surface-variant hover:text-primary transition-colors" href="{{ auth()->check() ? route('safety-reports.index') : route('login') }}">Help &amp; Safety Reports</a>
                 @endif
             </div>
 

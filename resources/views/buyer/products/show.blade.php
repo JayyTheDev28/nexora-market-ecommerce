@@ -389,9 +389,17 @@
                             </span>
                         </div>
                     </div>
-                    <a href="{{ route('stores.show', $product['sellerId']) }}" class="text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors shrink-0">
-                        Visit Store
-                    </a>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <a href="{{ route('stores.show', $product['sellerId']) }}" class="text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors shrink-0">
+                            Visit Store
+                        </a>
+                        @if(auth()->check() && auth()->user()->isBuyer())
+                            <a href="{{ route('safety-reports.index', ['category' => 'fake_misleading_product', 'title' => 'Report product: ' . $product['name'], 'product_id' => $product['id'], 'reported_user_id' => $product['sellerId'], 'subject_type' => 'product', 'subject_id' => $product['id']]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-xl border border-rose-200 text-rose-700 bg-rose-50/70 hover:bg-rose-100 transition-colors shrink-0 flex items-center gap-1" title="Report this product">
+                                <span class="material-symbols-outlined text-[15px]">flag</span>
+                                <span>Report Product</span>
+                            </a>
+                        @endif
+                    </div>
                 </div>
 
             </div>
