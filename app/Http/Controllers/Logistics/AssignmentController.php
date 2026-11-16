@@ -176,17 +176,30 @@ class AssignmentController extends Controller
             // Verify area or zone coverage eligibility
             $barangayCode = $lockedOrder->address?->barangay_code ?? ($lockedOrder->address_snapshot['barangay_code'] ?? null);
             $barangayName = $lockedOrder->address?->barangay_name ?? ($lockedOrder->address_snapshot['barangay_name'] ?? null);
+            $cityCode = $lockedOrder->address?->municipality_code ?? ($lockedOrder->address_snapshot['municipality_code'] ?? null);
 
             $coversZone = $courier->assignedZones()
-                ->whereHas('barangays', function ($b) use ($barangayCode, $barangayName) {
-                    if ($barangayCode) {
-                        $b->where('barangay_code', $barangayCode);
-                    } elseif ($barangayName) {
-                        $b->where('barangay_name', 'like', $barangayName);
+                ->where(function ($zq) use ($lockedOrder, $barangayCode, $barangayName, $cityCode) {
+                    if ($lockedOrder->delivery_zone_id) {
+                        $zq->where('zones.id', $lockedOrder->delivery_zone_id);
+                    }
+
+                    if ($barangayCode || $barangayName) {
+                        $zq->orWhereHas('barangays', function ($b) use ($barangayCode, $barangayName) {
+                            if ($barangayCode) {
+                                $b->where('barangay_code', $barangayCode);
+                            } elseif ($barangayName) {
+                                $b->where('barangay_name', 'like', $barangayName);
+                            }
+                        });
+                    }
+
+                    if ($cityCode) {
+                        $zq->orWhere('zones.city_code', $cityCode);
                     }
                 })
                 ->exists();
-            $coversArea = $coversZone || $courier->deliveryAreas()->where('delivery_areas.id', $lockedOrder->delivery_area_id)->exists();
+            $coversArea = $coversZone || ($lockedOrder->delivery_area_id && $courier->deliveryAreas()->where('delivery_areas.id', $lockedOrder->delivery_area_id)->exists());
 
             if (! $coversArea && empty($validated['override_reason'])) {
                 return back()->withInput()->withErrors([
