@@ -35,15 +35,18 @@ class AuthenticatedSessionController extends Controller
 
         $user = Auth::user();
 
-        // Enforce single active session: record this session ID and clear old sessions
-        $newSessionId = $request->session()->getId();
-        \Illuminate\Support\Facades\Cache::forever("user_active_session_{$user->id}", $newSessionId);
+        // Enforce single active session for non-logistics accounts; logistics partners
+        // operate across multiple hub workstations and devices concurrently.
+        if (! $user->isLogistics()) {
+            $newSessionId = $request->session()->getId();
+            \Illuminate\Support\Facades\Cache::forever("user_active_session_{$user->id}", $newSessionId);
 
-        if (config('session.driver') === 'database') {
-            \Illuminate\Support\Facades\DB::table('sessions')
-                ->where('user_id', $user->id)
-                ->where('id', '!=', $newSessionId)
-                ->delete();
+            if (config('session.driver') === 'database') {
+                \Illuminate\Support\Facades\DB::table('sessions')
+                    ->where('user_id', $user->id)
+                    ->where('id', '!=', $newSessionId)
+                    ->delete();
+            }
         }
 
         if ($user->isDisapproved()) {

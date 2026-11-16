@@ -23,6 +23,12 @@ class EnforceSingleSession
 
         if (Auth::check()) {
             $user = Auth::user();
+
+            // Logistics partner accounts can be accessed concurrently across multiple devices/hubs.
+            if ($user->isLogistics()) {
+                return $next($request);
+            }
+
             $currentSessionId = $request->session()->getId();
             $activeSessionId = Cache::get("user_active_session_{$user->id}");
 
