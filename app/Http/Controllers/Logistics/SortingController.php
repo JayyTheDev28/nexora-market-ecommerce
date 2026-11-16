@@ -67,7 +67,23 @@ class SortingController extends Controller
             ->orderBy('name')
             ->get();
 
-        $query = Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId))
+        $eligibleForLocalSorting = function ($q) use ($sortingCenterId) {
+            $q->where(function ($cq) use ($sortingCenterId) {
+                $cq->where('current_custody_logistics_id', $sortingCenterId)
+                    ->orWhere(function ($lq) use ($sortingCenterId) {
+                        $lq->whereNull('current_custody_logistics_id')
+                            ->where('sorting_center_id', $sortingCenterId);
+                    });
+            })->where(function ($dq) use ($sortingCenterId) {
+                $dq->whereNull('delivery_logistics_id')
+                    ->orWhere('delivery_logistics_id', $sortingCenterId);
+            })->where(function ($hq) {
+                $hq->whereNull('destination_hub_id')
+                    ->orWhereColumn('current_hub_id', 'destination_hub_id');
+            });
+        };
+
+        $query = Order::where($eligibleForLocalSorting)
             ->with([
                 'buyer',
                 'address',
@@ -115,7 +131,7 @@ class SortingController extends Controller
 
         $parcels = $query->latest()->paginate(15)->withQueryString();
 
-        $baseCountQuery = fn () => Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId));
+        $baseCountQuery = fn () => Order::where($eligibleForLocalSorting);
 
         $counts = [
             'unsorted' => (clone $baseCountQuery())->whereIn('status', ['at_sorting_center', 'received_at_hub'])->count(),
@@ -131,7 +147,20 @@ class SortingController extends Controller
      */
     public function confirm(Request $request, Order $order): RedirectResponse
     {
+        $companyId = (int) $request->user()->id;
         abort_unless(in_array($order->status, ['at_sorting_center', 'received_at_hub', 'sorted']), 422, 'Order must be at sorting center or hub to be sorted.');
+
+        if ($order->current_custody_logistics_id !== null && (int) $order->current_custody_logistics_id !== $companyId) {
+            return back()->withInput()->withErrors([
+                'delivery_zone_id' => 'This parcel is not currently in your logistics company\'s custody.',
+            ]);
+        }
+
+        if ($order->delivery_logistics_id !== null && (int) $order->delivery_logistics_id !== $companyId) {
+            return back()->withInput()->withErrors([
+                'delivery_zone_id' => 'This parcel is destined for another logistics company\'s service area and must be transferred via manifest instead of local delivery sorting.',
+            ]);
+        }
 
         // Guard: parcels requiring a hub transfer must reach their destination hub before local sorting
         if ($order->requiresHubTransfer() && !empty($order->destination_hub_id) && (int) $order->current_hub_id !== (int) $order->destination_hub_id) {

@@ -24,7 +24,23 @@ class AssignmentController extends Controller
         $areaFilter = $request->query('area_id');
         $search = $request->query('q');
 
-        $query = Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId))
+        $eligibleForDeliveryDispatch = function ($q) use ($sortingCenterId) {
+            $q->where(function ($cq) use ($sortingCenterId) {
+                $cq->where('current_custody_logistics_id', $sortingCenterId)
+                    ->orWhere(function ($lq) use ($sortingCenterId) {
+                        $lq->whereNull('current_custody_logistics_id')
+                            ->where('sorting_center_id', $sortingCenterId);
+                    });
+            })->where(function ($dq) use ($sortingCenterId) {
+                $dq->whereNull('delivery_logistics_id')
+                    ->orWhere('delivery_logistics_id', $sortingCenterId);
+            })->where(function ($hq) {
+                $hq->whereNull('destination_hub_id')
+                    ->orWhereColumn('current_hub_id', 'destination_hub_id');
+            });
+        };
+
+        $query = Order::where($eligibleForDeliveryDispatch)
             ->with([
                 'buyer',
                 'address',
@@ -65,7 +81,7 @@ class AssignmentController extends Controller
 
         $parcels = $query->latest()->paginate(15)->withQueryString();
 
-        $baseCountQuery = fn () => Order::where(fn ($q) => $q->where('sorting_center_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId));
+        $baseCountQuery = fn () => Order::where($eligibleForDeliveryDispatch);
 
         $counts = [
             'unassigned' => (clone $baseCountQuery())->whereIn('status', ['sorted', 'received_at_hub', 'at_sorting_center'])->count(),
@@ -126,6 +142,18 @@ class AssignmentController extends Controller
 
                 return back()->withInput()->withErrors([
                     'courier_id' => $restrictionMessage,
+                ]);
+            }
+
+            if ($lockedOrder->current_custody_logistics_id !== null && (int) $lockedOrder->current_custody_logistics_id !== (int) $sortingCenterId) {
+                return back()->withInput()->withErrors([
+                    'courier_id' => 'Cannot assign delivery rider: parcel is not currently in your logistics company\'s custody.',
+                ]);
+            }
+
+            if ($lockedOrder->delivery_logistics_id !== null && (int) $lockedOrder->delivery_logistics_id !== (int) $sortingCenterId) {
+                return back()->withInput()->withErrors([
+                    'courier_id' => 'Cannot assign final delivery rider: parcel belongs to another destination logistics company\'s service area.',
                 ]);
             }
 

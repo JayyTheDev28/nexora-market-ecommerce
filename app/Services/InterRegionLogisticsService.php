@@ -108,9 +108,14 @@ class InterRegionLogisticsService
         ?string $cityName = null,
         ?string $provinceName = null
     ): ?array {
-        // 1. Exact barangay code match
+        $normalizedCity = $this->normalizeCityName($cityName);
+
+        // 1. Exact barangay code match (active zone & hub)
         if ($barangayCode) {
-            $zb = ZoneBarangay::where('barangay_code', $barangayCode)->with('zone')->first();
+            $zb = ZoneBarangay::where('barangay_code', $barangayCode)
+                ->whereHas('zone', fn ($q) => $q->where('is_active', true)->whereHas('hub', fn ($hq) => $hq->where('is_active', true)))
+                ->with('zone')
+                ->first();
             if ($zb && $zb->zone) {
                 return [
                     'match_level' => 'barangay_code',
@@ -121,10 +126,11 @@ class InterRegionLogisticsService
             }
         }
 
-        // 2. Barangay name + City name match
-        if ($barangayName && $cityName) {
+        // 2. Barangay name + City name match (active zone & hub)
+        if ($barangayName && $normalizedCity) {
             $zb = ZoneBarangay::where('barangay_name', 'like', $barangayName)
-                ->where('city_name', 'like', "%{$cityName}%")
+                ->where('city_name', 'like', "%{$normalizedCity}%")
+                ->whereHas('zone', fn ($q) => $q->where('is_active', true)->whereHas('hub', fn ($hq) => $hq->where('is_active', true)))
                 ->with('zone')
                 ->first();
             if ($zb && $zb->zone) {
@@ -137,9 +143,12 @@ class InterRegionLogisticsService
             }
         }
 
-        // 3. City code fallback match
+        // 3. City code match across ZoneBarangay, Zone, and direct Hub
         if ($cityCode) {
-            $zb = ZoneBarangay::where('city_code', $cityCode)->with('zone')->first();
+            $zb = ZoneBarangay::where('city_code', $cityCode)
+                ->whereHas('zone', fn ($q) => $q->where('is_active', true)->whereHas('hub', fn ($hq) => $hq->where('is_active', true)))
+                ->with('zone')
+                ->first();
             if ($zb && $zb->zone) {
                 return [
                     'match_level' => 'city_code',
@@ -148,11 +157,40 @@ class InterRegionLogisticsService
                     'hub_id' => $zb->zone->hub_id,
                 ];
             }
+
+            $zone = Zone::where('is_active', true)
+                ->where('city_code', $cityCode)
+                ->whereHas('hub', fn ($hq) => $hq->where('is_active', true))
+                ->first();
+            if ($zone) {
+                return [
+                    'match_level' => 'city_code_zone',
+                    'zone_id' => $zone->id,
+                    'logistics_company_id' => $zone->logistics_company_id,
+                    'hub_id' => $zone->hub_id,
+                ];
+            }
+
+            $hub = Hub::where('is_active', true)
+                ->where('city_code', $cityCode)
+                ->first();
+            if ($hub) {
+                $hubZone = Zone::where('hub_id', $hub->id)->where('is_active', true)->first();
+                return [
+                    'match_level' => 'city_code_hub',
+                    'zone_id' => $hubZone?->id,
+                    'logistics_company_id' => $hub->logistics_company_id,
+                    'hub_id' => $hub->id,
+                ];
+            }
         }
 
-        // 4. City name fallback match on ZoneBarangay or Zone
-        if ($cityName) {
-            $zb = ZoneBarangay::where('city_name', 'like', "%{$cityName}%")->with('zone')->first();
+        // 4. Normalized city name match on ZoneBarangay, Zone, and direct Hub
+        if ($normalizedCity) {
+            $zb = ZoneBarangay::where('city_name', 'like', "%{$normalizedCity}%")
+                ->whereHas('zone', fn ($q) => $q->where('is_active', true)->whereHas('hub', fn ($hq) => $hq->where('is_active', true)))
+                ->with('zone')
+                ->first();
             if ($zb && $zb->zone) {
                 return [
                     'match_level' => 'city_name_zone_barangay',
@@ -162,7 +200,10 @@ class InterRegionLogisticsService
                 ];
             }
 
-            $zone = Zone::where('city_name', 'like', "%{$cityName}%")->first();
+            $zone = Zone::where('is_active', true)
+                ->where('city_name', 'like', "%{$normalizedCity}%")
+                ->whereHas('hub', fn ($hq) => $hq->where('is_active', true))
+                ->first();
             if ($zone) {
                 return [
                     'match_level' => 'city_name_zone',
@@ -172,15 +213,15 @@ class InterRegionLogisticsService
                 ];
             }
 
-            // Direct Hub match by city
+            // Direct Hub match by normalized city name
             $hub = Hub::where('is_active', true)
-                ->where(function ($q) use ($cityName) {
-                    $q->where('city_name', 'like', "%{$cityName}%")
-                      ->orWhere('name', 'like', "%{$cityName}%");
+                ->where(function ($q) use ($normalizedCity) {
+                    $q->where('city_name', 'like', "%{$normalizedCity}%")
+                      ->orWhere('name', 'like', "%{$normalizedCity}%");
                 })
                 ->first();
             if ($hub) {
-                $hubZone = Zone::where('hub_id', $hub->id)->first();
+                $hubZone = Zone::where('hub_id', $hub->id)->where('is_active', true)->first();
                 return [
                     'match_level' => 'hub_city',
                     'zone_id' => $hubZone?->id,
@@ -192,13 +233,29 @@ class InterRegionLogisticsService
 
         // 5. Province code fallback match
         if ($provinceCode) {
-            $zb = ZoneBarangay::where('province_code', $provinceCode)->with('zone')->first();
+            $zb = ZoneBarangay::where('province_code', $provinceCode)
+                ->whereHas('zone', fn ($q) => $q->where('is_active', true)->whereHas('hub', fn ($hq) => $hq->where('is_active', true)))
+                ->with('zone')
+                ->first();
             if ($zb && $zb->zone) {
                 return [
                     'match_level' => 'province_code',
                     'zone_id' => $zb->zone_id,
                     'logistics_company_id' => $zb->logistics_company_id,
                     'hub_id' => $zb->zone->hub_id,
+                ];
+            }
+
+            $hub = Hub::where('is_active', true)
+                ->where('province_code', $provinceCode)
+                ->first();
+            if ($hub) {
+                $hubZone = Zone::where('hub_id', $hub->id)->where('is_active', true)->first();
+                return [
+                    'match_level' => 'hub_province_code',
+                    'zone_id' => $hubZone?->id,
+                    'logistics_company_id' => $hub->logistics_company_id,
+                    'hub_id' => $hub->id,
                 ];
             }
         }
@@ -209,7 +266,7 @@ class InterRegionLogisticsService
                 ->where('province_name', 'like', "%{$provinceName}%")
                 ->first();
             if ($hub) {
-                $hubZone = Zone::where('hub_id', $hub->id)->first();
+                $hubZone = Zone::where('hub_id', $hub->id)->where('is_active', true)->first();
                 return [
                     'match_level' => 'hub_province',
                     'zone_id' => $hubZone?->id,
@@ -220,6 +277,18 @@ class InterRegionLogisticsService
         }
 
         return null;
+    }
+
+    private function normalizeCityName(?string $cityName): ?string
+    {
+        if (! $cityName) {
+            return null;
+        }
+        $clean = trim($cityName);
+        $clean = preg_replace('/^(City|Municipality)\s+of\s+/i', '', $clean);
+        $clean = preg_replace('/\s+(City|Municipality)$/i', '', $clean);
+        $clean = trim($clean);
+        return $clean !== '' ? $clean : null;
     }
 
     /**

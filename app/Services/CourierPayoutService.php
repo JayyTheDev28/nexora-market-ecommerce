@@ -83,11 +83,32 @@ class CourierPayoutService
             // Keep source-of-truth ledger accessible cleanly without silently mutating unexpected state
         }
 
-        $todayPickups = RiderEarning::where('courier_id', $courier->id)->where('type', 'pickup')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayDeliveries = RiderEarning::where('courier_id', $courier->id)->where('type', 'delivery')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayTransferTrips = RiderEarning::where('courier_id', $courier->id)->where('type', 'transfer_trip')->where('earned_at', '>=', now()->startOfDay())->count();
-        $todayPay = (float) RiderEarning::where('courier_id', $courier->id)->where('earned_at', '>=', now()->startOfDay())->sum('amount');
-        $weeklyPay = (float) RiderEarning::where('courier_id', $courier->id)->where('earned_at', '>=', now()->startOfWeek())->sum('amount');
+        $earnedStatuses = [
+            RiderEarning::STATUS_EARNED,
+            RiderEarning::STATUS_APPROVED_FOR_PAYOUT,
+            RiderEarning::STATUS_PAID,
+        ];
+
+        $todayStart = now()->startOfDay();
+        $todayQuery = fn () => RiderEarning::where('courier_id', $courier->id)
+            ->whereIn('status', $earnedStatuses)
+            ->where('earned_at', '>=', $todayStart);
+
+        $todayPickups = (clone $todayQuery())->where('type', 'pickup')->count();
+        $todayDeliveries = (clone $todayQuery())->where('type', 'delivery')->count();
+        $todayFailedDeliveries = (clone $todayQuery())->where('type', 'failed_delivery')->count();
+        $todayTransferTrips = (clone $todayQuery())->where('type', 'transfer_trip')->count();
+
+        $todayPickupPay = (float) (clone $todayQuery())->where('type', 'pickup')->sum('amount');
+        $todayDeliveryPay = (float) (clone $todayQuery())->where('type', 'delivery')->sum('amount');
+        $todayFailedDeliveryPay = (float) (clone $todayQuery())->where('type', 'failed_delivery')->sum('amount');
+        $todayTransferTripPay = (float) (clone $todayQuery())->where('type', 'transfer_trip')->sum('amount');
+        $todayPay = (float) (clone $todayQuery())->sum('amount');
+
+        $weeklyPay = (float) RiderEarning::where('courier_id', $courier->id)
+            ->whereIn('status', $earnedStatuses)
+            ->where('earned_at', '>=', now()->startOfWeek())
+            ->sum('amount');
 
         $past7Days = [];
         for ($i = 6; $i >= 0; $i--) {
@@ -95,6 +116,7 @@ class CourierPayoutService
             $dayStart = $dayDate->copy()->startOfDay();
             $dayEnd = $dayDate->copy()->endOfDay();
             $dayEarnings = RiderEarning::where('courier_id', $courier->id)
+                ->whereIn('status', $earnedStatuses)
                 ->whereBetween('earned_at', [$dayStart, $dayEnd]);
             $past7Days[] = [
                 'date' => $dayDate->format('Y-m-d'),
@@ -155,7 +177,12 @@ class CourierPayoutService
             'today_summary' => [
                 'pickups' => $todayPickups,
                 'deliveries' => $todayDeliveries,
+                'failed_deliveries' => $todayFailedDeliveries,
                 'transfer_trips' => $todayTransferTrips,
+                'pickup_pay' => $todayPickupPay,
+                'delivery_pay' => $todayDeliveryPay,
+                'failed_delivery_pay' => $todayFailedDeliveryPay,
+                'transfer_trip_pay' => $todayTransferTripPay,
                 'total_pay' => $todayPay,
             ],
             'weekly_total_pay' => $weeklyPay,

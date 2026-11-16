@@ -47,18 +47,47 @@ class IncomingController extends Controller
             'currentHub',
         ]);
 
-        $query->where(function ($q) use ($companyId) {
-            $q->where('current_custody_logistics_id', $companyId)
-              ->orWhere('pickup_logistics_id', $companyId)
-              ->orWhere('delivery_logistics_id', $companyId)
-              ->orWhere('sorting_center_id', $companyId);
-        });
+        $awaitingScope = function ($q) use ($companyId) {
+            $q->where('status', 'picked_up')
+                ->where(function ($pq) use ($companyId) {
+                    $pq->where('pickup_logistics_id', $companyId)
+                        ->orWhere(function ($lq) use ($companyId) {
+                            $lq->whereNull('pickup_logistics_id')
+                                ->where('sorting_center_id', $companyId);
+                        });
+                });
+        };
+
+        $receivedScope = function ($q) use ($companyId) {
+            $q->whereIn('status', ['at_sorting_center', 'received_at_hub'])
+                ->where(function ($cq) use ($companyId) {
+                    $cq->where('current_custody_logistics_id', $companyId)
+                        ->orWhere(function ($lq) use ($companyId) {
+                            $lq->whereNull('current_custody_logistics_id')
+                                ->where('sorting_center_id', $companyId);
+                        });
+                });
+        };
+
+        $allScope = function ($q) use ($companyId, $awaitingScope) {
+            $q->where($awaitingScope)
+                ->orWhere(function ($rq) use ($companyId) {
+                    $rq->whereIn('status', ['at_sorting_center', 'received_at_hub', 'sorted'])
+                        ->where(function ($cq) use ($companyId) {
+                            $cq->where('current_custody_logistics_id', $companyId)
+                                ->orWhere(function ($lq) use ($companyId) {
+                                    $lq->whereNull('current_custody_logistics_id')
+                                        ->where('sorting_center_id', $companyId);
+                                });
+                        });
+                });
+        };
 
         match ($tab) {
-            'awaiting' => $query->where('status', 'picked_up'),
-            'received' => $query->whereIn('status', ['at_sorting_center', 'received_at_hub']),
-            'all' => $query->whereIn('status', ['picked_up', 'at_sorting_center', 'received_at_hub', 'sorted']),
-            default => $query->where('status', 'picked_up'),
+            'awaiting' => $query->where($awaitingScope),
+            'received' => $query->where($receivedScope),
+            'all' => $query->where($allScope),
+            default => $query->where($awaitingScope),
         };
 
         if ($hubFilter) {
@@ -156,13 +185,20 @@ class IncomingController extends Controller
         $resolvedHub = $this->resolveVerifiedHub($order, $companyId, $selectedHub, $activeTransferToCompany);
 
         $requiresManifest = $activeManifestItem !== null;
-        $alreadyPassed = in_array($order->status, ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed'], true);
-        $alreadyAtHub = in_array($order->status, ['at_sorting_center', 'received_at_hub', 'sorted'], true)
+        $hasCompanyCustody = $order->current_custody_logistics_id === null
+            || (int) $order->current_custody_logistics_id === $companyId;
+        $isAtOriginCompanyStill = ! $hasCompanyCustody && $order->status !== 'in_transit_hub';
+
+        $alreadyPassed = $hasCompanyCustody
+            && in_array($order->status, ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed'], true);
+        $alreadyAtHub = $hasCompanyCustody
+            && in_array($order->status, ['at_sorting_center', 'received_at_hub', 'sorted'], true)
             && (! $hasHubs || ($resolvedHub && (int) $order->current_hub_id === (int) $resolvedHub->id));
 
         $hubMismatchError = $this->detectHubMismatchError($order, $companyId, $selectedHub, $activeTransferToCompany);
 
         $eligibleForReceipt = ! $requiresManifest
+            && ! $isAtOriginCompanyStill
             && ! $alreadyPassed
             && ! $alreadyAtHub
             && $hubMismatchError === null
@@ -170,6 +206,7 @@ class IncomingController extends Controller
 
         $outcome = match (true) {
             $requiresManifest => 'manifest_required',
+            $isAtOriginCompanyStill => 'not_eligible',
             $hubMismatchError !== null => 'wrong_hub',
             $alreadyAtHub || $alreadyPassed => 'already_received',
             $eligibleForReceipt => 'eligible',
@@ -183,7 +220,9 @@ class IncomingController extends Controller
                 ? 'Parcel has already passed hub receiving (current status: ' . ucwords(str_replace('_', ' ', $order->status)) . ').'
                 : 'Parcel is already checked in at ' . ($resolvedHub?->name ?? 'this facility') . '.',
             'eligible' => 'Parcel verified and ready to confirm receipt' . ($resolvedHub ? " at {$resolvedHub->name}" : '') . '.',
-            default => 'Parcel requires hub routing before receipt can be confirmed.',
+            default => $isAtOriginCompanyStill
+                ? 'Parcel is still in custody of origin logistics and has not been dispatched to your facility.'
+                : 'Parcel requires hub routing before receipt can be confirmed.',
         };
 
         return response()->json([
@@ -445,6 +484,21 @@ class IncomingController extends Controller
                 ];
             }
 
+            // Guard: Prevent destination logistics from receiving a parcel still held at origin logistics before transfer
+            if (
+                $order->current_custody_logistics_id !== null
+                && (int) $order->current_custody_logistics_id !== $companyId
+                && $order->status !== 'in_transit_hub'
+            ) {
+                return [
+                    'type' => 'error',
+                    'outcome' => 'not_in_transit',
+                    'status' => 422,
+                    'field' => 'identifier',
+                    'message' => "Parcel {$order->order_number} is still in custody of origin logistics and has not been dispatched to your hub.",
+                ];
+            }
+
             // Idempotency checks inside lock before making any transitions
             if (in_array($order->status, ['assigned_to_rider', 'out_for_delivery', 'delivered', 'completed'], true)) {
                 return [
@@ -455,7 +509,11 @@ class IncomingController extends Controller
                 ];
             }
 
-            if (in_array($order->status, ['received_at_hub', 'at_sorting_center', 'sorted'], true) && (int) $order->current_hub_id === (int) $hub->id) {
+            if (
+                in_array($order->status, ['received_at_hub', 'at_sorting_center', 'sorted'], true)
+                && (int) $order->current_hub_id === (int) $hub->id
+                && ($order->current_custody_logistics_id === null || (int) $order->current_custody_logistics_id === $companyId)
+            ) {
                 return [
                     'type' => 'already_received',
                     'order' => $order,
@@ -574,17 +632,30 @@ class IncomingController extends Controller
 
     private function buildCounts(int $companyId): array
     {
-        $baseCountQuery = fn () => Order::where(function ($q) use ($companyId) {
-            $q->where('current_custody_logistics_id', $companyId)
-              ->orWhere('pickup_logistics_id', $companyId)
-              ->orWhere('delivery_logistics_id', $companyId)
-              ->orWhere('sorting_center_id', $companyId);
+        $awaitingCount = Order::where('status', 'picked_up')
+            ->where(function ($pq) use ($companyId) {
+                $pq->where('pickup_logistics_id', $companyId)
+                    ->orWhere(function ($lq) use ($companyId) {
+                        $lq->whereNull('pickup_logistics_id')
+                            ->where('sorting_center_id', $companyId);
+                    });
+            })->count();
+
+        $receivedQuery = Order::where(function ($cq) use ($companyId) {
+            $cq->where('current_custody_logistics_id', $companyId)
+                ->orWhere(function ($lq) use ($companyId) {
+                    $lq->whereNull('current_custody_logistics_id')
+                        ->where('sorting_center_id', $companyId);
+                });
         });
 
+        $receivedCount = (clone $receivedQuery)->whereIn('status', ['at_sorting_center', 'received_at_hub'])->count();
+        $sortedCount = (clone $receivedQuery)->where('status', 'sorted')->count();
+
         return [
-            'awaiting' => (clone $baseCountQuery())->where('status', 'picked_up')->count(),
-            'received' => (clone $baseCountQuery())->whereIn('status', ['at_sorting_center', 'received_at_hub'])->count(),
-            'all' => (clone $baseCountQuery())->whereIn('status', ['picked_up', 'at_sorting_center', 'received_at_hub', 'sorted'])->count(),
+            'awaiting' => $awaitingCount,
+            'received' => $receivedCount,
+            'all' => $awaitingCount + $receivedCount + $sortedCount,
         ];
     }
 

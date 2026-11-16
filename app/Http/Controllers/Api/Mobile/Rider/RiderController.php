@@ -62,13 +62,23 @@ class RiderController extends Controller
             ->whereIn('status', ['delivered', 'completed'])
             ->count();
 
+        $overview = app(\App\Services\CourierPayoutService::class)->getCourierEarningsOverview($rider);
+        $todaySummary = $overview['today_summary'] ?? [];
+        $todayTasksCount = (int) ($todaySummary['pickups'] ?? 0)
+            + (int) ($todaySummary['deliveries'] ?? 0)
+            + (int) ($todaySummary['failed_deliveries'] ?? 0);
+
         return response()->json([
             'data' => [
                 'user' => new UserResource($rider),
                 'courier_profile' => $profile ? new RiderProfileResource($profile) : null,
                 'is_online' => (bool) ($profile?->is_online ?? false),
                 'active_jobs_count' => $profile?->activeJobsCount() ?? 0,
-                'earnings_balance' => (float) ($profile?->earnings_balance ?? 0),
+                'earnings_balance' => (float) ($profile?->earnings_balance ?? $overview['earnings_balance'] ?? 0),
+                'available_for_payout' => (float) ($overview['available_for_payout'] ?? 0),
+                'today_earnings' => (float) ($todaySummary['total_pay'] ?? 0),
+                'today_deliveries' => $todayTasksCount,
+                'today_summary' => $todaySummary,
                 'unremitted_cod_balance' => (float) ($profile?->unremitted_cod_balance ?? 0),
                 'rating' => $avgRating,
                 'reviews_count' => $reviewsCount,
@@ -458,31 +468,187 @@ class RiderController extends Controller
 
     /**
      * GET /api/mobile/v1/rider/deliveries/history
+     * Returns task-level history covering Completed Pickups, Completed Deliveries,
+     * and Failed Deliveries for the authenticated rider.
      */
     public function deliveryHistory(Request $request): JsonResponse
     {
         /** @var User $rider */
         $rider = $request->user();
 
-        $orders = Order::where(function ($query) use ($rider) {
-            $query->where('pickup_courier_id', $rider->id)
-                ->orWhere('delivery_courier_id', $rider->id);
+        $pickupCompletedStatuses = [
+            'picked_up',
+            'at_sorting_center',
+            'received_at_hub',
+            'sorted',
+            'in_transit_hub',
+            'assigned_to_rider',
+            'out_for_delivery',
+            'delivered',
+            'failed_delivery',
+            'return_to_sender',
+            'completed',
+        ];
+        $deliveryFinalStatuses = ['delivered', 'failed_delivery', 'return_to_sender', 'completed'];
+
+        $orders = Order::where(function ($query) use ($rider, $pickupCompletedStatuses, $deliveryFinalStatuses) {
+            $query->where(function ($q) use ($rider, $pickupCompletedStatuses) {
+                $q->where('pickup_courier_id', $rider->id)
+                    ->where(function ($pq) use ($pickupCompletedStatuses) {
+                        $pq->whereIn('status', $pickupCompletedStatuses)
+                            ->orWhereHas('statusHistory', fn ($hq) => $hq->where('status', 'picked_up'));
+                    });
+            })->orWhere(function ($q) use ($rider, $deliveryFinalStatuses) {
+                $q->where('delivery_courier_id', $rider->id)
+                    ->whereIn('status', $deliveryFinalStatuses);
+            });
         })
-            ->whereIn('status', ['delivered', 'failed_delivery', 'return_to_sender', 'completed'])
-            ->with(['items.product'])
-            ->orderBy('updated_at', 'desc')
-            ->paginate(15);
+            ->with(['items.product', 'seller.sellerProfile', 'seller.address', 'buyer', 'address', 'statusHistory'])
+            ->orderByDesc('updated_at')
+            ->get();
+
+        $earningsByOrderType = \App\Models\RiderEarning::where('courier_id', $rider->id)
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->get()
+            ->groupBy(fn ($e) => $e->order_id . ':' . $e->type);
+
+        $tasks = collect();
+
+        foreach ($orders as $order) {
+            $pickupHistory = $order->statusHistory->firstWhere('status', 'picked_up');
+            $isPickupTask = (int) $order->pickup_courier_id === (int) $rider->id
+                && ($pickupHistory !== null || in_array($order->status, $pickupCompletedStatuses, true));
+
+            if ($isPickupTask) {
+                $pickupEarning = $earningsByOrderType->get($order->id . ':pickup')?->first();
+                $completedAt = $pickupHistory?->changed_at ?? $pickupEarning?->earned_at ?? $order->updated_at;
+                $formatted = $this->formatRiderOrder($order, $rider, 'pickup');
+                $formatted['task_type'] = 'pickup';
+                $formatted['task_status'] = 'completed';
+                $formatted['task_outcome'] = 'picked_up';
+                $formatted['order_status'] = $order->status;
+                $formatted['completed_at'] = $completedAt?->toIso8601String();
+                $formatted['compensation_amount'] = $pickupEarning
+                    ? (float) $pickupEarning->amount
+                    : (float) $formatted['expected_pay'];
+                $formatted['expected_pay'] = $formatted['compensation_amount'];
+                $formatted['counterparty_name'] = $order->seller?->sellerProfile?->business_name
+                    ?? $order->seller?->full_name
+                    ?? 'Merchant Seller';
+                $formatted['_sort_ts'] = $completedAt?->timestamp ?? 0;
+                $tasks->push($formatted);
+            }
+
+            $isDeliveryTask = (int) $order->delivery_courier_id === (int) $rider->id
+                && in_array($order->status, $deliveryFinalStatuses, true);
+
+            if ($isDeliveryTask) {
+                $isSuccess = in_array($order->status, ['delivered', 'completed'], true);
+                $earningKey = $isSuccess ? 'delivery' : 'failed_delivery';
+                $deliveryEarning = $earningsByOrderType->get($order->id . ':' . $earningKey)?->first();
+                $completedAt = $order->delivered_at ?? $deliveryEarning?->earned_at ?? $order->updated_at;
+                $formatted = $this->formatRiderOrder($order, $rider, 'delivery');
+                $formatted['task_type'] = 'delivery';
+                $formatted['task_status'] = $isSuccess ? 'completed' : 'failed';
+                $formatted['task_outcome'] = $order->status;
+                $formatted['order_status'] = $order->status;
+                $formatted['completed_at'] = $completedAt?->toIso8601String();
+                $formatted['compensation_amount'] = $deliveryEarning
+                    ? (float) $deliveryEarning->amount
+                    : ($isSuccess ? (float) $formatted['expected_pay'] : 0.0);
+                $formatted['expected_pay'] = $formatted['compensation_amount'];
+                $formatted['counterparty_name'] = $order->recipient_name
+                    ?? $order->buyer?->full_name
+                    ?? 'Customer';
+                $formatted['_sort_ts'] = $completedAt?->timestamp ?? 0;
+                $tasks->push($formatted);
+            }
+        }
+
+        $sorted = $tasks->sortByDesc('_sort_ts')->values()->map(function ($t) {
+            unset($t['_sort_ts']);
+            return $t;
+        });
+
+        $perPage = 15;
+        $page = max(1, (int) $request->query('page', 1));
+        $total = $sorted->count();
+        $sliced = $sorted->forPage($page, $perPage)->values();
 
         return response()->json([
-            'data' => $orders->getCollection()->map(fn ($o) => $this->formatRiderOrder($o, $rider)),
+            'data' => $sliced,
             'meta' => [
-                'current_page' => $orders->currentPage(),
-                'last_page' => $orders->lastPage(),
-                'per_page' => $orders->perPage(),
-                'total' => $orders->total(),
+                'current_page' => $page,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'per_page' => $perPage,
+                'total' => $total,
             ],
             'message' => 'Delivery history retrieved.',
         ]);
+    }
+
+    /**
+     * POST /api/mobile/v1/rider/deliveries/{order}/start
+     * Authoritatively start delivery to customer (transitions assigned_to_rider -> out_for_delivery).
+     */
+    public function startDelivery(Request $request, Order $order): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $key = $request->header('Idempotency-Key') ?? $request->input('idempotency_key');
+
+        return IdempotencyService::run($key, $rider->id, "mobile_start_delivery_{$order->id}", function () use ($rider, $order) {
+            return DB::transaction(function () use ($rider, $order) {
+                $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+                if ((int) $lockedOrder->delivery_courier_id !== (int) $rider->id) {
+                    return response()->json([
+                        'message' => 'You are not assigned as the delivery rider for this order.',
+                        'errors' => ['courier' => ['Unauthorized delivery rider.']],
+                    ], 403);
+                }
+
+                if ($lockedOrder->hasUnresolvedHandlingRestrictions()) {
+                    return response()->json([
+                        'message' => "Parcel {$lockedOrder->order_number} has an unresolved incident or handling restriction and cannot start delivery.",
+                        'errors' => ['incident' => ['Parcel has unresolved handling restrictions.']],
+                    ], 422);
+                }
+
+                if ($lockedOrder->requiresHubTransfer() && (int) $lockedOrder->current_hub_id !== (int) $lockedOrder->destination_hub_id) {
+                    return response()->json([
+                        'message' => 'Parcel has not yet been received and verified at its destination hub.',
+                        'errors' => ['hub' => ['Parcel must reach destination hub before starting delivery.']],
+                    ], 422);
+                }
+
+                if ($lockedOrder->status === 'out_for_delivery') {
+                    return response()->json([
+                        'data' => $this->formatRiderOrder($lockedOrder, $rider, 'delivery'),
+                        'message' => "Order {$lockedOrder->order_number} is already Out for Delivery.",
+                    ]);
+                }
+
+                if ($lockedOrder->status !== 'assigned_to_rider') {
+                    return response()->json([
+                        'message' => "Cannot start delivery for order in status '" . ucwords(str_replace('_', ' ', $lockedOrder->status)) . "'.",
+                        'errors' => ['status' => ["Order must be in 'assigned_to_rider' status to start delivery."]],
+                    ], 422);
+                }
+
+                $this->stateMachine->transition(
+                    $lockedOrder,
+                    'out_for_delivery',
+                    $rider,
+                    "Rider {$rider->full_name} started delivery to customer."
+                );
+
+                return response()->json([
+                    'data' => $this->formatRiderOrder($lockedOrder->fresh(['items.product', 'buyer', 'seller.address', 'seller.sellerProfile', 'address']), $rider, 'delivery'),
+                    'message' => "Order {$lockedOrder->order_number} is now Out for Delivery.",
+                ]);
+            });
+        });
     }
 
     /**
@@ -846,13 +1012,15 @@ class RiderController extends Controller
     /**
      * Helper to format an order consistently for rider screens.
      */
-    protected function formatRiderOrder(Order $order, User $rider): array
+    protected function formatRiderOrder(Order $order, User $rider, ?string $forcedRole = null): array
     {
         $isPickup = (int) $order->pickup_courier_id === (int) $rider->id;
         $isDelivery = (int) $order->delivery_courier_id === (int) $rider->id;
 
         $deliveryStatuses = ['assigned_to_rider', 'out_for_delivery', 'delivered', 'failed_delivery', 'return_to_sender', 'completed'];
-        if ($isDelivery && in_array($order->status, $deliveryStatuses, true)) {
+        if ($forcedRole !== null) {
+            $role = $forcedRole;
+        } elseif ($isDelivery && in_array($order->status, $deliveryStatuses, true)) {
             $role = 'delivery';
         } elseif ($isPickup) {
             $role = 'pickup';
@@ -860,6 +1028,19 @@ class RiderController extends Controller
             $role = 'delivery';
         } else {
             $role = 'courier';
+        }
+
+        $jobType = $role === 'pickup' ? 'pickup' : 'delivery';
+        $recordedEarning = \App\Models\RiderEarning::where('courier_id', $rider->id)
+            ->where('order_id', $order->id)
+            ->where('type', $jobType)
+            ->first();
+
+        if ($recordedEarning) {
+            $expectedPay = (float) $recordedEarning->amount;
+        } else {
+            $rateInfo = app(\App\Services\CompensationPolicyService::class)->resolveRiderJobRate($order, $rider, $jobType);
+            $expectedPay = (float) ($rateInfo['amount'] ?? 0);
         }
 
         $pickupAddress = $order->seller_address
@@ -876,9 +1057,13 @@ class RiderController extends Controller
             'tracking_number' => $order->tracking_number,
             'status' => $order->status,
             'role' => $role,
+            'task_type' => $role,
+            'expected_pay' => $expectedPay,
+            'compensation_amount' => $expectedPay,
             'total' => (float) $order->total,
             'payment_method' => $order->payment_method,
             'cod_amount' => strtolower($order->payment_method) === 'cod' ? (float) $order->total : 0.00,
+            'seller_name' => $order->seller?->sellerProfile?->business_name ?? $order->seller?->full_name ?? 'Merchant Store',
             'recipient_name' => $order->recipient_name ?? $order->buyer?->full_name,
             'recipient_phone' => $order->recipient_phone ?? $order->buyer?->contact_number,
             'pickup_address' => $pickupAddress,

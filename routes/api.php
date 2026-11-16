@@ -162,6 +162,7 @@ Route::prefix('mobile/v1')->group(function () {
         Route::get('/deliveries/active', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'activeDeliveries'])->name('api.mobile.rider.deliveries.active');
         Route::get('/deliveries/history', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'deliveryHistory'])->name('api.mobile.rider.deliveries.history');
         Route::get('/deliveries/{order}', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'showDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.show');
+        Route::post('/deliveries/{order}/start', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'startDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.start');
         Route::post('/deliveries/{order}/complete', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'completeDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.complete');
         Route::post('/deliveries/{order}/deliver', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'completeDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.deliver');
         Route::post('/deliveries/{order}/fail', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'failDelivery'])->whereNumber('order')->name('api.mobile.rider.deliveries.fail');

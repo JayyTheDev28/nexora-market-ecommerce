@@ -14,7 +14,7 @@ class SingleSessionEnforcementTest extends TestCase
     public function test_concurrent_session_is_terminated_with_notification(): void
     {
         $user = User::factory()->create([
-            'role' => 'logistics',
+            'role' => 'buyer',
             'approval_status' => 'approved',
             'account_status' => 'active',
         ]);
@@ -31,7 +31,7 @@ class SingleSessionEnforcementTest extends TestCase
         $this->actingAs($user)
             ->withSession(['_token' => 'dummy'])
             ->withHeaders(['X-Test-Enforce-Single-Session' => '1'])
-            ->get(route('logistics.dashboard'))
+            ->get('/')
             ->assertRedirect(route('login'))
             ->assertSessionHas('warning', 'This account has been logged in on a different device. You have been logged out for security.');
 
