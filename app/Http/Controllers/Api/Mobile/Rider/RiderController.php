@@ -1044,12 +1044,31 @@ class RiderController extends Controller
         }
 
         $pickupAddress = $order->seller_address
-            ? "{$order->seller_address->street}, {$order->seller_address->barangay_name}, {$order->seller_address->municipality_name}"
+            ? implode(', ', array_filter([
+                $order->seller_address->street,
+                $order->seller_address->barangay_name,
+                $order->seller_address->municipality_name,
+                $order->seller_address->province_name,
+            ]))
             : 'Seller Store';
 
-        $dropoffAddress = $order->address
-            ? "{$order->address->street}, {$order->address->barangay_name}, {$order->address->municipality_name}"
-            : 'Buyer Address';
+        $snapshot = is_array($order->address_snapshot) ? $order->address_snapshot : [];
+        $dropoffAddress = ($order->address
+            ? implode(', ', array_filter([
+                $order->address->street,
+                $order->address->barangay_name,
+                $order->address->municipality_name,
+                $order->address->province_name,
+            ]))
+            : implode(', ', array_filter([
+                $snapshot['street'] ?? null,
+                $snapshot['barangay_name'] ?? null,
+                $snapshot['municipality_name'] ?? null,
+                $snapshot['province_name'] ?? null,
+            ]))) ?: 'Buyer Address';
+
+        $customerLat = $order->address?->latitude ?? ($snapshot['latitude'] ?? null);
+        $customerLng = $order->address?->longitude ?? ($snapshot['longitude'] ?? null);
 
         return [
             'id' => $order->id,
@@ -1068,6 +1087,10 @@ class RiderController extends Controller
             'recipient_phone' => $order->recipient_phone ?? $order->buyer?->contact_number,
             'pickup_address' => $pickupAddress,
             'dropoff_address' => $dropoffAddress,
+            'dropoff_city' => $order->address?->municipality_name ?? ($snapshot['municipality_name'] ?? null),
+            'dropoff_province' => $order->address?->province_name ?? ($snapshot['province_name'] ?? null),
+            'customer_lat' => $customerLat !== null ? (float) $customerLat : null,
+            'customer_lng' => $customerLng !== null ? (float) $customerLng : null,
             'items_count' => $order->items?->count() ?? 0,
             'items' => $order->items?->map(fn ($item) => [
                 'id' => $item->id,
