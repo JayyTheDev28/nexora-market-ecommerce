@@ -65,15 +65,25 @@ Route::prefix('mobile/v1')->group(function () {
         // Authenticated session routes
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/me', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'me'])->name('api.mobile.auth.me');
+            Route::put('/password', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'updatePassword'])->name('api.mobile.auth.password');
             Route::post('/logout', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'logout'])->name('api.mobile.auth.logout');
         });
     });
 
+    // Shared authenticated notifications routes (buyer, rider, courier)
+    Route::middleware('auth:sanctum')->prefix('notifications')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\Mobile\NotificationController::class, 'index'])->name('api.mobile.notifications.index');
+        Route::post('/read-all', [\App\Http\Controllers\Api\Mobile\NotificationController::class, 'markAllRead'])->name('api.mobile.notifications.read-all');
+        Route::post('/{id}/read', [\App\Http\Controllers\Api\Mobile\NotificationController::class, 'markRead'])->name('api.mobile.notifications.read');
+    });
+
     // Public buyer routes
     Route::prefix('buyer')->group(function () {
+        Route::get('/home', [\App\Http\Controllers\Api\Mobile\Buyer\CatalogController::class, 'home'])->name('api.mobile.buyer.home');
         Route::get('/catalog', [\App\Http\Controllers\Api\Mobile\Buyer\CatalogController::class, 'index'])->name('api.mobile.buyer.catalog');
         Route::get('/categories', [\App\Http\Controllers\Api\Mobile\Buyer\CatalogController::class, 'categories'])->name('api.mobile.buyer.categories');
         Route::get('/products/{id}', [\App\Http\Controllers\Api\Mobile\Buyer\ProductController::class, 'show'])->whereNumber('id')->name('api.mobile.buyer.products.show');
+        Route::get('/products/{id}/reviews', [\App\Http\Controllers\Api\Mobile\Buyer\ProductController::class, 'reviews'])->whereNumber('id')->name('api.mobile.buyer.products.reviews');
         Route::get('/stores/{seller}', [\App\Http\Controllers\Api\Mobile\Buyer\StoreController::class, 'show'])->whereNumber('seller')->name('api.mobile.buyer.stores.show');
     });
 
@@ -117,13 +127,15 @@ Route::prefix('mobile/v1')->group(function () {
         Route::get('/checkout/summary', [\App\Http\Controllers\Api\Mobile\Buyer\CheckoutController::class, 'summary'])->name('api.mobile.buyer.checkout.summary');
         Route::post('/checkout', [\App\Http\Controllers\Api\Mobile\Buyer\CheckoutController::class, 'store'])->name('api.mobile.buyer.checkout.store');
 
-        // Orders
+        // Orders & Returns
         Route::get('/orders', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'index'])->name('api.mobile.buyer.orders.index');
         Route::get('/orders/{order}', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'show'])->whereNumber('order')->name('api.mobile.buyer.orders.show');
         Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'cancelOrder'])->whereNumber('order')->name('api.mobile.buyer.orders.cancel');
         Route::post('/orders/{order}/confirm-receipt', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'confirmReceipt'])->whereNumber('order')->name('api.mobile.buyer.orders.confirm-receipt');
         Route::post('/orders/{order}/return', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'submitReturn'])->whereNumber('order')->name('api.mobile.buyer.orders.return');
+        Route::post('/orders/{order}/return-shipment', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'submitReturnShipment'])->whereNumber('order')->name('api.mobile.buyer.orders.return-shipment');
         Route::post('/orders/{order}/review', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'submitReview'])->whereNumber('order')->name('api.mobile.buyer.orders.review');
+        Route::get('/returns', [\App\Http\Controllers\Api\Mobile\Buyer\OrderController::class, 'returns'])->name('api.mobile.buyer.returns.index');
 
         // Chat
         Route::get('/chat', [\App\Http\Controllers\Api\Mobile\Buyer\ChatController::class, 'index'])->name('api.mobile.buyer.chat.index');
@@ -138,6 +150,7 @@ Route::prefix('mobile/v1')->group(function () {
         Route::post('/availability', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'toggleAvailability'])->name('api.mobile.rider.availability');
         Route::get('/hubs', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'hubs'])->name('api.mobile.rider.hubs');
         Route::post('/hub/select', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'selectHub'])->name('api.mobile.rider.hub.select');
+        Route::get('/lookup', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'lookupParcel'])->name('api.mobile.rider.lookup');
         Route::get('/offers', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'offers'])->name('api.mobile.rider.offers');
         Route::get('/deliveries/available', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'offers'])->name('api.mobile.rider.deliveries.available');
         Route::post('/offers/{offer}/accept', [\App\Http\Controllers\Api\Mobile\Rider\RiderController::class, 'acceptOffer'])->whereNumber('offer')->name('api.mobile.rider.offers.accept');

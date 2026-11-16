@@ -91,7 +91,11 @@ class TransferCourierController extends Controller
         if ($filter === 'active') {
             $query->whereIn('status', TransferManifest::ACTIVE_STATUSES);
         } elseif ($filter === 'history') {
-            $query->whereIn('status', [TransferManifest::STATUS_COMPLETED, TransferManifest::STATUS_CANCELLED]);
+            $query->whereIn('status', [
+                TransferManifest::STATUS_COMPLETED,
+                TransferManifest::STATUS_CLOSED_WITH_EXCEPTIONS,
+                TransferManifest::STATUS_CANCELLED,
+            ]);
         }
 
         $manifests = $query->get()->map(fn (TransferManifest $m) => $this->formatManifest($m));

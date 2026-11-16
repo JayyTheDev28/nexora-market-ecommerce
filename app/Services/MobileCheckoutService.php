@@ -145,6 +145,79 @@ class MobileCheckoutService
     }
 
     /**
+     * Read-only voucher discount preview for GET /checkout/summary.
+     *
+     * @return array{platform_discount: float, shipping_discount: float, store_discount: float, total_discount: float, voucher_errors: array<string, string>}
+     */
+    public function previewVouchers(User $user, array $summary, array $voucherIds): array
+    {
+        $grouped = $summary['grouped'] ?? collect();
+        $totalSubtotal = (float) ($summary['total_subtotal'] ?? 0);
+        $totalShipping = (float) ($summary['total_shipping'] ?? 0);
+
+        if (empty($grouped) || (is_countable($grouped) && count($grouped) === 0)) {
+            return [
+                'platform_discount' => 0.0,
+                'shipping_discount' => 0.0,
+                'store_discount' => 0.0,
+                'total_discount' => 0.0,
+                'voucher_errors' => [],
+            ];
+        }
+
+        $sellerSubtotals = [];
+        foreach ($grouped as $sellerId => $storeItems) {
+            $sellerSubtotals[(int) $sellerId] = (float) $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
+        }
+
+        $platformDiscount = 0.0;
+        $shippingDiscount = 0.0;
+        $storeDiscount = 0.0;
+        $errors = [];
+
+        if (! empty($voucherIds['platform_voucher_id'])) {
+            try {
+                $v = $this->resolveValidatedVoucher($user, (int) $voucherIds['platform_voucher_id'], 'platform', $totalSubtotal, $sellerSubtotals);
+                $platformDiscount = (float) $v->calculateDiscount($totalSubtotal);
+            } catch (ValidationException $e) {
+                $errors['platform_voucher_id'] = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            }
+        }
+
+        if (! empty($voucherIds['shipping_voucher_id'])) {
+            try {
+                $v = $this->resolveValidatedVoucher($user, (int) $voucherIds['shipping_voucher_id'], 'shipping', $totalSubtotal, $sellerSubtotals);
+                $shippingDiscount = min($totalShipping, (float) $v->calculateDiscount($totalShipping));
+            } catch (ValidationException $e) {
+                $errors['shipping_voucher_id'] = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            }
+        }
+
+        if (! empty($voucherIds['store_voucher_id'])) {
+            try {
+                $v = $this->resolveValidatedVoucher($user, (int) $voucherIds['store_voucher_id'], 'store', $totalSubtotal, $sellerSubtotals);
+                $sid = $v->seller_id !== null ? (int) $v->seller_id : null;
+                $targetSubtotal = ($sid !== null && isset($sellerSubtotals[$sid])) ? $sellerSubtotals[$sid] : $totalSubtotal;
+                $storeDiscount = (float) $v->calculateDiscount($targetSubtotal);
+            } catch (ValidationException $e) {
+                $errors['store_voucher_id'] = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            }
+        }
+
+        $platformDiscount = round($platformDiscount, 2);
+        $shippingDiscount = round($shippingDiscount, 2);
+        $storeDiscount = round($storeDiscount, 2);
+
+        return [
+            'platform_discount' => $platformDiscount,
+            'shipping_discount' => $shippingDiscount,
+            'store_discount' => $storeDiscount,
+            'total_discount' => round($platformDiscount + $shippingDiscount + $storeDiscount, 2),
+            'voucher_errors' => $errors,
+        ];
+    }
+
+    /**
      * Validate a claimed or public voucher explicitly so invalid/expired/below-min-spend
      * submissions fail loudly with a clear 422 message instead of silently disappearing.
      */

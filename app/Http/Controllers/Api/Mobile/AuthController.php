@@ -383,7 +383,7 @@ class AuthController extends Controller
         ]);
 
         $authToken = $rider->createToken('rider-app')->plainTextToken;
-        $profile = $rider->courierProfile()->with('sortingCenter')->first();
+        $profile = $rider->courierProfile()->with(['sortingCenter', 'logisticsCompany', 'assignedHub'])->first();
 
         return response()->json([
             'data' => [
@@ -430,6 +430,35 @@ class AuthController extends Controller
         return response()->json([
             'data' => null,
             'message' => 'Successfully logged out.',
+        ]);
+    }
+
+    /**
+     * Authenticated password update for any mobile role (buyer, rider, courier).
+     * PUT /api/mobile/v1/auth/password
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/'],
+        ], [
+            'password.regex' => 'New password must contain at least one uppercase letter, one lowercase letter, and one number.',
+        ]);
+
+        $user = $request->user();
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'Current password does not match our records.',
+                'errors' => ['current_password' => ['Current password does not match our records.']],
+            ], 422);
+        }
+
+        $user->update(['password' => Hash::make($validated['password'])]);
+
+        return response()->json([
+            'data' => null,
+            'message' => 'Password updated successfully.',
         ]);
     }
 }

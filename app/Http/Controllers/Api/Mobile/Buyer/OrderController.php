@@ -8,6 +8,7 @@ use App\Http\Requests\Api\Mobile\ReturnOrderRequest;
 use App\Http\Requests\Api\Mobile\ReviewOrderRequest;
 use App\Http\Resources\Api\Mobile\OrderDetailResource;
 use App\Http\Resources\Api\Mobile\OrderResource;
+use App\Models\Dispute;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\Review;
@@ -308,6 +309,8 @@ class OrderController extends Controller
             'details' => $validated['details'],
             'media_paths' => $uploadedPaths,
             'status' => 'open',
+            'seller_status' => 'pending',
+            'return_stage' => Dispute::RETURN_STAGE_REQUESTED,
         ]);
 
         return response()->json([
@@ -459,6 +462,123 @@ class OrderController extends Controller
                 ]);
             });
         }
+    }
+
+    /**
+     * List buyer return / refund disputes with full stage and refund breakdown.
+     * GET /api/mobile/v1/buyer/returns
+     */
+    public function returns(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $perPage = min(50, max(1, (int) $request->query('per_page', 20)));
+
+        $paginated = Dispute::with(['order.items.product', 'order.seller.sellerProfile'])
+            ->where('raised_by', $user->id)
+            ->latest('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $returns = collect($paginated->items())->map(function (Dispute $dispute) {
+            $order = $dispute->order;
+            $sellerName = $order?->seller?->sellerProfile?->business_name ?? $order?->seller?->full_name ?? 'Seller';
+
+            return [
+                'id' => $dispute->id,
+                'order_id' => $dispute->order_id,
+                'order_number' => $order?->order_number,
+                'order_status' => $order?->status,
+                'seller_name' => $sellerName,
+                'order_total' => $order ? (float) $order->total : 0.0,
+                'reason' => $dispute->reason,
+                'details' => $dispute->details,
+                'status' => $dispute->status,
+                'seller_status' => $dispute->seller_status,
+                'return_stage' => $dispute->return_stage,
+                'seller_response' => $dispute->seller_response,
+                'return_instructions' => $dispute->return_instructions,
+                'return_tracking_number' => $dispute->return_tracking_number,
+                'return_received_at' => $dispute->return_received_at?->toIso8601String(),
+                'inspection_condition' => $dispute->inspection_condition,
+                'inspection_notes' => $dispute->inspection_notes,
+                'inspected_at' => $dispute->inspected_at?->toIso8601String(),
+                'restock_approved' => $dispute->restock_approved,
+                'refund_amount' => $dispute->refund_amount !== null ? (float) $dispute->refund_amount : null,
+                'refund_method' => $dispute->refund_method,
+                'refund_reference' => $dispute->refund_reference,
+                'refund_authorized_at' => $dispute->refund_authorized_at?->toIso8601String(),
+                'refund_recorded_at' => $dispute->refund_recorded_at?->toIso8601String(),
+                'resolution_note' => $dispute->resolution_note,
+                'created_at' => $dispute->created_at?->toIso8601String(),
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => [
+                'returns' => $returns,
+                'pagination' => [
+                    'current_page' => $paginated->currentPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                    'last_page' => $paginated->lastPage(),
+                ],
+            ],
+            'message' => 'Returns retrieved successfully.',
+        ]);
+    }
+
+    /**
+     * Buyer submits return shipment tracking number after seller approves return.
+     * POST /api/mobile/v1/buyer/orders/{order}/return-shipment
+     */
+    public function submitReturnShipment(Request $request, Order $order): JsonResponse
+    {
+        if ($order->buyer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $dispute = $order->dispute;
+        if (! $dispute) {
+            return response()->json(['message' => 'No return request found for this order.'], 404);
+        }
+
+        if ($dispute->seller_status !== 'approved' || in_array($dispute->return_stage, [
+            Dispute::RETURN_STAGE_RECEIVED_FOR_INSPECTION,
+            Dispute::RETURN_STAGE_INSPECTED,
+            Dispute::RETURN_STAGE_REFUND_AUTHORIZED,
+            Dispute::RETURN_STAGE_REFUND_RECORDED,
+            Dispute::RETURN_STAGE_REJECTED,
+        ], true)) {
+            return response()->json([
+                'message' => 'Return shipment tracking can only be updated while awaiting return shipment.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'return_tracking_number' => ['required', 'string', 'min:3', 'max:100'],
+        ]);
+
+        $dispute->update([
+            'return_tracking_number' => trim($validated['return_tracking_number']),
+            'return_stage' => Dispute::RETURN_STAGE_IN_RETURN_TRANSIT,
+        ]);
+
+        return response()->json([
+            'data' => [
+                'order' => new OrderDetailResource($order->fresh([
+                    'items.product',
+                    'seller.sellerProfile',
+                    'deliveryCourier.courierProfile',
+                    'currentHub',
+                    'originHub',
+                    'destinationHub',
+                    'dispute',
+                    'review',
+                    'statusHistory',
+                ])),
+            ],
+            'message' => 'Return shipment tracking submitted.',
+        ]);
     }
 }
 

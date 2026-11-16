@@ -106,12 +106,17 @@ class CartController extends Controller
             ];
         }
 
+        $selectedItems = $items->where('selected', true);
+        $selectedSubtotal = round($selectedItems->sum(fn (CartItem $i) => (float) $i->unit_price * (int) $i->quantity), 2);
+
         return [
             'items' => CartItemResource::collection($items),
             'stores' => $formattedStores,
             'claimed_vouchers' => VoucherResource::collection($claimedVouchers),
             'total_items' => $items->count(),
             'cart_count' => $items->count(),
+            'selected_count' => $selectedItems->count(),
+            'selected_subtotal' => $selectedSubtotal,
         ];
     }
 
@@ -136,9 +141,9 @@ class CartController extends Controller
         $validated = $request->validated();
         $user = $request->user();
 
-        $product = Product::with('seller.sellerProfile')->findOrFail($validated['product_id']);
+        $product = Product::withTrashed()->with('seller.sellerProfile')->findOrFail($validated['product_id']);
 
-        if ($product->status !== 'active') {
+        if ($product->trashed() || $product->status !== 'active') {
             return response()->json([
                 'message' => 'This product is no longer available.',
                 'errors' => ['product' => ['Product is not active.']],

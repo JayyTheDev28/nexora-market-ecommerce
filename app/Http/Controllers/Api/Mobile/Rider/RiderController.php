@@ -270,6 +270,76 @@ class RiderController extends Controller
     }
 
     /**
+     * Read-only authorized barcode lookup for Rider scanner (does NOT mutate state).
+     * GET /api/mobile/v1/rider/lookup?tracking_number=...
+     */
+    public function lookupParcel(Request $request): JsonResponse
+    {
+        /** @var User $rider */
+        $rider = $request->user();
+        $tracking = trim((string) ($request->query('tracking_number') ?? $request->query('q') ?? ''));
+
+        if ($tracking === '') {
+            return response()->json([
+                'message' => 'Please provide a tracking number or barcode to look up.',
+                'errors' => ['tracking_number' => ['Tracking number is required.']],
+            ], 422);
+        }
+
+        $order = Order::findByScanIdentifier($tracking);
+        if (! $order) {
+            return response()->json([
+                'message' => "Barcode '{$tracking}' was not found.",
+                'errors' => ['tracking_number' => ['Order not found for scanned barcode.']],
+            ], 404);
+        }
+
+        $order->loadMissing(['seller.sellerProfile', 'currentHub', 'destinationHub', 'items']);
+        $companyId = $rider->logisticsCompanyId();
+        $hasOffer = JobOffer::where('order_id', $order->id)->where('courier_id', $rider->id)->exists();
+        $isAssignedPickup = (int) $order->pickup_courier_id === (int) $rider->id;
+        $isAssignedDelivery = (int) $order->delivery_courier_id === (int) $rider->id;
+        $sameCompany = $companyId && (
+            (int) $order->sorting_center_id === $companyId
+            || (int) $order->pickup_logistics_id === $companyId
+            || (int) $order->current_custody_logistics_id === $companyId
+        );
+
+        if (! $isAssignedPickup && ! $isAssignedDelivery && ! $hasOffer && ! $sameCompany) {
+            return response()->json([
+                'message' => 'You are not authorized to inspect this parcel.',
+                'errors' => ['tracking_number' => ['Parcel belongs to a different logistics operator or is unassigned.']],
+            ], 403);
+        }
+
+        $snapshot = is_array($order->address_snapshot) ? $order->address_snapshot : [];
+        $sellerName = $order->seller?->sellerProfile?->business_name ?? $order->seller?->full_name ?? 'Seller';
+
+        return response()->json([
+            'data' => [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'tracking_number' => $order->tracking_number,
+                'status' => $order->status,
+                'handling_status' => $order->handling_status,
+                'recipient_name' => $order->recipient_name ?? ($snapshot['recipient_name'] ?? null),
+                'delivery_address' => $snapshot['full_address'] ?? null,
+                'cod_amount' => (float) $order->total,
+                'payment_method' => $order->payment_method,
+                'seller_name' => $sellerName,
+                'current_hub_name' => $order->currentHub?->name,
+                'destination_hub_name' => $order->destinationHub?->name,
+                'items_count' => $order->items->count(),
+                'is_assigned_pickup' => $isAssignedPickup,
+                'is_assigned_delivery' => $isAssignedDelivery,
+                'can_pickup' => $isAssignedPickup && in_array($order->status, ['ready_for_pickup', 'assigned'], true),
+                'can_deliver' => $isAssignedDelivery && in_array($order->status, ['assigned_to_rider', 'out_for_delivery'], true),
+            ],
+            'message' => "Parcel {$order->tracking_number} verified ({$order->status}).",
+        ]);
+    }
+
+    /**
      * POST /api/mobile/v1/rider/pickup
      */
     public function confirmPickup(Request $request): JsonResponse

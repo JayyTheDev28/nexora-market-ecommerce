@@ -30,7 +30,22 @@ class OrderStatusUpdated extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['mail', 'database'];
+    }
+
+    public function toArray(object $notifiable): array
+    {
+        $headline = self::STATUS_LABELS[$this->status] ?? 'Your order status has been updated';
+
+        return [
+            'type' => 'order_status',
+            'order_id' => $this->order->id,
+            'order_number' => $this->order->order_number,
+            'tracking_number' => $this->order->tracking_number,
+            'status' => $this->status,
+            'title' => "Order {$this->order->order_number}",
+            'message' => "{$headline}.",
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

@@ -34,6 +34,11 @@ class CheckoutController extends Controller
         }
 
         $summary = $this->checkoutService->getSummary($request->user(), $cartItemIds);
+        $voucherPreview = $this->checkoutService->previewVouchers($request->user(), $summary, [
+            'platform_voucher_id' => $request->query('platform_voucher_id'),
+            'shipping_voucher_id' => $request->query('shipping_voucher_id'),
+            'store_voucher_id' => $request->query('store_voucher_id'),
+        ]);
 
         $formattedStores = [];
         foreach ($summary['grouped'] as $sellerId => $storeItems) {
@@ -51,6 +56,11 @@ class CheckoutController extends Controller
             ];
         }
 
+        $estimatedTotal = max(
+            0.0,
+            round($summary['total_subtotal'] + $summary['total_shipping'] - $voucherPreview['total_discount'], 2)
+        );
+
         return response()->json([
             'data' => [
                 'stores' => $formattedStores,
@@ -59,7 +69,12 @@ class CheckoutController extends Controller
                 'available_vouchers' => VoucherResource::collection($summary['vouchers']),
                 'total_subtotal' => $summary['total_subtotal'],
                 'total_shipping' => $summary['total_shipping'],
-                'estimated_total' => round($summary['total_subtotal'] + $summary['total_shipping'], 2),
+                'platform_discount' => $voucherPreview['platform_discount'],
+                'shipping_discount' => $voucherPreview['shipping_discount'],
+                'store_discount' => $voucherPreview['store_discount'],
+                'total_discount' => $voucherPreview['total_discount'],
+                'voucher_errors' => $voucherPreview['voucher_errors'],
+                'estimated_total' => $estimatedTotal,
             ],
             'message' => 'Checkout summary calculated successfully.',
         ]);
