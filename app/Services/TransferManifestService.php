@@ -12,6 +12,7 @@ use App\Models\TransferManifest;
 use App\Models\TransferManifestItem;
 use App\Models\User;
 use App\Notifications\TransferManifestNotification;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -354,6 +355,16 @@ class TransferManifestService
                 "Manifest cannot depart in status '{$manifest->status}'."
             );
 
+            $issueItemsCount = $manifest->items()
+                ->where('loading_status', TransferManifestItem::LOADING_ISSUE)
+                ->count();
+
+            abort_if(
+                $issueItemsCount > 0,
+                422,
+                "{$issueItemsCount} parcel(s) have unresolved loading issues. Remove affected parcels or resolve the loading incident before departure."
+            );
+
             $unloadedCount = $manifest->items()
                 ->where('loading_status', '!=', TransferManifestItem::LOADING_LOADED)
                 ->count();
@@ -501,10 +512,15 @@ class TransferManifestService
         string $trackingNumber,
         string $issueType,
         string $notes,
-        User $courier
+        User $courier,
+        ?string $lastKnownLocation = null,
+        ?UploadedFile $evidencePhoto = null
     ): TransferManifestItem {
-        return DB::transaction(function () use ($manifest, $trackingNumber, $issueType, $notes, $courier) {
-            $manifest = TransferManifest::whereKey($manifest->id)->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($manifest, $trackingNumber, $issueType, $notes, $courier, $lastKnownLocation, $evidencePhoto) {
+            $manifest = TransferManifest::whereKey($manifest->id)
+                ->with(['originHub', 'destinationHub', 'senderLogistics', 'receiverLogistics'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
             abort_unless(
                 $courier->isCourier() && (int) $manifest->assigned_courier_id === (int) $courier->id,
@@ -513,14 +529,16 @@ class TransferManifestService
             );
 
             abort_if($manifest->isTerminal(), 422, 'Cannot report issues on a closed manifest.');
-            abort_unless(in_array($issueType, ['missing', 'damaged'], true), 422, 'Invalid issue type.');
+            abort_unless(in_array($issueType, ['missing', 'damaged', 'discrepancy'], true), 422, 'Invalid issue type.');
 
             $normalized = trim($trackingNumber);
             $item = TransferManifestItem::where('manifest_id', $manifest->id)
                 ->where(function ($q) use ($normalized) {
                     $q->where('tracking_number', $normalized)
+                      ->orWhereRaw('UPPER(tracking_number) = ?', [strtoupper($normalized)])
                       ->orWhereHas('order', fn ($oq) => $oq->where('order_number', $normalized));
                 })
+                ->with('order')
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -529,9 +547,24 @@ class TransferManifestService
                 'issue_notes' => trim($notes),
             ]);
 
-            if ($manifest->status === TransferManifest::STATUS_IN_TRANSIT || $manifest->status === TransferManifest::STATUS_ARRIVED) {
+            if (in_array($manifest->status, [
+                TransferManifest::STATUS_LOADING,
+                TransferManifest::STATUS_READY_TO_DISPATCH,
+                TransferManifest::STATUS_IN_TRANSIT,
+                TransferManifest::STATUS_ARRIVED,
+            ], true)) {
                 $manifest->update(['status' => TransferManifest::STATUS_EXCEPTION]);
             }
+
+            $incident = app(ParcelIncidentService::class)->recordCourierTransitIncident(
+                $manifest,
+                $item,
+                $issueType,
+                $notes,
+                $courier,
+                $lastKnownLocation,
+                $evidencePhoto
+            );
 
             AuditLog::log(
                 'transfer_manifest_courier_issue',
@@ -540,6 +573,7 @@ class TransferManifestService
                 [
                     'tracking_number' => $item->tracking_number,
                     'issue_type' => $issueType,
+                    'incident_number' => $incident->incident_number,
                     'notes' => $notes,
                 ],
                 $notes,
@@ -551,7 +585,7 @@ class TransferManifestService
                 $manifest,
                 'manifest_issue_reported',
                 'Parcel Issue Reported on Manifest',
-                "Courier reported {$issueType} parcel ({$item->tracking_number}) on manifest {$manifest->manifest_number}: {$notes}"
+                "Courier reported {$issueType} parcel ({$item->tracking_number}) on manifest {$manifest->manifest_number} ({$incident->incident_number}): {$notes}"
             );
             if ($manifest->receiver_logistics_id !== $manifest->sender_logistics_id) {
                 $this->notifyUser(
@@ -559,11 +593,11 @@ class TransferManifestService
                     $manifest,
                     'manifest_issue_reported',
                     'Parcel Issue Reported on Incoming Manifest',
-                    "Courier reported {$issueType} parcel ({$item->tracking_number}) on manifest {$manifest->manifest_number}: {$notes}"
+                    "Courier reported {$issueType} parcel ({$item->tracking_number}) on manifest {$manifest->manifest_number} ({$incident->incident_number}): {$notes}"
                 );
             }
 
-            return $item->fresh();
+            return $item->fresh(['incidents.events', 'order']);
         });
     }
 
@@ -577,9 +611,12 @@ class TransferManifestService
         string $classification,
         User $operator,
         ?string $notes = null,
-        bool $autoScan = false
+        bool $autoScan = false,
+        bool $acceptIntoQuarantine = false,
+        ?UploadedFile $evidenceFile = null,
+        ?string $damageType = null
     ): array {
-        return DB::transaction(function () use ($manifest, $trackingNumber, $classification, $operator, $notes, $autoScan) {
+        return DB::transaction(function () use ($manifest, $trackingNumber, $classification, $operator, $notes, $autoScan, $acceptIntoQuarantine, $evidenceFile, $damageType) {
             $manifest = TransferManifest::whereKey($manifest->id)
                 ->with(['destinationHub', 'originHub'])
                 ->lockForUpdate()
@@ -719,17 +756,63 @@ class TransferManifestService
                 // Missing, damaged, or discrepancy: DO NOT transfer custody!
                 $item->update([
                     'receiving_status' => $classification,
-                    'received_at' => now(),
-                    'received_by' => $operator->id,
+                    'received_at' => $acceptIntoQuarantine ? now() : null,
+                    'received_by' => $acceptIntoQuarantine ? $operator->id : null,
                     'issue_notes' => $notes ? trim($notes) : $item->issue_notes,
+                    'disposition' => $acceptIntoQuarantine ? ParcelIncident::DISPOSITION_ACCEPTED_INTO_QUARANTINE : $item->disposition,
                 ]);
+
+                // Phase 4: Damage Before Receiving with explicit Accept Into Quarantine receives physical custody at hub
+                // while locking order in quarantine so dispatch is blocked until reinspection clears it.
+                if ($acceptIntoQuarantine && in_array($classification, [TransferManifestItem::RECEIVING_DAMAGED, TransferManifestItem::RECEIVING_DISCREPANCY], true)) {
+                    if ($item->hubTransfer && $item->hubTransfer->status === 'in_transit') {
+                        $item->hubTransfer->update([
+                            'status' => 'received',
+                            'received_by' => $operator->id,
+                            'received_at' => now(),
+                            'notes' => trim(($item->hubTransfer->notes ?? '') . "\n[QUARANTINE] " . trim((string) $notes)),
+                        ]);
+                    }
+
+                    if ($item->order) {
+                        $order = $item->order;
+                        $quarantineHubId = $manifest->destination_hub_id;
+                        $targetOrderStatus = in_array($order->status, ['in_transit_hub', 'picked_up', 'ready_for_pickup', 'preparing'], true)
+                            ? (((int) $quarantineHubId === (int) $order->destination_hub_id) ? 'at_sorting_center' : 'received_at_hub')
+                            : $order->status;
+
+                        if ($targetOrderStatus !== $order->status) {
+                            OrderLogisticsService::transition(
+                                order: $order,
+                                newStatus: $targetOrderStatus,
+                                changedBy: $operator->id,
+                                note: "Parcel {$order->tracking_number} arrived at {$manifest->destinationHub?->name} and was placed under hub inspection hold.",
+                                extraAttributes: [
+                                    'current_hub_id' => $quarantineHubId,
+                                    'current_custody_logistics_id' => $manifest->receiver_logistics_id,
+                                    'sorting_center_id' => $manifest->receiver_logistics_id ?: $order->sorting_center_id,
+                                    'handling_status' => ParcelIncident::RESTRICTION_QUARANTINED,
+                                ]
+                            );
+                        } else {
+                            $order->update([
+                                'current_hub_id' => $quarantineHubId,
+                                'current_custody_logistics_id' => $manifest->receiver_logistics_id,
+                                'handling_status' => ParcelIncident::RESTRICTION_QUARANTINED,
+                            ]);
+                        }
+                    }
+                }
 
                 app(ParcelIncidentService::class)->recordManifestExceptionIncident(
                     $manifest,
                     $item,
                     $classification,
                     $operator,
-                    (string) $notes
+                    (string) $notes,
+                    $evidenceFile,
+                    $damageType,
+                    $acceptIntoQuarantine
                 );
             }
 
@@ -999,6 +1082,7 @@ class TransferManifestService
                     TransferManifest::STATUS_DRAFT,
                     TransferManifest::STATUS_LOADING,
                     TransferManifest::STATUS_READY_TO_DISPATCH,
+                    TransferManifest::STATUS_EXCEPTION,
                 ], true),
                 422,
                 "Cannot remove parcels from manifest {$manifest->manifest_number} in status '{$manifest->status}'."
@@ -1009,7 +1093,20 @@ class TransferManifestService
             $item->delete();
 
             $newTotal = $manifest->items()->count();
-            $manifest->update(['total_parcels' => $newTotal]);
+            $loadedCount = $manifest->items()->where('loading_status', TransferManifestItem::LOADING_LOADED)->count();
+            $issueCount = $manifest->items()->where('loading_status', TransferManifestItem::LOADING_ISSUE)->count();
+
+            $nextStatus = $manifest->status;
+            if ($manifest->status === TransferManifest::STATUS_EXCEPTION && $issueCount === 0) {
+                $nextStatus = ($newTotal > 0 && $loadedCount === $newTotal)
+                    ? TransferManifest::STATUS_READY_TO_DISPATCH
+                    : TransferManifest::STATUS_LOADING;
+            }
+
+            $manifest->update([
+                'total_parcels' => $newTotal,
+                'status' => $nextStatus,
+            ]);
 
             AuditLog::log(
                 'transfer_manifest_parcel_removed',
@@ -1036,7 +1133,18 @@ class TransferManifestService
         $outstanding = $items->where('receiving_status', TransferManifestItem::RECEIVING_PENDING)->count();
 
         $incidents = ParcelIncident::where('manifest_id', $manifestId)->get();
-        $unresolvedIncidents = $incidents->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED);
+        $unresolvedIncidents = $incidents->whereIn('investigation_status', ParcelIncident::UNRESOLVED_STATUSES);
+        $quarantinedCount = $incidents->filter(fn (ParcelIncident $inc) => $inc->isQuarantined() && $inc->isUnresolved())->count();
+
+        $exceptionItems = $items->whereIn('receiving_status', [
+            TransferManifestItem::RECEIVING_MISSING,
+            TransferManifestItem::RECEIVING_DAMAGED,
+            TransferManifestItem::RECEIVING_DISCREPANCY,
+        ]);
+
+        $exceptionItemsDocumented = $exceptionItems->every(function (TransferManifestItem $item) use ($incidents) {
+            return $incidents->where('manifest_item_id', $item->id)->isNotEmpty();
+        });
 
         return [
             'expected' => $expected,
@@ -1045,10 +1153,120 @@ class TransferManifestService
             'damaged' => $damaged,
             'discrepancy' => $discrepancy,
             'outstanding' => $outstanding,
+            'quarantined' => $quarantinedCount,
             'open_incidents' => $unresolvedIncidents->count(),
             'open_damage_incidents' => $unresolvedIncidents->where('incident_type', ParcelIncident::TYPE_DAMAGE)->count(),
             'open_missing_incidents' => $unresolvedIncidents->where('incident_type', ParcelIncident::TYPE_MISSING)->count(),
+            'can_close_with_exceptions' => $outstanding === 0
+                && ($missing > 0 || $damaged > 0 || $discrepancy > 0)
+                && $exceptionItemsDocumented,
         ];
+    }
+
+    /**
+     * Controlled Phase 6 Closure: Close manifest with documented exceptions without fabricating receipts
+     * and without double-paying courier incentives.
+     */
+    public function closeWithExceptions(
+        TransferManifest $manifest,
+        User $operator,
+        string $reconciliationNotes
+    ): TransferManifest {
+        $cleanNotes = trim($reconciliationNotes);
+        abort_if($cleanNotes === '', 422, 'Reconciliation notes explaining the exception closure are required.');
+
+        return DB::transaction(function () use ($manifest, $operator, $cleanNotes) {
+            $manifest = TransferManifest::whereKey($manifest->id)
+                ->with(['items.incidents', 'originHub', 'destinationHub', 'senderLogistics', 'assignedCourier'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_unless(
+                (int) $manifest->receiver_logistics_id === $operator->logisticsCompanyId() || $operator->role === 'admin',
+                403,
+                'Only authorized receiving hub logistics operators or admins can close a manifest with exceptions.'
+            );
+
+            abort_if(
+                $manifest->status === TransferManifest::STATUS_CLOSED_WITH_EXCEPTIONS,
+                422,
+                'This manifest is already closed with exceptions.'
+            );
+
+            abort_if(
+                $manifest->status === TransferManifest::STATUS_COMPLETED || $manifest->status === TransferManifest::STATUS_CANCELLED,
+                422,
+                "Manifest in status '{$manifest->status}' cannot be closed with exceptions."
+            );
+
+            abort_if(
+                $manifest->arrived_at === null,
+                422,
+                'Manifest must arrive at destination hub before closing with exceptions.'
+            );
+
+            $pendingCount = $manifest->items->where('receiving_status', TransferManifestItem::RECEIVING_PENDING)->count();
+            abort_if(
+                $pendingCount > 0,
+                422,
+                "Cannot close manifest while {$pendingCount} parcel(s) are still Pending. Classify every parcel first."
+            );
+
+            foreach ($manifest->items as $item) {
+                if (in_array($item->receiving_status, [
+                    TransferManifestItem::RECEIVING_MISSING,
+                    TransferManifestItem::RECEIVING_DAMAGED,
+                    TransferManifestItem::RECEIVING_DISCREPANCY,
+                ], true)) {
+                    $hasIncident = $item->incidents->isNotEmpty();
+                    abort_unless(
+                        $hasIncident,
+                        422,
+                        "Exception parcel {$item->tracking_number} must have a documented Parcel Incident before closure."
+                    );
+                }
+            }
+
+            $now = now();
+            $manifest->update([
+                'status' => TransferManifest::STATUS_CLOSED_WITH_EXCEPTIONS,
+                'closed_with_exceptions_at' => $now,
+                'closed_with_exceptions_by' => $operator->id,
+                'completed_at' => $manifest->completed_at ?: $now,
+                'reconciliation_notes' => $cleanNotes,
+            ]);
+
+            // Idempotent exception trip payout — never double pays if already credited when entering exception status
+            app(CompensationPolicyService::class)->creditTransferCourierForManifest($manifest->fresh(), true);
+
+            $counts = $this->getReceivingCounts($manifest->id);
+
+            AuditLog::log(
+                'transfer_manifest_closed_with_exceptions',
+                $manifest,
+                null,
+                [
+                    'manifest_number' => $manifest->manifest_number,
+                    'received' => $counts['received'],
+                    'missing' => $counts['missing'],
+                    'damaged' => $counts['damaged'],
+                    'discrepancy' => $counts['discrepancy'],
+                    'reconciliation_notes' => $cleanNotes,
+                ],
+                $cleanNotes,
+                $operator->id
+            );
+
+            $this->notifyUser(
+                $manifest->senderLogistics,
+                $manifest,
+                'manifest_closed_with_exceptions',
+                "Manifest Closed With Exceptions: {$manifest->manifest_number}",
+                "Manifest {$manifest->manifest_number} closed with {$counts['received']} received, {$counts['missing']} missing, {$counts['damaged']} damaged, {$counts['discrepancy']} discrepancy."
+            );
+
+            return $manifest->fresh(['items.incidents', 'originHub', 'destinationHub', 'assignedCourier', 'closedWithExceptionsBy']);
+        });
     }
 
     protected function buildReceivingSummary(TransferManifest $manifest, TransferManifestItem $item, bool $alreadyVerified): array

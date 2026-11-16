@@ -240,9 +240,9 @@ class OrderController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        if (! in_array($order->status, ['out_for_delivery', 'delivered'], true)) {
+        if ($order->status !== 'delivered' || ($order->delivered_at === null && ! $order->proofOfDelivery()->exists())) {
             return response()->json([
-                'message' => 'Order cannot be confirmed before delivery dispatch.',
+                'message' => 'Order receipt can only be confirmed after delivery is verified by your courier.',
                 'errors' => ['status' => ['Current status is ' . $order->status]],
             ], 422);
         }

@@ -187,7 +187,10 @@ class CompensationPolicyService
                 return $existing;
             }
 
-            $parcelCount = max(1, (int) $manifest->items()->count());
+            $receivedCount = (int) $manifest->items()
+                ->where('receiving_status', \App\Models\TransferManifestItem::RECEIVING_RECEIVED)
+                ->count();
+            $parcelCount = $receivedCount > 0 ? $receivedCount : max(1, (int) $manifest->items()->count());
             $totalWeightKg = (float) $manifest->items()->with('order')->get()->sum(fn ($item) => (float) ($item->order?->shipping_weight ?? 1.0));
             $distanceKm = (float) ($manifest->distance_km ?? 0.0);
 
@@ -199,6 +202,7 @@ class CompensationPolicyService
                     'policy_name' => $policy->name,
                     'policy_version' => $policy->version,
                     'mode' => 'exception',
+                    'delivered_parcels_count' => $receivedCount,
                     'transfer_exception_rate' => $amount,
                 ];
             } else {
@@ -216,6 +220,7 @@ class CompensationPolicyService
                     'policy_version' => $policy->version,
                     'mode' => 'completed_trip',
                     'parcel_count' => $parcelCount,
+                    'delivered_parcels_count' => $receivedCount,
                     'total_weight_kg' => round($totalWeightKg, 2),
                     'distance_km' => round($distanceKm, 2),
                     'base_rate' => (float) $policy->transfer_trip_base_rate,

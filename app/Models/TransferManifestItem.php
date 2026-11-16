@@ -2,15 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TransferManifestItem extends Model
 {
-    use HasFactory;
-
     public const LOADING_PENDING = 'pending';
     public const LOADING_LOADED = 'loaded';
     public const LOADING_ISSUE = 'issue';
@@ -33,6 +30,11 @@ class TransferManifestItem extends Model
         'received_at',
         'received_by',
         'issue_notes',
+        'courier_issue_type',
+        'courier_issue_reported_at',
+        'courier_issue_evidence_path',
+        'courier_issue_location',
+        'disposition',
     ];
 
     protected function casts(): array
@@ -40,6 +42,7 @@ class TransferManifestItem extends Model
         return [
             'loaded_at' => 'datetime',
             'received_at' => 'datetime',
+            'courier_issue_reported_at' => 'datetime',
         ];
     }
 
@@ -55,7 +58,7 @@ class TransferManifestItem extends Model
 
     public function order(): BelongsTo
     {
-        return $this->belongsTo(Order::class, 'order_id');
+        return $this->belongsTo(Order::class);
     }
 
     public function loadedByUser(): BelongsTo
@@ -70,142 +73,119 @@ class TransferManifestItem extends Model
 
     public function incidents(): HasMany
     {
-        return $this->hasMany(ParcelIncident::class, 'manifest_item_id')->latest('reported_at');
+        return $this->hasMany(ParcelIncident::class, 'manifest_item_id')->latest('id');
     }
 
-    /**
-     * Resolve the Parcel Condition badge metadata separating physical receiving status from incident condition.
-     */
     public function getConditionSummaryAttribute(): array
     {
         $incidents = $this->relationLoaded('incidents')
             ? $this->incidents
             : $this->incidents()->get();
 
-        $unresolved = $incidents->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED);
-        $openDamage = $unresolved->firstWhere('incident_type', ParcelIncident::TYPE_DAMAGE);
-        $openMissing = $unresolved->firstWhere('incident_type', ParcelIncident::TYPE_MISSING);
-        $openDiscrepancy = $unresolved->firstWhere('incident_type', ParcelIncident::TYPE_DISCREPANCY);
+        $activeIncident = $incidents->first(fn (ParcelIncident $incident) => $incident->isUnresolved());
+        $latestIncident = $incidents->first();
+        $primaryIncident = $activeIncident ?? $latestIncident;
 
-        $hasAnyDamage = $incidents->contains('incident_type', ParcelIncident::TYPE_DAMAGE)
-            || $this->receiving_status === self::RECEIVING_DAMAGED;
-        $hasAnyMissing = $incidents->contains('incident_type', ParcelIncident::TYPE_MISSING)
-            || $this->receiving_status === self::RECEIVING_MISSING;
-        $hasAnyDiscrepancy = $incidents->contains('incident_type', ParcelIncident::TYPE_DISCREPANCY)
-            || $this->receiving_status === self::RECEIVING_DISCREPANCY;
+        $hasDamageReport = $incidents->contains(fn (ParcelIncident $incident) => $incident->incident_type === ParcelIncident::TYPE_DAMAGE);
+        $hasOpenDamage = $incidents->contains(fn (ParcelIncident $incident) => $incident->incident_type === ParcelIncident::TYPE_DAMAGE && $incident->isUnresolved());
+        $hasOpenMissing = $incidents->contains(fn (ParcelIncident $incident) => $incident->incident_type === ParcelIncident::TYPE_MISSING && $incident->isUnresolved());
+        $hasFoundMissing = $incidents->contains(fn (ParcelIncident $incident) => $incident->incident_type === ParcelIncident::TYPE_MISSING && $incident->investigation_status === ParcelIncident::STATUS_FOUND);
 
-        $underInvestigation = $unresolved->firstWhere('investigation_status', ParcelIncident::STATUS_UNDER_INVESTIGATION);
-        $foundMissing = $unresolved->where('incident_type', ParcelIncident::TYPE_MISSING)
-            ->firstWhere('investigation_status', ParcelIncident::STATUS_FOUND);
-
-        if ($underInvestigation) {
+        $format = function (string $key, string $label, string $classes, ?string $sublabel = null) use (
+            $activeIncident,
+            $latestIncident,
+            $primaryIncident,
+            $hasDamageReport,
+            $hasOpenDamage,
+            $hasOpenMissing,
+            $hasFoundMissing
+        ): array {
             return [
-                'key' => 'under_investigation',
-                'label' => 'Under Investigation',
-                'classes' => 'bg-amber-500/15 text-amber-800',
-                'sublabel' => ucfirst($underInvestigation->incident_type),
-                'has_open_damage' => (bool) $openDamage,
-                'has_open_missing' => (bool) $openMissing,
-                'has_damage_report' => $hasAnyDamage,
-                'has_missing_report' => $hasAnyMissing,
-                'has_found_missing' => (bool) $foundMissing,
-                'has_unresolved' => true,
-                'primary_incident' => $underInvestigation,
+                'key' => $key,
+                'label' => $label,
+                'sublabel' => $sublabel,
+                'classes' => $classes,
+                'badge_class' => $classes,
+                'active_incident' => $activeIncident,
+                'latest_incident' => $latestIncident,
+                'primary_incident' => $primaryIncident,
+                'has_damage_report' => $hasDamageReport,
+                'has_open_damage' => $hasOpenDamage,
+                'has_open_missing' => $hasOpenMissing,
+                'has_found_missing' => $hasFoundMissing,
             ];
+        };
+
+        if ($activeIncident) {
+            $sublabel = $activeIncident->incident_number
+                ? trim($activeIncident->incident_number . ($activeIncident->status_label ? ' · ' . $activeIncident->status_label : ''))
+                : $activeIncident->status_label;
+
+            if ($activeIncident->isQuarantined()) {
+                $qLabel = $activeIncident->incident_type === ParcelIncident::TYPE_DAMAGE
+                    ? 'Damage Reported (Quarantined)'
+                    : 'Quarantined';
+
+                return $format('quarantined', $qLabel, 'bg-purple-100 text-purple-800 border-purple-200', $sublabel);
+            }
+
+            if ($activeIncident->incident_type === ParcelIncident::TYPE_WRONG_HUB) {
+                return $format('wrong_hub', 'Wrong Hub / Reroute', 'bg-amber-100 text-amber-800 border-amber-200', $sublabel);
+            }
+
+            if ($activeIncident->investigation_status === ParcelIncident::STATUS_FOUND) {
+                return $format('found', 'Found / Recovery Pending', 'bg-cyan-100 text-cyan-800 border-cyan-200', $sublabel);
+            }
+
+            if ($activeIncident->incident_type === ParcelIncident::TYPE_MISSING) {
+                return $format('missing', 'Missing', 'bg-rose-100 text-rose-800 border-rose-200', $sublabel);
+            }
+
+            if (in_array($activeIncident->investigation_status, [
+                ParcelIncident::STATUS_UNDER_INVESTIGATION,
+                ParcelIncident::STATUS_AWAITING_EVIDENCE,
+                ParcelIncident::STATUS_AWAITING_DISPOSITION,
+            ], true)) {
+                return $format('under_investigation', $activeIncident->status_label, 'bg-amber-100 text-amber-800 border-amber-200', $sublabel);
+            }
+
+            return $format('damage_reported', 'Damage Reported', 'bg-orange-100 text-orange-800 border-orange-200', $sublabel);
         }
 
-        if ($foundMissing) {
-            return [
-                'key' => 'under_investigation',
-                'label' => 'Under Investigation',
-                'classes' => 'bg-amber-500/15 text-amber-800',
-                'sublabel' => 'Found — Awaiting Verification',
-                'has_open_damage' => (bool) $openDamage,
-                'has_open_missing' => true,
-                'has_damage_report' => $hasAnyDamage,
-                'has_missing_report' => true,
-                'has_found_missing' => true,
-                'has_unresolved' => true,
-                'primary_incident' => $foundMissing,
-            ];
+        if ($latestIncident && $latestIncident->isResolved()) {
+            $label = match ($latestIncident->disposition) {
+                ParcelIncident::DISPOSITION_DECLARED_LOST => 'Declared Lost',
+                ParcelIncident::DISPOSITION_DAMAGED_BEYOND_DELIVERY => 'Damaged Beyond Delivery',
+                ParcelIncident::DISPOSITION_RETURNED_TO_SENDER => 'Returned to Sender',
+                ParcelIncident::DISPOSITION_ESCALATED_TO_CLAIM => 'Claim / Refund Escalated',
+                default => 'Resolved',
+            };
+            $classes = in_array($latestIncident->disposition, [
+                ParcelIncident::DISPOSITION_DECLARED_LOST,
+                ParcelIncident::DISPOSITION_DAMAGED_BEYOND_DELIVERY,
+            ], true)
+                ? 'bg-rose-100 text-rose-800 border-rose-200'
+                : 'bg-sky-100 text-sky-800 border-sky-200';
+
+            return $format('resolved', $label, $classes, $latestIncident->incident_number);
         }
 
-        if ($openMissing || ($this->receiving_status === self::RECEIVING_MISSING && $incidents->isEmpty())) {
-            return [
-                'key' => 'missing',
-                'label' => 'Missing',
-                'classes' => 'bg-rose-600 text-white',
-                'sublabel' => $openMissing?->source_stage === ParcelIncident::STAGE_POST_RECEIPT ? 'Lost After Receipt' : null,
-                'has_open_damage' => (bool) $openDamage,
-                'has_open_missing' => true,
-                'has_damage_report' => $hasAnyDamage,
-                'has_missing_report' => true,
-                'has_found_missing' => false,
-                'has_unresolved' => true,
-                'primary_incident' => $openMissing,
-            ];
+        if ($this->receiving_status === self::RECEIVING_MISSING) {
+            return $format('missing', 'Missing', 'bg-rose-100 text-rose-800 border-rose-200');
         }
 
-        if ($openDamage || ($this->receiving_status === self::RECEIVING_DAMAGED && $incidents->isEmpty())) {
-            return [
-                'key' => 'damage_reported',
-                'label' => 'Damage Reported',
-                'classes' => 'bg-rose-500/15 text-rose-700',
-                'sublabel' => $openDamage?->source_stage === ParcelIncident::STAGE_POST_RECEIPT ? 'Post-Receipt' : null,
-                'has_open_damage' => true,
-                'has_open_missing' => false,
-                'has_damage_report' => true,
-                'has_missing_report' => $hasAnyMissing,
-                'has_found_missing' => false,
-                'has_unresolved' => true,
-                'primary_incident' => $openDamage,
-            ];
+        if (in_array($this->receiving_status, [self::RECEIVING_DAMAGED, self::RECEIVING_DISCREPANCY], true)) {
+            return $format(
+                'damage_reported',
+                $this->receiving_status === self::RECEIVING_DAMAGED ? 'Damage Reported' : 'Under Investigation',
+                'bg-orange-100 text-orange-800 border-orange-200'
+            );
         }
 
-        if ($openDiscrepancy || ($this->receiving_status === self::RECEIVING_DISCREPANCY && $incidents->isEmpty())) {
-            return [
-                'key' => 'under_investigation',
-                'label' => 'Under Investigation',
-                'classes' => 'bg-amber-500/15 text-amber-800',
-                'sublabel' => 'Discrepancy',
-                'has_open_damage' => false,
-                'has_open_missing' => false,
-                'has_damage_report' => $hasAnyDamage,
-                'has_missing_report' => $hasAnyMissing,
-                'has_found_missing' => false,
-                'has_unresolved' => true,
-                'primary_incident' => $openDiscrepancy,
-            ];
+        if ($this->loading_status === self::LOADING_ISSUE) {
+            return $format('under_investigation', 'Loading / Transit Issue', 'bg-amber-100 text-amber-800 border-amber-200');
         }
 
-        if ($incidents->isNotEmpty() || $hasAnyDamage || $hasAnyMissing || $hasAnyDiscrepancy) {
-            return [
-                'key' => 'resolved',
-                'label' => 'Resolved',
-                'classes' => 'bg-teal-500/15 text-teal-700',
-                'sublabel' => null,
-                'has_open_damage' => false,
-                'has_open_missing' => false,
-                'has_damage_report' => $hasAnyDamage,
-                'has_missing_report' => $hasAnyMissing,
-                'has_found_missing' => false,
-                'has_unresolved' => false,
-                'primary_incident' => $incidents->first(),
-            ];
-        }
-
-        return [
-            'key' => 'good',
-            'label' => 'Good',
-            'classes' => 'bg-emerald-500/15 text-emerald-700',
-            'sublabel' => null,
-            'has_open_damage' => false,
-            'has_open_missing' => false,
-            'has_damage_report' => false,
-            'has_missing_report' => false,
-            'has_found_missing' => false,
-            'has_unresolved' => false,
-            'primary_incident' => null,
-        ];
+        return $format('good', 'Good', 'bg-emerald-100 text-emerald-800 border-emerald-200');
     }
 }

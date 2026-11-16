@@ -106,6 +106,12 @@ class CodCollectionService
         return DB::transaction(function () use ($order, $courier, $pod, $collectedAmount, $idempotencyKey) {
             $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
 
+            abort_if(
+                $lockedOrder->hasUnresolvedHandlingRestrictions() || $lockedOrder->hasFinancialHold(),
+                422,
+                'COD collection cannot be recorded while the parcel has an active quarantine, loss, or incident financial hold.'
+            );
+
             $existing = CodCollection::where('order_id', $lockedOrder->id)->lockForUpdate()->first();
             if ($existing) {
                 return $existing;

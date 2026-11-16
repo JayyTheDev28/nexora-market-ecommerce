@@ -145,7 +145,7 @@ class CodFinancialService
             ->latest('delivered_at');
 
         $orders = $query->get()
-            ->filter(fn (Order $order) => $this->hasVerifiedRiderCodCash($order, $logisticsId))
+            ->filter(fn (Order $order) => $this->hasVerifiedRiderCodCash($order, $logisticsId) && ! $order->hasFinancialHold())
             ->values();
 
         if ($limit) {
@@ -549,6 +549,7 @@ class CodFinancialService
         $verifiedEarningsPayable = (float) $settledAllocations->sum('seller_payable');
 
         // 3. Earnings waiting for logistics remittance (delivered but logistics hasn't remitted or admin hasn't verified)
+        // Exclude orders held by parcel loss, quarantine, or active return dispute
         $waitingOrders = Order::where(function ($q) use ($sellerId) {
             $q->where('seller_id', $sellerId)
               ->orWhereHas('items.product', fn ($sq) => $sq->where('seller_id', $sellerId));
@@ -557,20 +558,22 @@ class CodFinancialService
         ->whereDoesntHave('settlementAllocation', function ($q) {
             $q->whereIn('status', ['available', 'paid', 'payout_requested']);
         })
-        ->get();
+        ->get()
+        ->reject(fn (Order $order) => $order->hasFinancialHold());
 
         $earningsWaitingLogistics = (float) $waitingOrders->sum(function ($order) use ($sellerId) {
             $merch = $order->merchandiseAmount();
             return round($merch * (1 - self::COMMISSION_RATE), 2);
         });
 
-        // 4. In-transit / processing earnings (orders not yet delivered)
+        // 4. In-transit / processing earnings (orders not yet delivered, excluding lost/damaged/terminated orders)
         $inTransitOrders = Order::where(function ($q) use ($sellerId) {
             $q->where('seller_id', $sellerId)
               ->orWhereHas('items.product', fn ($sq) => $sq->where('seller_id', $sellerId));
         })
         ->whereNotIn('status', ['delivered', 'completed', 'cancelled', 'returned'])
-        ->get();
+        ->get()
+        ->reject(fn (Order $order) => $order->hasFinancialHold());
 
         $pendingInTransitEarnings = (float) $inTransitOrders->sum(function ($order) use ($sellerId) {
             $merch = $order->merchandiseAmount();

@@ -161,6 +161,10 @@ Route::middleware('role:seller')->prefix('seller')->name('seller.')->group(funct
     Route::get('/returns', [Seller\ReturnController::class, 'index'])->name('returns.index');
     Route::get('/returns/{dispute}', [Seller\ReturnController::class, 'show'])->name('returns.show');
     Route::post('/returns/{dispute}/approve', [Seller\ReturnController::class, 'approve'])->name('returns.approve');
+    Route::post('/returns/{dispute}/receive', [Seller\ReturnController::class, 'markReceived'])->name('returns.receive');
+    Route::post('/returns/{dispute}/inspect', [Seller\ReturnController::class, 'inspect'])->name('returns.inspect');
+    Route::post('/returns/{dispute}/authorize-refund', [Seller\ReturnController::class, 'authorizeRefund'])->name('returns.authorize-refund');
+    Route::post('/returns/{dispute}/record-refund', [Seller\ReturnController::class, 'recordRefund'])->name('returns.record-refund');
     Route::post('/returns/{dispute}/reject', [Seller\ReturnController::class, 'reject'])->name('returns.reject');
 
     // Feedback & Reviews
@@ -227,6 +231,7 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::post('/transfers/manifests/{manifest}/items/{item}/report-damage', [Logistics\TransferController::class, 'reportManifestItemDamage'])->name('transfers.manifests.items.report-damage');
     Route::post('/transfers/manifests/{manifest}/items/{item}/report-missing', [Logistics\TransferController::class, 'reportManifestItemMissing'])->name('transfers.manifests.items.report-missing');
     Route::match(['patch', 'post'], '/transfers/manifests/{manifest}/incidents/{incident}/status', [Logistics\TransferController::class, 'updateIncidentStatus'])->name('transfers.manifests.incidents.update-status');
+    Route::post('/transfers/manifests/{manifest}/close-with-exceptions', [Logistics\TransferController::class, 'closeManifestWithExceptions'])->name('transfers.manifests.close-with-exceptions');
     Route::post('/transfers/manifests/{manifest}/parcels', [Logistics\TransferController::class, 'addParcelsToManifest'])->name('transfers.manifests.add-parcels');
     Route::delete('/transfers/manifests/{manifest}/items/{item}', [Logistics\TransferController::class, 'removeManifestParcel'])->name('transfers.manifests.remove-parcel');
     Route::post('/transfers/manifests/{manifest}/cancel', [Logistics\TransferController::class, 'cancelManifest'])->name('transfers.manifests.cancel');
@@ -264,6 +269,18 @@ Route::middleware(['role:logistics,sorting_center', 'logistics'])->prefix('logis
     Route::post('/incoming/lookup', [Logistics\IncomingController::class, 'lookup'])->name('incoming.lookup');
     Route::post('/incoming/scan', [Logistics\IncomingController::class, 'scan'])->name('incoming.scan');
     Route::post('/incoming/{order}/flag', [Logistics\IncomingController::class, 'flag'])->name('incoming.flag');
+    Route::post('/incoming/{order}/wrong-hub', [Logistics\IncomingController::class, 'flagWrongHub'])->name('incoming.wrong-hub');
+
+    // Centralized Parcel Exceptions & Quarantine Console
+    Route::get('/exceptions', [Logistics\ParcelExceptionController::class, 'index'])->name('exceptions.index');
+    Route::post('/exceptions/overdue-alerts', [Logistics\ParcelExceptionController::class, 'dispatchOverdueAlerts'])->name('exceptions.overdue-alerts');
+    Route::get('/exceptions/{incident}', [Logistics\ParcelExceptionController::class, 'show'])->name('exceptions.show');
+    Route::post('/exceptions/{incident}/assign', [Logistics\ParcelExceptionController::class, 'assign'])->name('exceptions.assign');
+    Route::post('/exceptions/{incident}/events', [Logistics\ParcelExceptionController::class, 'addEvent'])->name('exceptions.events');
+    Route::post('/exceptions/{incident}/quarantine', [Logistics\ParcelExceptionController::class, 'quarantine'])->name('exceptions.quarantine');
+    Route::post('/exceptions/{incident}/recover', [Logistics\ParcelExceptionController::class, 'recover'])->name('exceptions.recover');
+    Route::post('/exceptions/{incident}/disposition', [Logistics\ParcelExceptionController::class, 'applyDisposition'])->name('exceptions.disposition');
+    Route::post('/exceptions/{incident}/reroute', [Logistics\ParcelExceptionController::class, 'reroute'])->name('exceptions.reroute');
 
     // Sorting Hub
     Route::get('/sorting', [Logistics\SortingController::class, 'index'])->name('sorting.index');

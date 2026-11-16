@@ -284,9 +284,11 @@ class TransferController extends Controller
             'items.incidents.reporter',
             'items.incidents.resolver',
             'items.incidents.hub',
+            'items.incidents.events.actor',
             'incidents.reporter',
             'incidents.resolver',
             'incidents.hub',
+            'incidents.events.actor',
         ]);
 
         $receivingCounts = $this->manifestService->getReceivingCounts($manifest->id);
@@ -427,6 +429,9 @@ class TransferController extends Controller
             'classification' => ['required', 'string', 'in:received,missing,damaged,discrepancy'],
             'notes' => ['nullable', 'string', 'max:500'],
             'auto_scan' => ['nullable', 'boolean'],
+            'accept_into_quarantine' => ['nullable', 'boolean'],
+            'damage_type' => ['nullable', 'string', 'max:50'],
+            'evidence_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $trackingNumber = Order::normalizeScanIdentifier($validated['tracking_number']);
@@ -452,7 +457,10 @@ class TransferController extends Controller
                 $validated['classification'],
                 $request->user(),
                 $validated['notes'] ?? null,
-                $autoScan
+                $autoScan,
+                $request->boolean('accept_into_quarantine', false),
+                $request->file('evidence_photo'),
+                $validated['damage_type'] ?? null
             );
         } catch (HttpExceptionInterface $e) {
             if (! $request->expectsJson()) {
@@ -632,6 +640,9 @@ class TransferController extends Controller
         $validated = $request->validate([
             'investigation_status' => ['required', 'string', "in:{$statuses}"],
             'resolution_notes' => ['nullable', 'string', 'max:1000'],
+            'disposition' => ['nullable', 'string'],
+            'recovery_location' => ['nullable', 'string', 'max:255'],
+            'evidence_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $updated = $this->incidentService->updateIncidentStatus(
@@ -639,7 +650,10 @@ class TransferController extends Controller
             $request->user(),
             $validated['investigation_status'],
             $validated['resolution_notes'] ?? null,
-            $manifest
+            $manifest,
+            $validated['disposition'] ?? null,
+            $validated['recovery_location'] ?? null,
+            $request->file('evidence_photo')
         );
 
         $message = "Incident for parcel {$updated->tracking_number} updated to {$updated->status_label}.";
@@ -648,6 +662,33 @@ class TransferController extends Controller
             return response()->json([
                 'message' => $message,
                 'incident' => $updated,
+            ]);
+        }
+
+        return back()->with('status', $message);
+    }
+
+    /**
+     * Controlled Closed With Exceptions manifest closure (Phase 6).
+     */
+    public function closeManifestWithExceptions(Request $request, TransferManifest $manifest): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'reconciliation_notes' => ['required', 'string', 'min:5', 'max:2000'],
+        ]);
+
+        $closed = $this->manifestService->closeWithExceptions(
+            $manifest,
+            $request->user(),
+            $validated['reconciliation_notes']
+        );
+
+        $message = "Manifest {$closed->manifest_number} closed with exceptions cleanly (no missing/damaged items fabricated as received).";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'manifest' => $closed,
             ]);
         }
 

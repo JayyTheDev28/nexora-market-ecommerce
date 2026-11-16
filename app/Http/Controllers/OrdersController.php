@@ -30,7 +30,23 @@ class OrdersController extends Controller
         $activeTab = $request->query('tab', 'all');
 
         $query = $user->orders()
-            ->with(['items.product', 'seller.sellerProfile', 'dispute', 'review', 'statusHistory'])
+            ->with([
+                'items.product',
+                'seller.sellerProfile',
+                'dispute',
+                'review',
+                'statusHistory',
+                'originHub',
+                'destinationHub',
+                'currentHub',
+                'reroutedFromHub',
+                'transfers.senderHub',
+                'transfers.receiverHub',
+                'manifestItems.manifest.originHub',
+                'manifestItems.manifest.destinationHub',
+                'incidents',
+                'proofOfDelivery',
+            ])
             ->latest('placed_at');
 
         // Apply Tab Filter (Rule B10 - System is exclusively COD)
@@ -81,7 +97,10 @@ class OrdersController extends Controller
             'return_refund' => $allOrders->filter(fn ($o) => $o->status === 'returned' || $o->dispute !== null)->count(),
         ];
 
-        return view('buyer.orders.index', compact('orders', 'activeTab', 'counts'));
+        $trackingService = app(\App\Services\ParcelTrackingService::class);
+        $trackingSummaries = $orders->mapWithKeys(fn (Order $order) => [$order->id => $trackingService->buildBuyerTrackingSummary($order)]);
+
+        return view('buyer.orders.index', compact('orders', 'activeTab', 'counts', 'trackingSummaries'));
     }
 
     /**
@@ -133,7 +152,7 @@ class OrdersController extends Controller
     {
         $this->authorizeOwner($request, $order);
 
-        abort_unless(in_array($order->status, ['out_for_delivery', 'delivered'], true), 400);
+        abort_unless($order->status === 'delivered' && ($order->delivered_at !== null || $order->proofOfDelivery()->exists()), 422, 'Order receipt can only be confirmed after courier completes delivery verification.');
 
         DB::transaction(function () use ($order, $request) {
             $order->update([

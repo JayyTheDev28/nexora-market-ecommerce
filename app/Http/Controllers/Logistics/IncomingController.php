@@ -12,6 +12,7 @@ use App\Models\TransferManifest;
 use App\Models\TransferManifestItem;
 use App\Services\InterRegionLogisticsService;
 use App\Services\OrderLogisticsService;
+use App\Services\ParcelIncidentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -423,6 +424,12 @@ class IncomingController extends Controller
                     'outcome' => 'wrong_hub',
                     'status' => 422,
                     'field' => 'hub_id',
+                    'order_id' => $order->id,
+                    'tracking_number' => $order->tracking_number ?? $order->order_number,
+                    'expected_hub_name' => $order->destinationHub?->name ?? $order->originHub?->name,
+                    'actual_hub_id' => $selectedHub?->id,
+                    'can_flag_wrong_hub' => $selectedHub !== null,
+                    'wrong_hub_url' => route('logistics.incoming.wrong-hub', $order),
                     'message' => $hubMismatchError,
                 ];
             }
@@ -725,5 +732,44 @@ class IncomingController extends Controller
         ]);
 
         return back()->with('status', "Recorded issue note on parcel {$order->order_number}.");
+    }
+
+    /**
+     * Phase 9: Log a formal Wrong-Hub / Misrouted Parcel incident without silently overwriting historical hubs.
+     */
+    public function flagWrongHub(Request $request, Order $order): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'actual_hub_id' => ['required', 'integer', 'exists:hubs,id'],
+            'notes' => ['required', 'string', 'min:5', 'max:1000'],
+            'location' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $actualHub = Hub::findOrFail((int) $validated['actual_hub_id']);
+        $companyId = $request->user()->logisticsCompanyId();
+        abort_unless((int) $actualHub->logistics_company_id === $companyId || $request->user()->role === 'admin', 403);
+
+        $expectedHub = $order->destinationHub ?? $order->originHub;
+
+        $incident = app(ParcelIncidentService::class)->recordWrongHubIncident(
+            $order,
+            $expectedHub,
+            $actualHub,
+            $request->user(),
+            $validated['notes'],
+            $validated['location'] ?? $actualHub->name
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => "Logged Wrong-Hub incident {$incident->incident_number} for parcel {$order->tracking_number}.",
+                'incident' => $incident,
+                'redirect_url' => route('logistics.exceptions.show', $incident),
+            ], 201);
+        }
+
+        return redirect()
+            ->route('logistics.exceptions.show', $incident)
+            ->with('status', "Logged Wrong-Hub incident {$incident->incident_number}. Authorize a reroute leg below.");
     }
 }

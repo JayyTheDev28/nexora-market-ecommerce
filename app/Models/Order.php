@@ -15,6 +15,7 @@ class Order extends Model
         'address_id',
         'address_snapshot',
         'status',
+        'handling_status',
         'payment_method',
         'payment_status',
         'payment_expires_at',
@@ -44,6 +45,8 @@ class Order extends Model
         'origin_hub_id',
         'destination_hub_id',
         'current_hub_id',
+        'rerouted_from_hub_id',
+        'reroute_count',
         'pickup_zone_id',
         'delivery_zone_id',
         'delivery_area_id',
@@ -219,6 +222,11 @@ class Order extends Model
         return $this->belongsTo(Hub::class, 'current_hub_id');
     }
 
+    public function reroutedFromHub()
+    {
+        return $this->belongsTo(Hub::class, 'rerouted_from_hub_id');
+    }
+
     public function manifestItems()
     {
         return $this->hasMany(TransferManifestItem::class);
@@ -226,24 +234,61 @@ class Order extends Model
 
     public function incidents()
     {
-        return $this->hasMany(ParcelIncident::class)->latest('reported_at');
+        return $this->hasMany(ParcelIncident::class)->latest('reported_at')->latest('id');
     }
 
     public function unresolvedIncidents()
     {
         return $this->hasMany(ParcelIncident::class)
-            ->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED)
+            ->whereIn('investigation_status', ParcelIncident::UNRESOLVED_STATUSES)
             ->latest('reported_at');
     }
 
     public function hasUnresolvedHandlingRestrictions(): bool
     {
-        if ($this->relationLoaded('unresolvedIncidents')) {
-            return $this->unresolvedIncidents->isNotEmpty();
+        if (in_array($this->handling_status, [
+            ParcelIncident::RESTRICTION_QUARANTINED,
+            ParcelIncident::RESTRICTION_HOLD_DISPATCH,
+            ParcelIncident::RESTRICTION_RETURN_TO_SENDER,
+            ParcelIncident::RESTRICTION_REROUTE_REQUIRED,
+            ParcelIncident::RESTRICTION_TERMINATED_LOST,
+            ParcelIncident::RESTRICTION_TERMINATED_DAMAGED,
+        ], true)) {
+            return true;
+        }
+
+        if ($this->relationLoaded('unresolvedIncidents') && $this->unresolvedIncidents->isNotEmpty()) {
+            return true;
         }
 
         return ParcelIncident::where('order_id', $this->id)
-            ->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED)
+            ->where(function ($q) {
+                $q->whereIn('investigation_status', ParcelIncident::UNRESOLVED_STATUSES)
+                    ->orWhereIn('disposition', [
+                        ParcelIncident::DISPOSITION_ACCEPTED_INTO_QUARANTINE,
+                        ParcelIncident::DISPOSITION_RETURNED_TO_SENDER,
+                        ParcelIncident::DISPOSITION_DECLARED_LOST,
+                        ParcelIncident::DISPOSITION_DAMAGED_BEYOND_DELIVERY,
+                        ParcelIncident::DISPOSITION_ESCALATED_TO_CLAIM,
+                    ]);
+            })
+            ->exists();
+    }
+
+    public function isQuarantined(): bool
+    {
+        return $this->handling_status === ParcelIncident::RESTRICTION_QUARANTINED
+            || ParcelIncident::where('order_id', $this->id)->quarantined()->whereIn('investigation_status', ParcelIncident::UNRESOLVED_STATUSES)->exists();
+    }
+
+    public function hasFinancialHold(): bool
+    {
+        return ParcelIncident::where('order_id', $this->id)
+            ->whereIn('financial_hold_status', [
+                ParcelIncident::FIN_HOLD_ON_HOLD,
+                ParcelIncident::FIN_HOLD_CLAIM_ESCALATED,
+                ParcelIncident::FIN_HOLD_LOSS_WRITTEN_OFF,
+            ])
             ->exists();
     }
 
@@ -251,7 +296,7 @@ class Order extends Model
     {
         return ParcelIncident::where('order_id', $this->id)
             ->where('incident_type', ParcelIncident::TYPE_MISSING)
-            ->where('investigation_status', '!=', ParcelIncident::STATUS_RESOLVED)
+            ->whereIn('investigation_status', ParcelIncident::UNRESOLVED_STATUSES)
             ->exists();
     }
 

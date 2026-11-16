@@ -653,12 +653,22 @@
                     ? '<div class="mt-2"><a href="' + escapeHtml(payload.manifest.url) + '" class="inline-flex items-center gap-1.5 rounded-xl bg-[#d97706] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#b45309]">Open Manifest ' + escapeHtml(payload.manifest.manifest_number) + '</a></div>'
                     : '';
 
+                const wrongHubBtn = (outcome === 'wrong_hub' && payload.can_flag_wrong_hub && payload.wrong_hub_url)
+                    ? `<form method="POST" action="${escapeHtml(payload.wrong_hub_url)}" class="mt-2 flex flex-wrap gap-2">
+                            <input type="hidden" name="_token" value="${escapeHtml(csrfToken)}">
+                            <input type="hidden" name="actual_hub_id" value="${escapeHtml(String(payload.actual_hub_id || ''))}">
+                            <input type="hidden" name="notes" value="Misrouted parcel scanned at unexpected hub during inbound scan.">
+                            <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-amber-700 cursor-pointer">Log Wrong-Hub Incident &amp; Reroute</button>
+                       </form>`
+                    : '';
+
                 feedbackBox.classList.remove('hidden');
                 feedbackBox.className = 'mt-4 rounded-2xl border-2 border-[#fca5a5] bg-[#fef2f2] p-4 text-xs text-[#991b1b]';
                 feedbackBox.innerHTML = `
                     <div class="font-extrabold text-sm">${escapeHtml(outcome === 'manifest_required' ? 'MANIFEST REQUIRED' : (outcome === 'wrong_hub' ? 'WRONG HUB' : 'SCAN REJECTED'))}</div>
                     <div class="mt-1">${escapeHtml(msg)}</div>
                     ${manifestBtn}
+                    ${wrongHubBtn}
                 `;
                 scheduleResume(3000);
             } catch (err) {

@@ -18,6 +18,13 @@
     $pendingRidersCount = \App\Models\User::where('role', 'courier')->where('approval_status', 'pending')->count();
 
     $incomingTransfersCount = \App\Models\HubTransfer::where('receiver_logistics_id', $user->id)->where('status', 'in_transit')->count();
+    $openExceptionsCount = \App\Models\ParcelIncident::unresolved()
+        ->where(function ($q) use ($user) {
+            $companyId = $user->logisticsCompanyId();
+            $q->where('logistics_company_id', $companyId)
+                ->orWhereHas('manifest', fn ($mq) => $mq->where('sender_logistics_id', $companyId)->orWhere('receiver_logistics_id', $companyId));
+        })
+        ->count();
 
     $sections = [
         [
@@ -35,6 +42,7 @@
                 'deliveries' => ['label' => 'Delivery Tracking', 'icon' => 'local_shipping', 'url' => route('logistics.deliveries.index'), 'badge' => null],
                 'pickups' => ['label' => 'Merchant Pickups', 'icon' => 'hail', 'url' => route('logistics.pickups.index'), 'badge' => null],
                 'transfers' => ['label' => 'Hub Transfers', 'icon' => 'sync_alt', 'url' => route('logistics.transfers.index'), 'badge' => $incomingTransfersCount ?: null, 'badgeColor' => 'bg-indigo-600 text-white'],
+                'exceptions' => ['label' => 'Parcel Exceptions', 'icon' => 'report_problem', 'url' => route('logistics.exceptions.index'), 'badge' => $openExceptionsCount ?: null, 'badgeColor' => 'bg-rose-600 text-white'],
             ],
         ],
         [

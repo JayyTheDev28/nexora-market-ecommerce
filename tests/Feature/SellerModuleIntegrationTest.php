@@ -603,21 +603,52 @@ class SellerModuleIntegrationTest extends TestCase
             'status' => 'open',
         ]);
 
-        // Approve return with return instructions and restock
+        // Stage 1: Approve return with return instructions — must NOT prematurely restock before receipt & inspection
         $approveResponse = $this->actingAs($this->seller)->post(route('seller.returns.approve', $dispute), [
             'seller_response' => 'We accept the return. Please pack it securely.',
             'return_instructions' => 'Drop off parcel at J&T branch using Return ID #123.',
-            'restore_stock' => 1,
+            'return_tracking_number' => 'RET-TRK-123',
         ]);
 
         $approveResponse->assertRedirect(route('seller.returns.show', $dispute));
         $dispute->refresh();
         $this->assertEquals('approved', $dispute->seller_status);
+        $this->assertEquals('approved_awaiting_return', $dispute->return_stage);
         $this->assertEquals('Drop off parcel at J&T branch using Return ID #123.', $dispute->return_instructions);
 
+        // Inventory must remain 5 prior to physical receipt & inspection
         $product->refresh();
-        // Restocked 1 back: 5 + 1 = 6
+        $this->assertEquals(5, $product->stock);
+
+        // Stage 2 & 3: Record physical receipt, inspect condition, and approve restock
+        $this->actingAs($this->seller)->post(route('seller.returns.receive', $dispute), [
+            'return_tracking_number' => 'RET-TRK-123',
+        ])->assertRedirect(route('seller.returns.show', $dispute));
+
+        $this->actingAs($this->seller)->post(route('seller.returns.inspect', $dispute), [
+            'inspection_condition' => 'restockable',
+            'inspection_notes' => 'Item arrived intact and clean for resale.',
+            'restock_approved' => 1,
+        ])->assertRedirect(route('seller.returns.show', $dispute));
+
+        $product->refresh();
+        // Restocked 1 back ONLY after physical receipt + inspection: 5 + 1 = 6
         $this->assertEquals(6, $product->stock);
+
+        // Stage 4 & 5: Authorize & record verified refund reference
+        $this->actingAs($this->seller)->post(route('seller.returns.authorize-refund', $dispute), [
+            'refund_amount' => 500,
+            'refund_method' => 'gcash',
+            'refund_notes' => 'Full refund authorized after inspection.',
+        ])->assertRedirect(route('seller.returns.show', $dispute));
+
+        $this->actingAs($this->seller)->post(route('seller.returns.record-refund', $dispute), [
+            'refund_reference' => 'GCASH-REF-9901',
+        ])->assertRedirect(route('seller.returns.show', $dispute));
+
+        $dispute->refresh();
+        $this->assertEquals('refund_recorded', $dispute->return_stage);
+        $this->assertEquals('resolved', $dispute->status);
 
         // Test dispute rejection with reason
         $dispute2 = Dispute::create([

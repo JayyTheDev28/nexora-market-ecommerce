@@ -2,15 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TransferManifest extends Model
 {
-    use HasFactory;
-
     public const STATUS_DRAFT = 'draft';
     public const STATUS_LOADING = 'loading';
     public const STATUS_READY_TO_DISPATCH = 'ready_to_dispatch';
@@ -18,6 +15,7 @@ class TransferManifest extends Model
     public const STATUS_ARRIVED = 'arrived';
     public const STATUS_RECEIVING = 'receiving';
     public const STATUS_COMPLETED = 'completed';
+    public const STATUS_CLOSED_WITH_EXCEPTIONS = 'closed_with_exceptions';
     public const STATUS_EXCEPTION = 'exception';
     public const STATUS_CANCELLED = 'cancelled';
 
@@ -32,14 +30,49 @@ class TransferManifest extends Model
     ];
 
     public const ALLOWED_TRANSITIONS = [
-        self::STATUS_DRAFT => [self::STATUS_LOADING, self::STATUS_READY_TO_DISPATCH, self::STATUS_CANCELLED],
-        self::STATUS_LOADING => [self::STATUS_READY_TO_DISPATCH, self::STATUS_IN_TRANSIT, self::STATUS_CANCELLED],
-        self::STATUS_READY_TO_DISPATCH => [self::STATUS_IN_TRANSIT, self::STATUS_CANCELLED],
-        self::STATUS_IN_TRANSIT => [self::STATUS_ARRIVED, self::STATUS_EXCEPTION],
-        self::STATUS_ARRIVED => [self::STATUS_RECEIVING, self::STATUS_EXCEPTION, self::STATUS_COMPLETED],
-        self::STATUS_RECEIVING => [self::STATUS_COMPLETED, self::STATUS_EXCEPTION],
-        self::STATUS_EXCEPTION => [self::STATUS_RECEIVING, self::STATUS_COMPLETED],
+        self::STATUS_DRAFT => [
+            self::STATUS_LOADING,
+            self::STATUS_READY_TO_DISPATCH,
+            self::STATUS_CANCELLED,
+        ],
+        self::STATUS_LOADING => [
+            self::STATUS_READY_TO_DISPATCH,
+            self::STATUS_IN_TRANSIT,
+            self::STATUS_EXCEPTION,
+            self::STATUS_CANCELLED,
+        ],
+        self::STATUS_READY_TO_DISPATCH => [
+            self::STATUS_IN_TRANSIT,
+            self::STATUS_EXCEPTION,
+            self::STATUS_CANCELLED,
+        ],
+        self::STATUS_IN_TRANSIT => [
+            self::STATUS_ARRIVED,
+            self::STATUS_EXCEPTION,
+        ],
+        self::STATUS_ARRIVED => [
+            self::STATUS_RECEIVING,
+            self::STATUS_COMPLETED,
+            self::STATUS_CLOSED_WITH_EXCEPTIONS,
+            self::STATUS_EXCEPTION,
+        ],
+        self::STATUS_RECEIVING => [
+            self::STATUS_COMPLETED,
+            self::STATUS_CLOSED_WITH_EXCEPTIONS,
+            self::STATUS_EXCEPTION,
+        ],
+        self::STATUS_EXCEPTION => [
+            self::STATUS_LOADING,
+            self::STATUS_READY_TO_DISPATCH,
+            self::STATUS_IN_TRANSIT,
+            self::STATUS_ARRIVED,
+            self::STATUS_RECEIVING,
+            self::STATUS_COMPLETED,
+            self::STATUS_CLOSED_WITH_EXCEPTIONS,
+            self::STATUS_CANCELLED,
+        ],
         self::STATUS_COMPLETED => [],
+        self::STATUS_CLOSED_WITH_EXCEPTIONS => [],
         self::STATUS_CANCELLED => [],
     ];
 
@@ -51,14 +84,17 @@ class TransferManifest extends Model
         'destination_hub_id',
         'assigned_courier_id',
         'vehicle_plate_number',
+        'distance_km',
         'status',
         'total_parcels',
-        'distance_km',
         'dispatched_at',
         'arrived_at',
         'completed_at',
+        'closed_with_exceptions_at',
+        'closed_with_exceptions_by',
         'created_by',
         'notes',
+        'reconciliation_notes',
     ];
 
     protected function casts(): array
@@ -69,6 +105,7 @@ class TransferManifest extends Model
             'dispatched_at' => 'datetime',
             'arrived_at' => 'datetime',
             'completed_at' => 'datetime',
+            'closed_with_exceptions_at' => 'datetime',
         ];
     }
 
@@ -78,13 +115,16 @@ class TransferManifest extends Model
             return true;
         }
 
-        $allowed = self::ALLOWED_TRANSITIONS[$this->status] ?? [];
-        return in_array($newStatus, $allowed, true);
+        return in_array($newStatus, self::ALLOWED_TRANSITIONS[$this->status] ?? [], true);
     }
 
     public function isTerminal(): bool
     {
-        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_CANCELLED], true);
+        return in_array($this->status, [
+            self::STATUS_COMPLETED,
+            self::STATUS_CLOSED_WITH_EXCEPTIONS,
+            self::STATUS_CANCELLED,
+        ], true);
     }
 
     public function getIsInternalAttribute(): bool
@@ -94,7 +134,7 @@ class TransferManifest extends Model
 
     public function getTransferTypeAttribute(): string
     {
-        return $this->is_internal ? 'internal' : 'inter_company';
+        return $this->is_internal ? 'internal' : 'external';
     }
 
     public function senderLogistics(): BelongsTo
@@ -127,6 +167,11 @@ class TransferManifest extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function closedWithExceptionsBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_with_exceptions_by');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(TransferManifestItem::class, 'manifest_id');
@@ -139,6 +184,6 @@ class TransferManifest extends Model
 
     public function incidents(): HasMany
     {
-        return $this->hasMany(ParcelIncident::class, 'manifest_id')->latest('reported_at');
+        return $this->hasMany(ParcelIncident::class, 'manifest_id');
     }
 }

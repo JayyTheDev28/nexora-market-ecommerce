@@ -242,8 +242,10 @@ class TransferCourierController extends Controller
 
         $validated = $request->validate([
             'tracking_number' => ['required', 'string', 'max:100'],
-            'issue_type' => ['required', 'string', 'in:missing,damaged'],
+            'issue_type' => ['required', 'string', 'in:missing,damaged,discrepancy'],
             'notes' => ['required', 'string', 'max:500'],
+            'last_known_location' => ['nullable', 'string', 'max:255'],
+            'evidence_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $item = $this->manifestService->reportCourierIssue(
@@ -251,7 +253,9 @@ class TransferCourierController extends Controller
             $validated['tracking_number'],
             $validated['issue_type'],
             $validated['notes'],
-            $courier
+            $courier,
+            $validated['last_known_location'] ?? null,
+            $request->file('evidence_photo')
         );
 
         return response()->json([
@@ -416,6 +420,10 @@ class TransferCourierController extends Controller
 
     protected function formatInventoryItem(TransferManifestItem $item, ?TransferManifest $manifest): array
     {
+        $item->loadMissing(['incidents.events']);
+        $latestIncident = $item->incidents->sortByDesc('id')->first();
+        $activeIncident = $item->incidents->first(fn ($inc) => $inc->isUnresolved()) ?? $latestIncident;
+
         return [
             'id' => $item->id,
             'manifest_id' => $item->manifest_id,
@@ -429,6 +437,29 @@ class TransferCourierController extends Controller
             'receiving_status' => $item->receiving_status,
             'received_at' => $item->received_at?->toIso8601String(),
             'issue_notes' => $item->issue_notes,
+            'disposition' => $item->disposition,
+            'incident' => $activeIncident ? [
+                'id' => $activeIncident->id,
+                'incident_number' => $activeIncident->incident_number,
+                'incident_type' => $activeIncident->incident_type,
+                'investigation_status' => $activeIncident->investigation_status,
+                'status_label' => $activeIncident->status_label,
+                'disposition' => $activeIncident->disposition,
+                'disposition_label' => $activeIncident->disposition_label,
+                'last_known_location' => $activeIncident->last_known_location,
+                'evidence_url' => $activeIncident->evidence_url ? url($activeIncident->evidence_url) : null,
+                'reported_at' => $activeIncident->reported_at?->toIso8601String(),
+                'resolved_at' => $activeIncident->resolved_at?->toIso8601String(),
+                'events' => $activeIncident->events->map(fn ($e) => [
+                    'id' => $e->id,
+                    'event_type' => $e->event_type,
+                    'to_status' => $e->to_status,
+                    'disposition' => $e->disposition,
+                    'location' => $e->location,
+                    'notes' => $e->notes,
+                    'occurred_at' => $e->occurred_at?->toIso8601String(),
+                ])->values(),
+            ] : null,
         ];
     }
 }

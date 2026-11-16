@@ -91,9 +91,10 @@ class OrderDetailResource extends JsonResource
             'status_history' => $this->statusHistory->map(fn ($h) => [
                 'id' => $h->id,
                 'status' => $h->status,
-                'note' => $h->note,
+                'note' => app(\App\Services\ParcelTrackingService::class)->sanitizeStatusNote($h->note, (string) $h->status),
                 'changed_at' => $h->changed_at?->format('Y-m-d H:i:s'),
             ]),
+            'tracking_summary' => app(\App\Services\ParcelTrackingService::class)->buildBuyerTrackingSummary($this->resource),
             'has_dispute' => $this->dispute !== null,
             'has_review' => $this->review !== null,
             'dispute' => $this->dispute ? [

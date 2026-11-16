@@ -186,6 +186,45 @@
                                 </div>
                             @endif
 
+                            {{-- Unified Parcel Tracking & Hub Transfer Milestones (Phase 7) --}}
+                            @php
+                                $tracking = $trackingSummaries[$order->id] ?? null;
+                            @endphp
+                            @if($tracking)
+                                @if(!empty($tracking['exception_badge']))
+                                    <div class="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start justify-between gap-2">
+                                        <div>
+                                            <span class="font-bold">{{ $tracking['exception_badge'] }}</span>
+                                            <p class="text-[11px] text-amber-800 mt-0.5">{{ $tracking['exception_message'] }}</p>
+                                        </div>
+                                        @if(!empty($tracking['exception_reference']))
+                                            <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-900">{{ $tracking['exception_reference'] }}</span>
+                                        @endif
+                                    </div>
+                                @endif
+                                @if(!empty($tracking['milestones']))
+                                    <div class="mt-2 p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/60 space-y-1.5">
+                                        <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Shipment &amp; Transfer Timeline</p>
+                                        <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                                            @foreach(array_reverse($tracking['milestones']) as $milestone)
+                                                <div class="flex items-start justify-between gap-2 text-[11px]">
+                                                    <div class="min-w-0">
+                                                        <span class="font-semibold text-on-surface">{{ $milestone['label'] }}</span>
+                                                        @if(!empty($milestone['hub']))
+                                                            <span class="text-on-surface-variant">({{ $milestone['hub'] }})</span>
+                                                        @endif
+                                                        @if(!empty($milestone['detail']))
+                                                            <span class="block text-[10px] text-on-surface-variant">{{ $milestone['detail'] }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <span class="text-[10px] text-outline shrink-0 font-mono">{{ \Carbon\Carbon::parse($milestone['timestamp'])->format('M d H:i') }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+                            @endif
+
                             {{-- Return/Dispute Notice (Rule B12) --}}
                             @if($dispute)
                                 <div class="mt-2 p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-900 flex flex-col gap-1.5">
@@ -268,8 +307,8 @@
                                     </button>
                                 @endif
 
-                                {{-- Confirm Delivery Receipt --}}
-                                @if(in_array($order->status, ['out_for_delivery', 'delivered']))
+                                {{-- Confirm Delivery Receipt (Only allowed after verified delivery) --}}
+                                @if($order->status === 'delivered')
                                     <form method="POST" action="{{ route('buyer.orders.confirm-receipt', $order->id) }}">
                                         @csrf
                                         <button

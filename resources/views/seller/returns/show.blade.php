@@ -125,33 +125,36 @@
 
             </div>
 
-            {{-- Decision & Resolution Panel --}}
+            {{-- Decision & Multi-Stage Return Resolution Panel --}}
             <div class="space-y-6">
 
                 <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 shadow-sm space-y-4">
-                    <h2 class="font-headline-sm text-sm font-bold text-on-surface border-b border-outline-variant pb-2">
-                        Merchant Decision
-                    </h2>
+                    <div class="flex items-center justify-between border-b border-outline-variant pb-2">
+                        <h2 class="font-headline-sm text-sm font-bold text-on-surface">
+                            Return &amp; Refund Workflow
+                        </h2>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-primary/10 text-primary">
+                            {{ str_replace('_', ' ', $dispute->return_stage ?? 'requested') }}
+                        </span>
+                    </div>
 
                     @if($dispute->seller_status === 'pending')
                         <div class="space-y-4">
-                            {{-- Approve Action --}}
+                            {{-- Stage 1: Approve Return Request (NO premature restock) --}}
                             <form method="POST" action="{{ route('seller.returns.approve', $dispute) }}" class="space-y-3 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
                                 @csrf
                                 <h3 class="font-bold text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
                                     <span class="material-symbols-outlined text-[16px]">check_circle</span>
-                                    Approve Return / Refund
+                                    Stage 1: Approve Return Request
                                 </h3>
+                                <p class="text-[11px] text-on-surface-variant">Approving authorizes the return shipment only. Inventory restock and refund remain held until physical parcel receipt and condition inspection are recorded.</p>
                                 <div>
                                     <label class="block text-[11px] font-semibold text-on-surface mb-1">Return Instructions for Buyer</label>
-                                    <textarea name="return_instructions" rows="2" placeholder="e.g. Please ship back using any courier to our warehouse at: ..." class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs text-on-surface focus:outline-none"></textarea>
+                                    <textarea name="return_instructions" rows="2" placeholder="e.g. Please pack securely and ship to..." class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs text-on-surface focus:outline-none"></textarea>
                                 </div>
-                                <label class="flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-on-surface">
-                                    <input type="checkbox" name="restore_stock" value="1" checked class="rounded text-primary focus:ring-primary w-4 h-4">
-                                    Restore product inventory stock
-                                </label>
-                                <button type="submit" onclick="return confirm('Approve this return request?');" class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors">
-                                    Approve & Send Instructions
+                                <input type="text" name="return_tracking_number" placeholder="Optional Return Tracking #" class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs text-on-surface focus:outline-none">
+                                <button type="submit" onclick="return confirm('Approve return request and await physical parcel receipt?');" class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors">
+                                    Approve Return &amp; Send Instructions
                                 </button>
                             </form>
 
@@ -171,15 +174,82 @@
                                 </button>
                             </form>
                         </div>
+                    @elseif($dispute->seller_status === 'approved')
+                        <div class="space-y-4 text-xs">
+                            <div class="p-3 rounded-xl bg-surface-container-low space-y-1">
+                                <p class="font-bold text-on-surface">Approved Summary</p>
+                                @if($dispute->return_instructions)
+                                    <p><strong>Instructions:</strong> {{ $dispute->return_instructions }}</p>
+                                @endif
+                                @if($dispute->return_tracking_number)
+                                    <p><strong>Return Tracking:</strong> <span class="font-mono">{{ $dispute->return_tracking_number }}</span></p>
+                                @endif
+                            </div>
+
+                            {{-- Stage 2: Physical Return Receipt --}}
+                            @if($dispute->return_received_at === null)
+                                <form method="POST" action="{{ route('seller.returns.receive', $dispute) }}" class="space-y-3 p-4 rounded-xl border border-sky-500/30 bg-sky-500/5">
+                                    @csrf
+                                    <h3 class="font-bold text-xs text-sky-800">Stage 2: Confirm Physical Return Receipt</h3>
+                                    <input type="text" name="return_tracking_number" value="{{ $dispute->return_tracking_number }}" placeholder="Return parcel tracking # (optional)" class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs">
+                                    <button type="submit" class="w-full py-2 px-3 rounded-lg bg-sky-600 text-white font-bold text-xs">Mark Parcel Physically Received</button>
+                                </form>
+                            @elseif($dispute->inspected_at === null)
+                                {{-- Stage 3: Inspection & Conditional Restock --}}
+                                <form method="POST" action="{{ route('seller.returns.inspect', $dispute) }}" class="space-y-3 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                                    @csrf
+                                    <h3 class="font-bold text-xs text-amber-800">Stage 3: Physical Inspection &amp; Restock Decision</h3>
+                                    <select name="inspection_condition" required class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs">
+                                        <option value="restockable">Restockable / Good Condition</option>
+                                        <option value="damaged_resellable">Minor Packaging Damage (Resellable)</option>
+                                        <option value="damaged_unusable">Damaged Beyond Resale</option>
+                                        <option value="missing_item">Item Missing / Empty Return</option>
+                                    </select>
+                                    <textarea name="inspection_notes" rows="2" required placeholder="Inspection observations..." class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs"></textarea>
+                                    <label class="flex items-center gap-2 font-semibold text-on-surface">
+                                        <input type="checkbox" name="restock_approved" value="1" class="rounded">
+                                        Restore verified items to product stock
+                                    </label>
+                                    <button type="submit" class="w-full py-2 px-3 rounded-lg bg-amber-600 text-white font-bold text-xs">Complete Inspection</button>
+                                </form>
+                            @elseif($dispute->refund_authorized_at === null)
+                                {{-- Stage 4: Authorize Refund --}}
+                                <form method="POST" action="{{ route('seller.returns.authorize-refund', $dispute) }}" class="space-y-3 p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/5">
+                                    @csrf
+                                    <h3 class="font-bold text-xs text-indigo-800">Stage 4: Authorize Refund</h3>
+                                    <input type="number" step="0.01" name="refund_amount" value="{{ $dispute->order->total }}" required class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs">
+                                    <select name="refund_method" required class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs">
+                                        <option value="gcash">GCash</option>
+                                        <option value="maya">Maya</option>
+                                        <option value="bank_transfer">Bank Transfer</option>
+                                        <option value="manual_cash">Manual Cash Adjustment</option>
+                                    </select>
+                                    <textarea name="refund_notes" rows="2" placeholder="Refund authorization note..." class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs"></textarea>
+                                    <button type="submit" class="w-full py-2 px-3 rounded-lg bg-indigo-600 text-white font-bold text-xs">Authorize Refund</button>
+                                </form>
+                            @elseif($dispute->refund_recorded_at === null)
+                                {{-- Stage 5: Record Manual Payout Reference --}}
+                                <form method="POST" action="{{ route('seller.returns.record-refund', $dispute) }}" class="space-y-3 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+                                    @csrf
+                                    <h3 class="font-bold text-xs text-emerald-800">Stage 5: Record Verified Refund Reference</h3>
+                                    <p class="text-[11px] text-on-surface-variant">Authorized Amount: <strong>₱{{ number_format((float) $dispute->refund_amount, 2) }}</strong> via {{ strtoupper((string) $dispute->refund_method) }}</p>
+                                    <input type="text" name="refund_reference" required placeholder="External transfer / receipt reference #" class="w-full rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs">
+                                    <button type="submit" class="w-full py-2 px-3 rounded-lg bg-emerald-600 text-white font-bold text-xs">Confirm Refund Recorded &amp; Close</button>
+                                </form>
+                            @else
+                                <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+                                    <p class="font-bold">Return &amp; Refund Completed</p>
+                                    <p>Condition: {{ str_replace('_', ' ', (string) $dispute->inspection_condition) }} • Restocked: {{ $dispute->restock_approved ? 'Yes' : 'No' }}</p>
+                                    <p>Refund: ₱{{ number_format((float) $dispute->refund_amount, 2) }} ({{ strtoupper((string) $dispute->refund_method) }}) • Ref: <span class="font-mono font-bold">{{ $dispute->refund_reference }}</span></p>
+                                </div>
+                            @endif
+                        </div>
                     @else
                         <div class="p-4 rounded-xl bg-surface-container-low text-xs space-y-2">
                             <p class="font-bold text-on-surface">Recorded Decision:</p>
                             <p class="capitalize"><strong class="text-on-surface">Status:</strong> {{ $dispute->seller_status }}</p>
                             @if($dispute->seller_response)
                                 <p><strong class="text-on-surface">Note:</strong> {{ $dispute->seller_response }}</p>
-                            @endif
-                            @if($dispute->return_instructions)
-                                <p><strong class="text-on-surface">Instructions:</strong> {{ $dispute->return_instructions }}</p>
                             @endif
                             @if($dispute->seller_response_at)
                                 <p class="text-[10px] text-on-surface-variant">Recorded on {{ $dispute->seller_response_at->format('M j, Y H:i') }}</p>

@@ -26,6 +26,7 @@
                             <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide
                                 {{ match($manifest->status) {
                                     'completed' => 'bg-emerald-500/15 text-emerald-700',
+                                    'closed_with_exceptions' => 'bg-amber-500/15 text-amber-800',
                                     'exception' => 'bg-rose-500/15 text-rose-700',
                                     'in_transit' => 'bg-indigo-500/15 text-indigo-700',
                                     'arrived', 'receiving' => 'bg-amber-500/15 text-amber-700',
@@ -41,14 +42,26 @@
                         </p>
                     </div>
 
-                    @if ((int) $manifest->sender_logistics_id === (int) auth()->id() && in_array($manifest->status, ['draft', 'loading', 'ready_to_dispatch']))
-                        <form action="{{ route('logistics.transfers.manifests.cancel', $manifest) }}" method="POST" onsubmit="return confirm('Cancel this transfer manifest?');">
-                            @csrf
-                            <button type="submit" class="px-4 py-2 rounded-full border border-rose-500/40 text-rose-700 text-xs font-semibold hover:bg-rose-500/10 cursor-pointer">
-                                Cancel Manifest
-                            </button>
-                        </form>
-                    @endif
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if ((int) $manifest->sender_logistics_id === (int) auth()->id() && in_array($manifest->status, ['draft', 'loading', 'ready_to_dispatch']))
+                            <form action="{{ route('logistics.transfers.manifests.cancel', $manifest) }}" method="POST" onsubmit="return confirm('Cancel this transfer manifest?');">
+                                @csrf
+                                <button type="submit" class="px-4 py-2 rounded-full border border-rose-500/40 text-rose-700 text-xs font-semibold hover:bg-rose-500/10 cursor-pointer">
+                                    Cancel Manifest
+                                </button>
+                            </form>
+                        @endif
+
+                        @if ((int) $manifest->receiver_logistics_id === (int) auth()->id() && ($receivingCounts['can_close_with_exceptions'] ?? false) && ! $manifest->isTerminal())
+                            <form action="{{ route('logistics.transfers.manifests.close-with-exceptions', $manifest) }}" method="POST" class="flex items-center gap-2" onsubmit="return confirm('Close manifest with documented exceptions? Missing or damaged items will remain accurately recorded.');">
+                                @csrf
+                                <input type="text" name="reconciliation_notes" required placeholder="Exception closure reconciliation notes..." class="px-3 py-1.5 rounded-full border border-amber-400 bg-surface-container-lowest text-xs w-64">
+                                <button type="submit" class="px-4 py-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer">
+                                    Close With Exceptions
+                                </button>
+                            </form>
+                        @endif
+                    </div>
                 </div>
 
                 @if (session('status'))
@@ -215,12 +228,15 @@
                                 'condition' => $cond,
                                 'incidents' => $it->incidents->map(fn ($inc) => [
                                     'id' => $inc->id,
+                                    'incident_number' => $inc->incident_number,
                                     'incident_type' => $inc->incident_type,
                                     'damage_type' => $inc->damage_type,
                                     'damage_type_label' => $inc->damage_type_label,
                                     'source_stage' => $inc->source_stage,
                                     'investigation_status' => $inc->investigation_status,
                                     'status_label' => $inc->status_label,
+                                    'disposition_label' => $inc->disposition_label,
+                                    'last_known_location' => $inc->last_known_location,
                                     'description' => $inc->description,
                                     'resolution_notes' => $inc->resolution_notes,
                                     'evidence_url' => $inc->evidence_url,
@@ -404,7 +420,7 @@
             </button>
         </div>
 
-        <form action="{{ route('logistics.transfers.manifests.verify-parcel', $manifest) }}" method="POST" class="space-y-4">
+        <form action="{{ route('logistics.transfers.manifests.verify-parcel', $manifest) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
             @csrf
             <input type="hidden" name="tracking_number" id="classify-tracking-input">
 
@@ -423,9 +439,19 @@
                 </select>
             </div>
 
+            <label class="flex items-start gap-2 p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900 cursor-pointer">
+                <input type="checkbox" name="accept_into_quarantine" value="1" class="mt-0.5 rounded text-purple-700">
+                <span><strong>Accept Into Quarantine</strong> (Takes custody at destination hub for Damaged / Discrepancy while blocking normal delivery dispatch until reinspected)</span>
+            </label>
+
             <div>
                 <label for="classify-notes-input" id="classify-notes-label" class="block text-xs font-semibold text-on-surface mb-1">Notes (Optional for normal receipt)</label>
                 <textarea name="notes" id="classify-notes-input" rows="3" placeholder="Enter inspection, condition, or discrepancy details..." class="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-on-surface mb-1">Photo Evidence (Optional)</label>
+                <input type="file" name="evidence_photo" accept="image/*" class="text-xs w-full">
             </div>
 
             <div class="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant">
@@ -691,9 +717,12 @@
                         const statusOptions = [
                             ['open', 'Open'],
                             ['under_investigation', 'Under Investigation'],
-                            ...(inc.incident_type !== 'damage' ? [['found', 'Found']] : []),
-                            ['resolved', 'Resolved'],
+                            ['awaiting_evidence', 'Awaiting Evidence'],
+                            ['awaiting_disposition', 'Awaiting Disposition'],
+                            ...(inc.incident_type !== 'missing' ? [['resolved', 'Inspected & Cleared (Resolved)']] : []),
                         ].map(([val, lbl]) => `<option value="${val}" ${inc.investigation_status === val ? 'selected' : ''}>${lbl}</option>`).join('');
+
+                        const workspaceLink = `<a href="/logistics/exceptions/${inc.id}" class="inline-flex items-center gap-1 text-primary font-bold underline text-[11px]">Open Full Recovery / Disposition Workspace</a>`;
 
                         const updateFormHtml = (IS_AUTHORIZED_RECEIVER && inc.investigation_status !== 'resolved')
                             ? `
@@ -736,6 +765,7 @@
                                 ${inc.found_at ? `<div class="text-[11px] text-indigo-700 font-medium">Marked Found: ${escapeHtml(inc.found_at)}</div>` : ''}
                                 ${inc.resolved_at ? `<div class="text-[11px] text-emerald-700 font-medium">Resolved${inc.resolver_name ? ' by ' + escapeHtml(inc.resolver_name) : ''} on ${escapeHtml(inc.resolved_at)}${inc.resolution_notes ? ' — ' + escapeHtml(inc.resolution_notes) : ''}</div>` : ''}
                                 ${evidenceHtml}
+                                <div class="pt-1">${workspaceLink}</div>
                                 ${updateFormHtml}
                             </div>
                         `;
