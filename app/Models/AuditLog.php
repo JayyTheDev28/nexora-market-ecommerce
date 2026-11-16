@@ -53,7 +53,7 @@ class AuditLog extends Model
     }
 
     /**
-     * Record an audit event.
+     * Record an audit event with automatic redaction of sensitive keys.
      */
     public static function log(
         string $action,
@@ -68,11 +68,44 @@ class AuditLog extends Model
             'action' => $action,
             'auditable_type' => get_class($auditable),
             'auditable_id' => $auditable->getKey(),
-            'old_values' => $oldValues,
-            'new_values' => $newValues,
+            'old_values' => self::redactSensitive($oldValues),
+            'new_values' => self::redactSensitive($newValues),
             'reason' => $reason,
             'ip_address' => request()?->ip(),
             'created_at' => now(),
         ]);
+    }
+
+    private static function redactSensitive(?array $values): ?array
+    {
+        if ($values === null) {
+            return null;
+        }
+
+        $sensitiveKeys = [
+            'password',
+            'password_confirmation',
+            'current_password',
+            'token',
+            'remember_token',
+            'activation_token',
+            'secret',
+            'two_factor_secret',
+            'api_key',
+            'authorization',
+            'email_verification_otp',
+            'pending_email_otp',
+            'pending_phone_otp',
+        ];
+
+        foreach ($values as $key => $val) {
+            if (is_array($val)) {
+                $values[$key] = self::redactSensitive($val);
+            } elseif (in_array(strtolower((string) $key), $sensitiveKeys, true)) {
+                $values[$key] = '[REDACTED]';
+            }
+        }
+
+        return $values;
     }
 }

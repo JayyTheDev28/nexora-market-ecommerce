@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountRestriction;
 use App\Models\AuditLog;
 use App\Models\Order;
+use App\Models\RestrictionAppeal;
 use App\Models\SellerWarning;
 use App\Models\User;
 use App\Notifications\AccountStatusChangedNotification;
+use App\Services\AccountEnforcementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -77,6 +80,8 @@ class UserController extends Controller
             'courierProfile',
             'address',
             'addresses',
+            'accountRestrictions.issuer',
+            'accountRestrictions.appeals',
             'products' => fn ($q) => $q->latest()->limit(5),
         ]);
 
@@ -151,5 +156,54 @@ class UserController extends Controller
         }
 
         return back()->with('status', "Account status for {$user->full_name} updated to {$newStatus}.");
+    }
+
+    public function restrict(Request $request, User $user, AccountEnforcementService $enforcement): RedirectResponse
+    {
+        abort_unless($request->user()->hasAdminPermission('manage_users'), 403);
+        abort_if($user->id === $request->user()->id, 422, 'Cannot restrict your own administrator account.');
+
+        $validated = $request->validate([
+            'restriction_type' => ['required', Rule::in(array_keys(AccountRestriction::TYPES))],
+            'reason' => ['required', 'string', 'max:1000'],
+            'duration_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+        ]);
+
+        $restriction = $enforcement->applyRestriction(
+            $user,
+            $request->user(),
+            $validated['restriction_type'],
+            $validated['reason'],
+            $validated['duration_days'] ?? null
+        );
+
+        return back()->with('status', "{$restriction->type_label} applied to {$user->full_name}.");
+    }
+
+    public function liftRestriction(Request $request, AccountRestriction $restriction, AccountEnforcementService $enforcement): RedirectResponse
+    {
+        abort_unless($request->user()->hasAdminPermission('manage_users'), 403);
+
+        $validated = $request->validate([
+            'lift_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $enforcement->liftRestriction($restriction, $request->user(), $validated['lift_reason']);
+
+        return back()->with('status', 'Restriction lifted and logged.');
+    }
+
+    public function reviewAppeal(Request $request, RestrictionAppeal $appeal, AccountEnforcementService $enforcement): RedirectResponse
+    {
+        abort_unless($request->user()->hasAdminPermission('manage_users'), 403);
+
+        $validated = $request->validate([
+            'decision' => ['required', Rule::in(['approved', 'rejected', 'under_review'])],
+            'admin_notes' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $enforcement->reviewAppeal($appeal, $request->user(), $validated['decision'], $validated['admin_notes']);
+
+        return back()->with('status', "Appeal #{$appeal->id} marked as " . ucfirst(str_replace('_', ' ', $validated['decision'])) . '.');
     }
 }

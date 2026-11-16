@@ -269,10 +269,11 @@ class AdminManagementTest extends TestCase
 
         $dispute->refresh();
         $this->assertEquals('resolved', $dispute->status);
+        $this->assertEquals(Dispute::RETURN_STAGE_APPROVED_AWAITING_RETURN, $dispute->return_stage);
         $this->assertEquals('Photographic evidence confirmed transit damage. Return & full refund granted.', $dispute->resolution_note);
 
         $order->refresh();
-        $this->assertEquals('returned', $order->status);
+        $this->assertEquals('delivered', $order->status);
 
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'dispute_resolved',

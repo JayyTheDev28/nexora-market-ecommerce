@@ -77,6 +77,15 @@ Route::prefix('mobile/v1')->group(function () {
         Route::post('/{id}/read', [\App\Http\Controllers\Api\Mobile\NotificationController::class, 'markRead'])->name('api.mobile.notifications.read');
     });
 
+    // Shared authenticated safety reporting & restriction appeals (buyer, rider, courier)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/safety-reports', [\App\Http\Controllers\Api\Mobile\SafetyReportController::class, 'index'])->name('api.mobile.safety-reports.index');
+        Route::post('/safety-reports', [\App\Http\Controllers\Api\Mobile\SafetyReportController::class, 'store'])->name('api.mobile.safety-reports.store');
+        Route::get('/safety-reports/{safetyReport}', [\App\Http\Controllers\Api\Mobile\SafetyReportController::class, 'show'])->whereNumber('safetyReport')->name('api.mobile.safety-reports.show');
+        Route::get('/restrictions', [\App\Http\Controllers\Api\Mobile\SafetyReportController::class, 'restrictions'])->name('api.mobile.restrictions.index');
+        Route::post('/restrictions/{restriction}/appeal', [\App\Http\Controllers\Api\Mobile\SafetyReportController::class, 'appeal'])->whereNumber('restriction')->name('api.mobile.restrictions.appeal');
+    });
+
     // Public buyer routes
     Route::prefix('buyer')->group(function () {
         Route::get('/home', [\App\Http\Controllers\Api\Mobile\Buyer\CatalogController::class, 'home'])->name('api.mobile.buyer.home');

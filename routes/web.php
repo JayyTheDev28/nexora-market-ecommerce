@@ -353,6 +353,33 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::get('/users', [\App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
     Route::get('/users/{user}', [\App\Http\Controllers\Admin\UserController::class, 'show'])->name('users.show');
     Route::post('/users/{user}/status', [\App\Http\Controllers\Admin\UserController::class, 'updateStatus'])->name('users.status');
+    Route::post('/users/{user}/restrict', [\App\Http\Controllers\Admin\UserController::class, 'restrict'])->name('users.restrict');
+    Route::post('/restrictions/{restriction}/lift', [\App\Http\Controllers\Admin\UserController::class, 'liftRestriction'])->name('users.restrictions.lift');
+    Route::post('/appeals/{appeal}/review', [\App\Http\Controllers\Admin\UserController::class, 'reviewAppeal'])->name('users.appeals.review');
+
+    // Safety & Reports Center
+    Route::get('/safety', [\App\Http\Controllers\Admin\SafetyReportController::class, 'index'])->name('safety.index');
+    Route::get('/safety/{safetyReport}', [\App\Http\Controllers\Admin\SafetyReportController::class, 'show'])->name('safety.show');
+    Route::post('/safety/{safetyReport}/update', [\App\Http\Controllers\Admin\SafetyReportController::class, 'update'])->name('safety.update');
+    Route::post('/safety/{safetyReport}/notes', [\App\Http\Controllers\Admin\SafetyReportController::class, 'addNote'])->name('safety.notes');
+    Route::post('/safety/{safetyReport}/restrict', [\App\Http\Controllers\Admin\SafetyReportController::class, 'applyRestriction'])->name('safety.restrict');
+    Route::get('/safety/{safetyReport}/evidence/{index}', [\App\Http\Controllers\Admin\SafetyReportController::class, 'downloadEvidence'])->name('safety.evidence');
+
+    // Platform-Wide Logistics Monitoring
+    Route::get('/logistics-monitoring', [\App\Http\Controllers\Admin\LogisticsMonitoringController::class, 'index'])->name('logistics-monitoring.index');
+    Route::get('/logistics-monitoring/company/{company}', [\App\Http\Controllers\Admin\LogisticsMonitoringController::class, 'showCompany'])->name('logistics-monitoring.company');
+
+    // Financial Safety & Monitoring Center
+    Route::get('/financial-monitoring', [\App\Http\Controllers\Admin\FinancialMonitoringController::class, 'index'])->name('financial-monitoring.index');
+
+    // Fraud & Risk Detection Alerts
+    Route::get('/fraud-alerts', [\App\Http\Controllers\Admin\FraudAlertController::class, 'index'])->name('fraud-alerts.index');
+    Route::post('/fraud-alerts/scan', [\App\Http\Controllers\Admin\FraudAlertController::class, 'scan'])->name('fraud-alerts.scan');
+    Route::post('/fraud-alerts/{riskAlert}/review', [\App\Http\Controllers\Admin\FraudAlertController::class, 'review'])->name('fraud-alerts.review');
+
+    // System Health Monitoring
+    Route::get('/system-health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])->name('system-health.index');
+    Route::post('/system-health/retry/{uuid}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'retryJob'])->name('system-health.retry');
 
     // Seller Compliance & Warnings
     Route::get('/compliance', [\App\Http\Controllers\Admin\ComplianceController::class, 'index'])->name('compliance.index');
@@ -363,6 +390,7 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::get('/disputes', [\App\Http\Controllers\Admin\DisputeController::class, 'index'])->name('disputes.index');
     Route::get('/disputes/{dispute}', [\App\Http\Controllers\Admin\DisputeController::class, 'show'])->name('disputes.show');
     Route::post('/disputes/{dispute}/resolve', [\App\Http\Controllers\Admin\DisputeController::class, 'resolve'])->name('disputes.resolve');
+    Route::post('/disputes/{dispute}/return-step', [\App\Http\Controllers\Admin\DisputeController::class, 'recordReturnStep'])->name('disputes.return-step');
 
     // 10% Commissions & Settlements
     Route::get('/commissions', [\App\Http\Controllers\Admin\CommissionController::class, 'index'])->name('commissions.index');
@@ -407,6 +435,14 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
     Route::get('/account', [\App\Http\Controllers\Admin\AccountController::class, 'show'])->name('account.show');
     Route::post('/account/profile', [\App\Http\Controllers\Admin\AccountController::class, 'updateProfile'])->name('account.profile');
     Route::post('/account/password', [\App\Http\Controllers\Admin\AccountController::class, 'updatePassword'])->name('account.password');
+    Route::post('/account/two-factor', [\App\Http\Controllers\Admin\AccountController::class, 'toggleTwoFactor'])->name('account.two-factor');
+});
+
+// Shared Authenticated Web Safety & Appeal Routes (Buyers, Sellers, Logistics)
+Route::middleware('auth')->group(function () {
+    Route::get('/safety-reports', [\App\Http\Controllers\Web\SafetyReportController::class, 'index'])->name('safety-reports.index');
+    Route::post('/safety-reports', [\App\Http\Controllers\Web\SafetyReportController::class, 'store'])->name('safety-reports.store');
+    Route::post('/restrictions/{restriction}/appeal', [\App\Http\Controllers\Web\SafetyReportController::class, 'submitAppeal'])->name('restrictions.appeal');
 });
 
 Route::middleware('role:rider')->prefix('rider')->name('rider.')->group(function () {

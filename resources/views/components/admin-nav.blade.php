@@ -14,40 +14,63 @@
     }
 
     $pendingApplicationsCount = \App\Models\User::where('approval_status', 'pending')
-        ->whereIn('role', ['buyer', 'seller', 'sorting_center'])
+        ->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])
         ->count();
 
     $openDisputesCount = \App\Models\Dispute::whereIn('status', ['open', 'under_review'])->count();
+    $openSafetyReportsCount = \App\Models\SafetyReport::whereIn('status', ['new', 'under_investigation', 'escalated'])->count();
+    $openFraudAlertsCount = \App\Models\RiskAlert::whereIn('status', ['open', 'investigating', 'escalated'])->count();
 
-    $pendingRemittancesCount = \App\Models\LogisticsAdminRemittance::whereIn('status', ['pending', 'under_review'])->count();
+    $pendingRemittancesCount = \App\Models\LogisticsAdminRemittance::whereIn('status', ['submitted', 'under_review'])->count();
     $pendingSellerPayoutsCount = \App\Models\SellerPayoutRequest::where('status', 'pending')->count();
 
     $sections = [
         [
-            'title' => null,
+            'title' => 'OVERVIEW',
             'items' => [
                 'dashboard' => ['label' => 'Dashboard', 'icon' => 'grid_view', 'url' => route('admin.dashboard'), 'badge' => null],
             ],
         ],
         [
-            'title' => 'PLATFORM GOVERNANCE',
+            'title' => 'PLATFORM MANAGEMENT',
             'items' => [
-                'applications' => ['label' => 'Partner applications', 'icon' => 'how_to_reg', 'url' => route('admin.applications.index'), 'badge' => $pendingApplicationsCount ?: null, 'badgeColor' => 'bg-primary text-on-primary'],
-                'users' => ['label' => 'User directory', 'icon' => 'group', 'url' => route('admin.users.index'), 'badge' => null],
-                'compliance' => ['label' => 'Seller compliance', 'icon' => 'gavel', 'url' => route('admin.compliance.index'), 'badge' => null],
-                'disputes' => ['label' => 'Dispute claims', 'icon' => 'report_problem', 'url' => route('admin.disputes.index'), 'badge' => $openDisputesCount ?: null, 'badgeColor' => 'bg-error text-on-error'],
+                'applications' => ['label' => 'Users & Applications', 'icon' => 'how_to_reg', 'url' => route('admin.applications.index'), 'badge' => $pendingApplicationsCount ?: null, 'badgeColor' => 'bg-primary text-on-primary'],
+                'users' => ['label' => 'User Directory', 'icon' => 'group', 'url' => route('admin.users.index'), 'badge' => null],
+                'compliance' => ['label' => 'Sellers & Compliance', 'icon' => 'gavel', 'url' => route('admin.compliance.index'), 'badge' => null],
+                'safety' => ['label' => 'Safety & Reports Center', 'icon' => 'shield', 'url' => route('admin.safety.index'), 'badge' => $openSafetyReportsCount ?: null, 'badgeColor' => 'bg-error text-on-error'],
+                'disputes' => ['label' => 'Disputes & Returns', 'icon' => 'report_problem', 'url' => route('admin.disputes.index'), 'badge' => $openDisputesCount ?: null, 'badgeColor' => 'bg-error text-on-error'],
             ],
         ],
         [
-            'title' => 'FINANCES & AUDITS',
+            'title' => 'LOGISTICS OVERSIGHT',
             'items' => [
+                'logistics-monitoring' => ['label' => 'Logistics Monitoring', 'icon' => 'hub', 'url' => route('admin.logistics-monitoring.index'), 'badge' => null],
+            ],
+        ],
+        [
+            'title' => 'FINANCIAL MANAGEMENT',
+            'items' => [
+                'financial-monitoring' => ['label' => 'Financial Monitoring', 'icon' => 'monitoring', 'url' => route('admin.financial-monitoring.index'), 'badge' => null],
                 'logistics-remittances' => ['label' => 'Logistics Remittances', 'icon' => 'local_shipping', 'url' => route('admin.logistics-remittances.index'), 'badge' => $pendingRemittancesCount ?: null, 'badgeColor' => 'bg-amber-500 text-white'],
                 'seller-payouts' => ['label' => 'Seller Payouts', 'icon' => 'account_balance_wallet', 'url' => route('admin.seller-payouts.index'), 'badge' => $pendingSellerPayoutsCount ?: null, 'badgeColor' => 'bg-primary text-on-primary'],
                 'commissions' => ['label' => 'Commissions (10%)', 'icon' => 'payments', 'url' => route('admin.commissions.index'), 'badge' => null],
-                'reports' => ['label' => 'Reports & analytics', 'icon' => 'bar_chart', 'url' => route('admin.reports.index'), 'badge' => null],
-                'audit-logs' => ['label' => 'Audit trail', 'icon' => 'history', 'url' => route('admin.audit-logs.index'), 'badge' => null],
-                'settings' => ['label' => 'Platform settings', 'icon' => 'tune', 'url' => route('admin.settings.index'), 'badge' => null],
-                'account' => ['label' => 'Admin profile', 'icon' => 'admin_panel_settings', 'url' => route('admin.account.show'), 'badge' => null],
+                'shipping-policies' => ['label' => 'Shipping Policies', 'icon' => 'policy', 'url' => route('admin.shipping-policies.index'), 'badge' => null],
+            ],
+        ],
+        [
+            'title' => 'ANALYTICS & HEALTH',
+            'items' => [
+                'reports' => ['label' => 'Reports & Analytics', 'icon' => 'bar_chart', 'url' => route('admin.reports.index'), 'badge' => null],
+                'fraud-alerts' => ['label' => 'Fraud Alerts', 'icon' => 'warning', 'url' => route('admin.fraud-alerts.index'), 'badge' => $openFraudAlertsCount ?: null, 'badgeColor' => 'bg-amber-500 text-white'],
+                'system-health' => ['label' => 'System Health', 'icon' => 'health_and_safety', 'url' => route('admin.system-health.index'), 'badge' => null],
+            ],
+        ],
+        [
+            'title' => 'ADMINISTRATION',
+            'items' => [
+                'audit-logs' => ['label' => 'Security & Audit Logs', 'icon' => 'history', 'url' => route('admin.audit-logs.index'), 'badge' => null],
+                'settings' => ['label' => 'Platform Settings', 'icon' => 'tune', 'url' => route('admin.settings.index'), 'badge' => null],
+                'account' => ['label' => 'Admin Profile & 2FA', 'icon' => 'admin_panel_settings', 'url' => route('admin.account.show'), 'badge' => null],
             ],
         ],
     ];

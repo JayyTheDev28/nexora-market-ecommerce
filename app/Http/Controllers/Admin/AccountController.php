@@ -16,7 +16,37 @@ class AccountController extends Controller
     public function show(): View
     {
         $admin = auth()->user();
-        return view('admin.account.show', compact('admin'));
+        $securityActivity = AuditLog::where('operator_id', $admin->id)
+            ->latest('created_at')
+            ->limit(15)
+            ->get();
+
+        return view('admin.account.show', compact('admin', 'securityActivity'));
+    }
+
+    public function toggleTwoFactor(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+        ]);
+
+        $admin = $request->user();
+        if (! Hash::check($validated['current_password'], $admin->password)) {
+            return back()->withErrors(['current_password' => 'Password reauthentication failed.']);
+        }
+
+        $next = ! $admin->two_factor_enabled;
+        $admin->update(['two_factor_enabled' => $next]);
+
+        AuditLog::log(
+            action: 'admin_two_factor_toggled',
+            auditable: $admin,
+            oldValues: ['two_factor_enabled' => ! $next],
+            newValues: ['two_factor_enabled' => $next],
+            reason: $next ? 'Administrator enabled 2FA protection' : 'Administrator disabled 2FA protection'
+        );
+
+        return back()->with('status', 'Two-factor authentication ' . ($next ? 'enabled' : 'disabled') . '.');
     }
 
     public function updateProfile(Request $request): RedirectResponse

@@ -40,6 +40,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verification_otp_expires_at',
         'activation_token',
         'activation_token_expires_at',
+        'admin_permissions',
+        'two_factor_enabled',
+        'last_login_at',
+        'last_login_ip',
     ];
 
     protected $hidden = [
@@ -57,6 +61,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'activation_token_expires_at' => 'datetime',
             'birthday' => 'date',
             'password' => 'hashed',
+            'admin_permissions' => 'array',
+            'two_factor_enabled' => 'boolean',
+            'last_login_at' => 'datetime',
         ];
     }
 
@@ -467,5 +474,39 @@ class User extends Authenticatable implements MustVerifyEmail
             'admin' => 'Administrator',
             default => 'User',
         };
+    }
+
+    public function accountRestrictions()
+    {
+        return $this->hasMany(AccountRestriction::class)->latest();
+    }
+
+    public function sentTransferManifests()
+    {
+        return $this->hasMany(TransferManifest::class, 'sender_logistics_id');
+    }
+
+    public function hasRestriction(string $type): bool
+    {
+        return $this->accountRestrictions()
+            ->where('restriction_type', $type)
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->exists();
+    }
+
+    public function hasAdminPermission(string $permission): bool
+    {
+        if (! $this->isAdmin()) {
+            return false;
+        }
+        $perms = $this->admin_permissions;
+        // Null/empty permissions preserves full super-admin compatibility for single-admin setups
+        if (empty($perms)) {
+            return true;
+        }
+        return in_array('*', $perms, true) || in_array($permission, $perms, true);
     }
 }
