@@ -407,8 +407,11 @@ Route::middleware(['admin', 'role:admin'])->prefix('admin')->name('admin.')->gro
 
     // Shipping Rate & Inter-Company Policy Governance
     Route::get('/shipping-policies', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'index'])->name('shipping-policies.index');
+    Route::post('/shipping-policies', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'store'])->name('shipping-policies.store');
     Route::post('/shipping-policies/{policy}/approve', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'approve'])->name('shipping-policies.approve');
     Route::post('/shipping-policies/{policy}/reject', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'reject'])->name('shipping-policies.reject');
+    Route::post('/compensation-policies/{compensationPolicy}/approve', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'approveCompensation'])->name('compensation-policies.approve');
+    Route::post('/compensation-policies/{compensationPolicy}/reject', [\App\Http\Controllers\Admin\ShippingPolicyController::class, 'rejectCompensation'])->name('compensation-policies.reject');
 
     // Seller Payout Management (Section 7)
     Route::get('/seller-payouts', [\App\Http\Controllers\Admin\SellerPayoutController::class, 'index'])->name('seller-payouts.index');
@@ -512,6 +515,7 @@ Route::middleware('role:buyer')->group(function () {
 
     // B8, B9: Checkout & Payment
     Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+    Route::post('/checkout/quote', [CheckoutController::class, 'quote'])->name('checkout.quote');
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
     // B10, B11, B12, B13: Orders, Tracking, Cancellation, Returns, Reviews

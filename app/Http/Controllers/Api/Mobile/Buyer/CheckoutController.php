@@ -33,7 +33,15 @@ class CheckoutController extends Controller
             $cartItemIds = array_values(array_filter(array_map('intval', explode(',', $rawIds)), fn (int $id) => $id > 0));
         }
 
-        $summary = $this->checkoutService->getSummary($request->user(), $cartItemIds);
+        $addressId = $request->filled('address_id') ? (int) $request->query('address_id') : null;
+        $locationOverride = null;
+        if (! $addressId && ($request->filled('province_code') || $request->filled('province_name') || $request->filled('municipality_code') || $request->filled('municipality_name'))) {
+            $locationOverride = $request->only([
+                'province_code', 'province_name', 'municipality_code', 'municipality_name', 'barangay_code', 'barangay_name',
+            ]);
+        }
+
+        $summary = $this->checkoutService->getSummary($request->user(), $cartItemIds, $addressId, $locationOverride);
         $voucherPreview = $this->checkoutService->previewVouchers($request->user(), $summary, [
             'platform_voucher_id' => $request->query('platform_voucher_id'),
             'shipping_voucher_id' => $request->query('shipping_voucher_id'),
@@ -44,13 +52,20 @@ class CheckoutController extends Controller
         foreach ($summary['grouped'] as $sellerId => $storeItems) {
             $seller = $storeItems->first()?->product?->seller;
             $storeName = $seller?->sellerProfile?->business_name ?? $seller?->full_name ?? 'Seller';
+            $quote = $summary['store_quotes'][$sellerId] ?? null;
 
             $formattedStores[] = [
                 'seller_id' => $sellerId,
                 'store_name' => $storeName,
                 'raw_weight' => $summary['store_weights'][$sellerId]['raw'] ?? 0,
+                'volumetric_weight' => $summary['store_weights'][$sellerId]['volumetric'] ?? 0,
                 'billed_weight' => $summary['store_weights'][$sellerId]['billed'] ?? 1,
+                'is_oversized' => $summary['store_weights'][$sellerId]['is_oversized'] ?? false,
                 'shipping_fee' => $summary['store_shipping_fees'][$sellerId] ?? 50.0,
+                'route_type' => $quote['route_type'] ?? 'same_city',
+                'serviceable' => $quote['serviceable'] ?? true,
+                'serviceability_error' => $quote['serviceability_error'] ?? null,
+                'shipping_breakdown' => $quote['breakdown'] ?? null,
                 'subtotal' => round($storeItems->sum(fn ($i) => $i->unit_price * $i->quantity), 2),
                 'items' => CartItemResource::collection($storeItems),
             ];
@@ -69,6 +84,8 @@ class CheckoutController extends Controller
                 'available_vouchers' => VoucherResource::collection($summary['vouchers']),
                 'total_subtotal' => $summary['total_subtotal'],
                 'total_shipping' => $summary['total_shipping'],
+                'all_serviceable' => $summary['all_serviceable'] ?? true,
+                'serviceability_error' => $summary['serviceability_error'] ?? null,
                 'platform_discount' => $voucherPreview['platform_discount'],
                 'shipping_discount' => $voucherPreview['shipping_discount'],
                 'store_discount' => $voucherPreview['store_discount'],

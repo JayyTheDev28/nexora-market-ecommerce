@@ -113,8 +113,14 @@ class CompensationPolicyService
     /**
      * Resolve locked pickup or delivery rate for a courier + order (honors JobOffer rate snapshot if accepted).
      */
-    public function resolveRiderJobRate(Order $order, User $courier, string $jobType, ?float $overrideAmount = null): array
-    {
+    public function resolveRiderJobRate(
+        Order $order,
+        User $courier,
+        string $jobType,
+        ?float $overrideAmount = null,
+        float $distanceKm = 0.0,
+        bool $includeBatchBonus = false
+    ): array {
         $companyId = $this->resolveCompanyIdForCourier($courier, $order, $jobType);
         $policy = $this->getActivePolicy(CompensationPolicy::ROLE_RIDER, $companyId);
 
@@ -125,12 +131,21 @@ class CompensationPolicyService
             ->latest('id')
             ->first();
 
-        $rate = match ($jobType) {
+        $baseRate = match ($jobType) {
             'pickup' => (float) ($acceptedOffer?->expected_pay ?? $policy->pickup_rate),
             'delivery' => (float) ($acceptedOffer?->expected_pay ?? $policy->delivery_rate),
             'failed_delivery' => (float) $policy->failed_attempt_rate,
             default => (float) $policy->delivery_rate,
         };
+
+        $distanceAllowance = (! $acceptedOffer && $distanceKm > 0 && in_array($jobType, ['pickup', 'delivery'], true))
+            ? round((float) ($policy->distance_allowance_rate ?? 0) * $distanceKm, 2)
+            : 0.00;
+        $batchBonus = (! $acceptedOffer && $includeBatchBonus && in_array($jobType, ['pickup', 'delivery'], true))
+            ? round((float) ($policy->batch_completion_bonus ?? 0), 2)
+            : 0.00;
+
+        $rate = $baseRate + $distanceAllowance + $batchBonus;
 
         if ($overrideAmount !== null) {
             $rate = $overrideAmount;
@@ -149,7 +164,38 @@ class CompensationPolicyService
                 'pickup_rate' => (float) $policy->pickup_rate,
                 'delivery_rate' => (float) $policy->delivery_rate,
                 'failed_attempt_rate' => (float) $policy->failed_attempt_rate,
+                'distance_allowance_rate' => (float) ($policy->distance_allowance_rate ?? 0),
+                'distance_km' => round($distanceKm, 2),
+                'distance_allowance_amount' => $distanceAllowance,
+                'batch_completion_bonus' => $batchBonus,
             ],
+        ];
+    }
+
+    /**
+     * Estimate Transfer Cost Per Parcel = Estimated Trip Cost / Expected Number of Parcels.
+     */
+    public function estimateTransferCostPerParcel(
+        CompensationPolicy $policy,
+        float $distanceKm = 0.0,
+        ?int $expectedParcels = null,
+        float $expectedWeightKg = 0.0
+    ): array {
+        $capacity = max(1, (int) ($expectedParcels ?: $policy->expected_manifest_parcels ?: 20));
+        $baseCents = (int) round((float) $policy->transfer_trip_base_rate * 100);
+        $kmCents = (int) round((float) $policy->transfer_per_km_rate * $distanceKm * 100);
+        $parcelCents = (int) round((float) $policy->transfer_per_parcel_rate * $capacity * 100);
+        $kgCents = (int) round((float) $policy->transfer_per_kg_rate * $expectedWeightKg * 100);
+        $fuelCents = (int) round((float) $policy->transfer_fuel_allowance * 100);
+
+        $estimatedTripCost = round(($baseCents + $kmCents + $parcelCents + $kgCents + $fuelCents) / 100, 2);
+        $costPerParcel = round($estimatedTripCost / $capacity, 2);
+
+        return [
+            'policy_id' => $policy->id,
+            'expected_parcel_count' => $capacity,
+            'estimated_trip_cost' => $estimatedTripCost,
+            'expected_cost_per_parcel' => $costPerParcel,
         ];
     }
 
@@ -235,6 +281,36 @@ class CompensationPolicyService
                 return null;
             }
 
+            $expectedEstimate = $this->estimateTransferCostPerParcel(
+                $policy,
+                $distanceKm,
+                $manifest->expected_parcel_count ?: ($policy->expected_manifest_parcels ?: 20),
+                $totalWeightKg
+            );
+            $expectedParcels = $manifest->expected_parcel_count ?: $expectedEstimate['expected_parcel_count'];
+            $estimatedTripCost = $manifest->estimated_trip_cost !== null
+                ? (float) $manifest->estimated_trip_cost
+                : $expectedEstimate['estimated_trip_cost'];
+            $expectedCostPerParcel = $manifest->expected_cost_per_parcel !== null
+                ? (float) $manifest->expected_cost_per_parcel
+                : $expectedEstimate['expected_cost_per_parcel'];
+            $actualCostPerParcel = round($amount / max(1, $parcelCount), 2);
+            $lowVolumeWarning = $parcelCount < max(1, (int) ceil($expectedParcels * 0.5));
+
+            $manifest->update([
+                'expected_parcel_count' => $expectedParcels,
+                'estimated_trip_cost' => $estimatedTripCost,
+                'expected_cost_per_parcel' => $expectedCostPerParcel,
+                'actual_cost_per_parcel' => $actualCostPerParcel,
+            ]);
+
+            $breakdown['expected_parcel_count'] = $expectedParcels;
+            $breakdown['estimated_trip_cost'] = $estimatedTripCost;
+            $breakdown['expected_cost_per_parcel'] = $expectedCostPerParcel;
+            $breakdown['actual_trip_cost'] = $amount;
+            $breakdown['actual_cost_per_parcel'] = $actualCostPerParcel;
+            $breakdown['low_volume_warning'] = $lowVolumeWarning;
+
             $earning = RiderEarning::create([
                 'courier_id' => $courierId,
                 'logistics_company_id' => $companyId,
@@ -294,6 +370,8 @@ class CompensationPolicyService
             'pickup_rate' => round((float) ($data['pickup_rate'] ?? 0), 2),
             'delivery_rate' => round((float) ($data['delivery_rate'] ?? 0), 2),
             'failed_attempt_rate' => round((float) ($data['failed_attempt_rate'] ?? 0), 2),
+            'distance_allowance_rate' => round((float) ($data['distance_allowance_rate'] ?? 0), 2),
+            'batch_completion_bonus' => round((float) ($data['batch_completion_bonus'] ?? 0), 2),
             'transfer_trip_base_rate' => round((float) ($data['transfer_trip_base_rate'] ?? 0), 2),
             'transfer_per_km_rate' => round((float) ($data['transfer_per_km_rate'] ?? 0), 2),
             'transfer_per_parcel_rate' => round((float) ($data['transfer_per_parcel_rate'] ?? 0), 2),
@@ -301,6 +379,7 @@ class CompensationPolicyService
             'transfer_fuel_allowance' => round((float) ($data['transfer_fuel_allowance'] ?? 0), 2),
             'transfer_exception_rate' => round((float) ($data['transfer_exception_rate'] ?? 0), 2),
             'pay_on_exception' => (bool) ($data['pay_on_exception'] ?? false),
+            'expected_manifest_parcels' => max(1, (int) ($data['expected_manifest_parcels'] ?? 20)),
             'effective_from' => $data['effective_from'] ?? null,
             'effective_to' => $data['effective_to'] ?? null,
             'notes' => $data['notes'] ?? null,
@@ -335,6 +414,8 @@ class CompensationPolicyService
                         'pickup_rate' => $locked->pickup_rate,
                         'delivery_rate' => $locked->delivery_rate,
                         'failed_attempt_rate' => $locked->failed_attempt_rate,
+                        'distance_allowance_rate' => $locked->distance_allowance_rate ?? 0.00,
+                        'batch_completion_bonus' => $locked->batch_completion_bonus ?? 0.00,
                         'transfer_trip_base_rate' => $locked->transfer_trip_base_rate,
                         'transfer_per_km_rate' => $locked->transfer_per_km_rate,
                         'transfer_per_parcel_rate' => $locked->transfer_per_parcel_rate,
@@ -342,6 +423,7 @@ class CompensationPolicyService
                         'transfer_fuel_allowance' => $locked->transfer_fuel_allowance,
                         'transfer_exception_rate' => $locked->transfer_exception_rate,
                         'pay_on_exception' => $locked->pay_on_exception,
+                        'expected_manifest_parcels' => $locked->expected_manifest_parcels ?? 20,
                         'effective_from' => now(),
                         'notes' => $locked->notes,
                         'created_by' => $actor->id,

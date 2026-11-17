@@ -28,16 +28,16 @@
                 @endif
 
                 <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-xs">
-                    <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-800 text-[10px] font-bold uppercase">Currently Active Schedule</span>
+                    <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-800 text-[10px] font-bold uppercase">Currently Active Schedule · {{ strtoupper(str_replace('_', ' ', $activePolicy->pricing_mode ?? 'weight_tiered')) }}</span>
                     <h1 class="text-xl font-bold text-on-surface mt-2">{{ $activePolicy->name }} <span class="text-xs font-mono text-outline">v{{ $activePolicy->version }}</span></h1>
                     <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-4 text-xs">
                         <div class="bg-surface-container/50 p-3 rounded-2xl">
-                            <span class="text-[10px] text-on-surface-variant block">Base Fee</span>
+                            <span class="text-[10px] text-on-surface-variant block">Base / Minimum Fee</span>
                             <strong class="text-lg font-extrabold text-primary">₱{{ number_format($activePolicy->base_fee, 2) }}</strong>
                         </div>
                         <div class="bg-surface-container/50 p-3 rounded-2xl">
-                            <span class="text-[10px] text-on-surface-variant block">Base Weight</span>
-                            <strong class="text-lg font-extrabold">{{ number_format($activePolicy->base_weight_kg, 0) }} kg</strong>
+                            <span class="text-[10px] text-on-surface-variant block">Target Margin</span>
+                            <strong class="text-lg font-extrabold">{{ number_format($activePolicy->target_profit_margin_pct ?? 20, 0) }}%</strong>
                         </div>
                         <div class="bg-surface-container/50 p-3 rounded-2xl">
                             <span class="text-[10px] text-on-surface-variant block">Add'l Kg Fee</span>

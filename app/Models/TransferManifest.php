@@ -87,6 +87,10 @@ class TransferManifest extends Model
         'distance_km',
         'status',
         'total_parcels',
+        'expected_parcel_count',
+        'estimated_trip_cost',
+        'expected_cost_per_parcel',
+        'actual_cost_per_parcel',
         'dispatched_at',
         'arrived_at',
         'completed_at',
@@ -101,6 +105,10 @@ class TransferManifest extends Model
     {
         return [
             'total_parcels' => 'integer',
+            'expected_parcel_count' => 'integer',
+            'estimated_trip_cost' => 'decimal:2',
+            'expected_cost_per_parcel' => 'decimal:2',
+            'actual_cost_per_parcel' => 'decimal:2',
             'distance_km' => 'decimal:2',
             'dispatched_at' => 'datetime',
             'arrived_at' => 'datetime',

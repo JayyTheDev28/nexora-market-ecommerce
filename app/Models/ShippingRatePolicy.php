@@ -15,17 +15,36 @@ class ShippingRatePolicy extends Model
     public const REVIEW_APPROVED = 'approved';
     public const REVIEW_REJECTED = 'rejected';
 
+    public const MODE_WEIGHT_TIERED = 'weight_tiered';
+    public const MODE_SMART_COST_MARGIN = 'smart_cost_margin';
+
+    public const ROUTE_SAME_CITY = 'same_city';
+    public const ROUTE_SAME_PROVINCE = 'same_province';
+    public const ROUTE_INTERPROVINCIAL = 'interprovincial';
+
     protected $fillable = [
         'name',
         'logistics_company_id',
         'version',
         'status',
+        'pricing_mode',
         'review_status',
         'contract_reference',
         'base_fee',
         'base_weight_kg',
         'per_additional_kg_fee',
         'minimum_fee',
+        'target_profit_margin_pct',
+        'rounding_increment',
+        'estimated_pickup_cost',
+        'estimated_delivery_cost',
+        'estimated_transfer_cost_per_parcel',
+        'estimated_hub_operating_cost',
+        'same_province_surcharge',
+        'interprovincial_surcharge',
+        'oversized_surcharge',
+        'volumetric_divisor',
+        'route_rules',
         'origin_logistics_share_pct',
         'transfer_carrier_share_pct',
         'delivery_logistics_share_pct',
@@ -46,6 +65,17 @@ class ShippingRatePolicy extends Model
             'base_weight_kg' => 'decimal:2',
             'per_additional_kg_fee' => 'decimal:2',
             'minimum_fee' => 'decimal:2',
+            'target_profit_margin_pct' => 'decimal:2',
+            'rounding_increment' => 'decimal:2',
+            'estimated_pickup_cost' => 'decimal:2',
+            'estimated_delivery_cost' => 'decimal:2',
+            'estimated_transfer_cost_per_parcel' => 'decimal:2',
+            'estimated_hub_operating_cost' => 'decimal:2',
+            'same_province_surcharge' => 'decimal:2',
+            'interprovincial_surcharge' => 'decimal:2',
+            'oversized_surcharge' => 'decimal:2',
+            'volumetric_divisor' => 'integer',
+            'route_rules' => 'array',
             'origin_logistics_share_pct' => 'decimal:2',
             'transfer_carrier_share_pct' => 'decimal:2',
             'delivery_logistics_share_pct' => 'decimal:2',

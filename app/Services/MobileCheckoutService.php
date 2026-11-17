@@ -59,8 +59,12 @@ class MobileCheckoutService
      * - Ceil(weight) shipping fee calculation (₱50 for first kg, ₱20 for each additional kg)
      * - Collect available active, non-expired, unused vouchers for user
      */
-    public function getSummary(User $user, ?array $cartItemIds = null): array
-    {
+    public function getSummary(
+        User $user,
+        ?array $cartItemIds = null,
+        ?int $addressId = null,
+        ?array $locationOverride = null
+    ): array {
         $query = $user->cartItems()
             ->with(['product' => fn ($q) => $q->withTrashed()->with('seller.sellerProfile')]);
 
@@ -78,6 +82,7 @@ class MobileCheckoutService
 
         $addresses = $user->addresses()->orderByDesc('is_default')->latest()->get();
         $defaultAddress = $addresses->firstWhere('is_default', true) ?: $addresses->first();
+        $selectedAddress = $addressId ? ($addresses->firstWhere('id', $addressId) ?: $user->addresses()->find($addressId)) : $defaultAddress;
 
         if ($items->isEmpty()) {
             return [
@@ -88,6 +93,9 @@ class MobileCheckoutService
                 'vouchers' => [],
                 'store_weights' => [],
                 'store_shipping_fees' => [],
+                'store_quotes' => [],
+                'all_serviceable' => true,
+                'serviceability_error' => null,
                 'total_subtotal' => 0.0,
                 'total_shipping' => 0.0,
             ];
@@ -95,23 +103,39 @@ class MobileCheckoutService
 
         // Group items by seller
         $grouped = $items->groupBy(fn ($item) => $item->product->seller_id);
+        $shippingPricing = app(ShippingPricingService::class);
 
         $storeWeights = [];
         $storeShippingFees = [];
+        $storeQuotes = [];
         $totalSubtotal = 0.0;
         $totalShipping = 0.0;
+        $allServiceable = true;
+        $serviceabilityError = null;
 
         foreach ($grouped as $sellerId => $storeItems) {
-            $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-            $billedWeight = max(1, (int) ceil($rawWeight));
+            $quote = $shippingPricing->calculateSmartQuote(
+                $storeItems,
+                (int) $sellerId,
+                $locationOverride ? null : $selectedAddress,
+                $locationOverride
+            );
+
             $storeWeights[$sellerId] = [
-                'raw' => $rawWeight,
-                'billed' => $billedWeight,
+                'raw' => $quote['raw_weight_kg'],
+                'volumetric' => $quote['volumetric_weight_kg'],
+                'billed' => $quote['billed_weight_kg'],
+                'is_oversized' => $quote['is_oversized'],
             ];
 
-            // ₱50 for first kg, ₱20 for each additional kg
-            $shippingFee = 50.00 + (20.00 * ($billedWeight - 1));
+            $shippingFee = $quote['shipping_fee'];
             $storeShippingFees[$sellerId] = $shippingFee;
+            $storeQuotes[$sellerId] = $quote;
+
+            if (! $quote['serviceable']) {
+                $allServiceable = false;
+                $serviceabilityError ??= $quote['serviceability_error'];
+            }
 
             $storeSubtotal = $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
             $totalSubtotal += $storeSubtotal;
@@ -139,6 +163,9 @@ class MobileCheckoutService
             'vouchers' => $userVouchers,
             'store_weights' => $storeWeights,
             'store_shipping_fees' => $storeShippingFees,
+            'store_quotes' => $storeQuotes,
+            'all_serviceable' => $allServiceable,
+            'serviceability_error' => $serviceabilityError,
             'total_subtotal' => round($totalSubtotal, 2),
             'total_shipping' => round($totalShipping, 2),
         ];
@@ -531,13 +558,13 @@ class MobileCheckoutService
 
             // Proportionate shipping discount
             $totalShippingDiscount = 0.00;
+            $shippingFunder = $shippingVoucher ? ($shippingVoucher->funding_source ?? 'platform') : 'none';
+            $storeQuotes = [];
+            foreach ($grouped as $sellerId => $storeItems) {
+                $storeQuotes[$sellerId] = $shippingPricing->calculateSmartQuote($storeItems, (int) $sellerId, $address);
+            }
             if ($shippingVoucher) {
-                $totalBaseShipping = 0;
-                foreach ($grouped as $storeItems) {
-                    $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                    $calc = $shippingPricing->calculateForWeight($rawWeight);
-                    $totalBaseShipping += $calc['shipping_fee'];
-                }
+                $totalBaseShipping = collect($storeQuotes)->sum('shipping_fee');
                 $totalShippingDiscount = $shippingVoucher->calculateDiscount($totalBaseShipping);
             }
             $shippingDiscountRemaining = $totalShippingDiscount;
@@ -548,8 +575,7 @@ class MobileCheckoutService
                 $isLast = ($index === $sellerCount);
 
                 $storeSubtotal = $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
-                $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                $shippingCalc = $shippingPricing->calculateForWeight($rawWeight);
+                $shippingCalc = $storeQuotes[$sellerId];
                 $billedWeight = $shippingCalc['billed_weight_kg'];
 
                 // Rule 12: Shipping calculation from active policy
@@ -611,12 +637,15 @@ class MobileCheckoutService
                     'store_voucher_discount' => round($storeDiscount, 2),
                     'platform_voucher_discount' => round($storePlatformDiscount, 2),
                     'shipping_voucher_discount' => round($storeShippingDiscount, 2),
-                    'platform_shipping_subsidy' => round($storeShippingDiscount, 2),
+                    'platform_shipping_subsidy' => $shippingFunder === 'platform' ? round($storeShippingDiscount, 2) : 0.00,
+                    'shipping_voucher_funder' => $storeShippingDiscount > 0 ? $shippingFunder : null,
                     'shipping_fee' => $effectiveShippingFee,
                     'base_shipping_fee' => round($storeShippingFee, 2),
                     'shipping_weight' => $billedWeight,
                     'shipping_voucher_id' => $shippingVoucher?->id,
                     'shipping_rate_policy_id' => $shippingCalc['policy']->id,
+                    'shipping_route_type' => $shippingCalc['route_type'],
+                    'shipping_quote_breakdown' => $shippingCalc['breakdown'],
                     'store_voucher_id' => $appliedStoreVoucherId,
                     'platform_voucher_id' => $platformVoucher?->id,
                     'total' => $storeTotal,

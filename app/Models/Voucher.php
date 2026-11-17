@@ -11,6 +11,7 @@ class Voucher extends Model
         'code',
         'type',
         'voucher_scope',
+        'funding_source',
         'value',
         'min_spend',
         'max_discount',

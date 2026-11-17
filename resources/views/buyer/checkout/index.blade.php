@@ -55,9 +55,13 @@
                     addresses: {{ json_encode($addresses) }},
                     defaultAddressId: {{ $defaultAddress?->id ?? 'null' }},
                     storeShippingFees: {{ json_encode($storeShippingFees) }},
+                    storeDetails: {{ json_encode(collect($storeQuotes)->map(fn($q) => ['shipping_fee' => $q['shipping_fee'], 'route_type' => $q['route_type'], 'serviceable' => $q['serviceable'], 'serviceability_error' => $q['serviceability_error']])->all()) }},
+                    serviceable: {{ ($allServiceable ?? true) ? 'true' : 'false' }},
+                    serviceabilityError: {{ json_encode($serviceabilityError ?? null) }},
                     totalSubtotal: {{ (float) $totalSubtotal }},
                     totalShipping: {{ (float) $totalShipping }},
-                    vouchers: {{ json_encode($userVouchers) }}
+                    vouchers: {{ json_encode($userVouchers) }},
+                    quoteUrl: '{{ route('checkout.quote') }}'
                 })"
                 @submit="handleSubmit($event)"
                 method="POST" action="{{ route('checkout.store') }}"
@@ -93,6 +97,7 @@
                                         name="address_id"
                                         :value="addr.id"
                                         x-model="selectedAddressId"
+                                        @change="refreshShippingQuote()"
                                         class="mt-1 text-primary focus:ring-primary">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2">
@@ -257,17 +262,19 @@
                                     </div>
 
                                     {{-- Weight & Shipping Breakdown --}}
-                                    <div class="pt-2 border-t border-outline-variant/40 flex flex-wrap items-center justify-between text-xs bg-surface-container-low/40 p-2.5 rounded-xl">
-                                        <div class="flex items-center gap-2">
+                                    <div class="pt-2 border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-2 text-xs bg-surface-container-low/40 p-2.5 rounded-xl">
+                                        <div class="flex flex-wrap items-center gap-2">
                                             <span class="material-symbols-outlined text-[16px] text-outline">scale</span>
                                             <span class="text-on-surface-variant">
                                                 Package Weight: <strong>{{ number_format($weightInfo['raw'], 2) }} kg</strong>
-                                                → Billed: <strong>{{ $weightInfo['billed'] }} kg</strong> ($\lceil \text{weight} \rceil$)
+                                                → Billed: <strong>{{ $weightInfo['billed'] }} kg</strong>
                                             </span>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary uppercase"
+                                                x-text="(storeDetails['{{ $sellerId }}']?.route_type || '{{ $storeQuotes[$sellerId]['route_type'] ?? 'same_city' }}').replace('_', ' ')"></span>
                                         </div>
                                         <div>
                                             <span class="text-on-surface-variant">Shipping Fee:</span>
-                                            <strong class="text-on-surface ml-1">₱{{ number_format($shippingFee, 2) }}</strong>
+                                            <strong class="text-on-surface ml-1">₱<span x-text="Number(storeShippingFees['{{ $sellerId }}'] ?? {{ $shippingFee }}).toFixed(2)">{{ number_format($shippingFee, 2) }}</span></strong>
                                         </div>
                                     </div>
                                 </div>
@@ -411,10 +418,13 @@
                             </span>
                         </div>
 
+                        {{-- Unserviceable Area Alert --}}
+                        <div x-show="!serviceable && serviceabilityError" x-cloak class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-700 font-semibold" x-text="serviceabilityError"></div>
+
                         {{-- Double-Click Submission Guardrails (Rule B8) --}}
                         <button
                             type="submit"
-                            :disabled="submitting || (!selectedAddressId && !isNewAddress)"
+                            :disabled="submitting || !serviceable || (!selectedAddressId && !isNewAddress)"
                             class="w-full py-4 rounded-full bg-primary text-on-primary font-label-md text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                             <span x-show="submitting" x-cloak class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
                             <span x-text="submitting ? 'Placing Orders...' : 'Place Order Now'"></span>
@@ -443,6 +453,11 @@
             isNewAddress: cfg.addresses.length === 0,
             paymentMethod: 'cod',
             submitting: false,
+            quoteUrl: cfg.quoteUrl,
+            storeShippingFees: cfg.storeShippingFees || {},
+            storeDetails: cfg.storeDetails || {},
+            serviceable: cfg.serviceable !== false,
+            serviceabilityError: cfg.serviceabilityError || null,
 
             totalSubtotal: cfg.totalSubtotal,
             baseShipping: cfg.totalShipping,
@@ -508,6 +523,7 @@
                     const res = await fetch(`https://psgc.gitlab.io/api/provinces/${this.selectedProvince}/cities-municipalities/`);
                     this.municipalities = (await res.json()).sort((a, b) => a.name.localeCompare(b.name));
                 } catch (e) { console.error(e); }
+                this.refreshShippingQuote();
             },
 
             async onMunicipalityChange() {
@@ -516,6 +532,41 @@
                 try {
                     const res = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${this.selectedMunicipality}/barangays/`);
                     this.barangays = (await res.json()).sort((a, b) => a.name.localeCompare(b.name));
+                } catch (e) { console.error(e); }
+                this.refreshShippingQuote();
+            },
+
+            async refreshShippingQuote() {
+                if (!this.quoteUrl) return;
+                try {
+                    const payload = this.isNewAddress
+                        ? {
+                            province_code: this.selectedProvince,
+                            province_name: this.selectedProvinceName,
+                            municipality_code: this.selectedMunicipality,
+                            municipality_name: this.selectedMunicipalityName,
+                            barangay_code: this.selectedBarangay,
+                            barangay_name: this.selectedBarangayName
+                        }
+                        : { address_id: this.selectedAddressId };
+
+                    const res = await fetch(this.quoteUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    this.storeShippingFees = data.store_shipping_fees || this.storeShippingFees;
+                    this.storeDetails = data.store_details || this.storeDetails;
+                    this.baseShipping = Number(data.total_shipping ?? this.baseShipping);
+                    this.serviceable = data.serviceable !== false;
+                    this.serviceabilityError = data.serviceability_error || null;
+                    this.recalculate();
                 } catch (e) { console.error(e); }
             },
 

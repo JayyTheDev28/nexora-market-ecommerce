@@ -102,6 +102,15 @@ class TransferManifestService
             $manifestNumber = $this->generateManifestNumber();
             $initialStatus = $assignedCourier ? TransferManifest::STATUS_LOADING : TransferManifest::STATUS_DRAFT;
 
+            $compPolicyService = app(CompensationPolicyService::class);
+            $courierPolicy = $compPolicyService->getActivePolicy(\App\Models\CompensationPolicy::ROLE_COURIER, $originHub->logistics_company_id);
+            $distanceKm = isset($data['distance_km']) ? (float) $data['distance_km'] : 0.0;
+            $expectedWeightKg = (float) $orders->sum(fn ($o) => (float) ($o->shipping_weight ?? 1.0));
+            $expectedCapacity = isset($data['expected_parcel_count'])
+                ? max(1, (int) $data['expected_parcel_count'])
+                : max($orders->count(), (int) ($courierPolicy->expected_manifest_parcels ?: 20));
+            $tripEstimate = $compPolicyService->estimateTransferCostPerParcel($courierPolicy, $distanceKm, $expectedCapacity, $expectedWeightKg);
+
             $manifest = TransferManifest::create([
                 'manifest_number' => $manifestNumber,
                 'sender_logistics_id' => $originHub->logistics_company_id,
@@ -110,8 +119,12 @@ class TransferManifestService
                 'destination_hub_id' => $destinationHub->id,
                 'assigned_courier_id' => $assignedCourier?->id,
                 'vehicle_plate_number' => ! empty($data['vehicle_plate_number']) ? strtoupper(trim($data['vehicle_plate_number'])) : null,
+                'distance_km' => $distanceKm > 0 ? round($distanceKm, 2) : null,
                 'status' => $initialStatus,
                 'total_parcels' => $orders->count(),
+                'expected_parcel_count' => $tripEstimate['expected_parcel_count'],
+                'estimated_trip_cost' => $tripEstimate['estimated_trip_cost'],
+                'expected_cost_per_parcel' => $tripEstimate['expected_cost_per_parcel'],
                 'created_by' => $operator->id,
                 'notes' => $data['notes'] ?? null,
             ]);

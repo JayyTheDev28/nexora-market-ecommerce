@@ -165,12 +165,38 @@
                     </table>
                 </div>
 
-                {{-- TAB 6: Profitability & Routes --}}
+                {{-- TAB 6: Shipping Profitability & Routes --}}
                 <div x-show="tab === 'profitability'" class="space-y-6">
+                    @if(!empty($profitability['missing_data_warnings']))
+                        <div class="rounded-2xl p-4 border bg-amber-500/10 border-amber-500/30 text-amber-900 text-xs space-y-1">
+                            <div class="font-bold flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[18px]">warning</span>
+                                <span>Profitability Reliability &amp; Capacity Warnings</span>
+                            </div>
+                            <ul class="list-disc list-inside space-y-0.5">
+                                @foreach($profitability['missing_data_warnings'] as $warn)
+                                    <li>{{ $warn }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
                     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Shipping Revenue</span><strong class="text-xl text-primary">₱{{ number_format($profitability['recognized_shipping_revenue'], 2) }}</strong></div>
-                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Courier Comp Total</span><strong class="text-xl text-amber-800">₱{{ number_format($profitability['total_courier_comp'], 2) }}</strong></div>
-                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Operating Expenses</span><strong class="text-xl text-rose-700">₱{{ number_format($profitability['operating_expenses_total'], 2) }}</strong></div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
+                            <span class="text-[10px] uppercase text-on-surface-variant block">Shipping Revenue</span>
+                            <strong class="text-xl text-primary">₱{{ number_format($profitability['recognized_shipping_revenue'], 2) }}</strong>
+                            <span class="text-[10px] text-outline block mt-0.5">Subsidies: ₱{{ number_format($profitability['platform_shipping_subsidies'], 2) }}</span>
+                        </div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
+                            <span class="text-[10px] uppercase text-on-surface-variant block">Courier Comp Total</span>
+                            <strong class="text-xl text-amber-800">₱{{ number_format($profitability['total_courier_comp'], 2) }}</strong>
+                            <span class="text-[10px] text-outline block mt-0.5">Pickup ₱{{ number_format($profitability['rider_pickup_comp'], 0) }} · Del ₱{{ number_format($profitability['rider_delivery_comp'], 0) }} · Linehaul ₱{{ number_format($profitability['transfer_courier_comp'], 0) }}</span>
+                        </div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
+                            <span class="text-[10px] uppercase text-on-surface-variant block">Hub &amp; Operating Costs</span>
+                            <strong class="text-xl text-rose-700">₱{{ number_format($profitability['operating_expenses_total'], 2) }}</strong>
+                            <span class="text-[10px] text-outline block mt-0.5">Interco Net: ₱{{ number_format($profitability['intercompany_net_allocation'] ?? 0, 2) }}</span>
+                        </div>
                         <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
                             <span class="text-[10px] uppercase text-on-surface-variant block">Net Operating Contribution</span>
                             <strong class="text-xl {{ $profitability['net_operating_contribution'] >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">₱{{ number_format($profitability['net_operating_contribution'], 2) }}</strong>
@@ -178,7 +204,11 @@
                                 <span class="text-[10px] text-outline block mt-0.5">{{ $profitability['contribution_note'] }}</span>
                             @endif
                         </div>
-                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant"><span class="text-[10px] uppercase text-on-surface-variant block">Operating Margin</span><strong class="text-xl">{{ $profitability['operating_margin_pct'] }}%</strong></div>
+                        <div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
+                            <span class="text-[10px] uppercase text-on-surface-variant block">Operating Margin</span>
+                            <strong class="text-xl">{{ $profitability['operating_margin_pct'] }}%</strong>
+                            <span class="text-[10px] text-outline block mt-0.5">Projected Active: ₱{{ number_format($profitability['projected_profit'] ?? 0, 2) }}</span>
+                        </div>
                     </div>
 
                     <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 overflow-x-auto">
@@ -203,6 +233,85 @@
                                     </tr>
                                 @empty
                                     <tr><td colspan="6" class="py-6 text-center text-outline">No completed deliveries in range to analyze routes.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {{-- Individual Order Profitability (Realized vs Projected) --}}
+                    <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 overflow-x-auto">
+                        <h3 class="text-sm font-bold mb-1">Individual Order Shipping Profitability</h3>
+                        <p class="text-[11px] text-on-surface-variant mb-3">Formula: Profit = Allocated Shipping Revenue + Subsidies − Logistics Operating Costs (distinguishing Realized vs Projected orders).</p>
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="border-b border-outline-variant text-[11px] uppercase text-on-surface-variant">
+                                    <th class="pb-2">Order</th>
+                                    <th class="pb-2">Stage</th>
+                                    <th class="pb-2">Route Type &amp; Path</th>
+                                    <th class="pb-2 text-right">Alloc. Rev</th>
+                                    <th class="pb-2 text-right">Subsidy</th>
+                                    <th class="pb-2 text-right">Op. Cost</th>
+                                    <th class="pb-2 text-right">Net Profit</th>
+                                    <th class="pb-2 text-right">Margin</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-outline-variant/40">
+                                @forelse(($profitability['order_profitability'] ?? []) as $op)
+                                    <tr>
+                                        <td class="py-2 font-mono font-bold">{{ $op['order_number'] }}</td>
+                                        <td class="py-2">
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $op['is_realized'] ? 'bg-emerald-500/10 text-emerald-700' : 'bg-indigo-500/10 text-indigo-700' }}">
+                                                {{ $op['is_realized'] ? 'Realized' : 'Projected' }}
+                                            </span>
+                                        </td>
+                                        <td class="py-2">{{ strtoupper(str_replace('_', ' ', $op['route_type'])) }} · {{ $op['route'] }}</td>
+                                        <td class="py-2 text-right">₱{{ number_format($op['allocated_shipping_revenue'], 2) }}</td>
+                                        <td class="py-2 text-right">₱{{ number_format($op['subsidies'], 2) }}</td>
+                                        <td class="py-2 text-right">₱{{ number_format($op['total_operating_cost'], 2) }}</td>
+                                        <td class="py-2 text-right font-bold {{ $op['is_unprofitable'] ? 'text-rose-700' : 'text-emerald-700' }}">₱{{ number_format($op['net_profit'], 2) }}</td>
+                                        <td class="py-2 text-right">{{ $op['margin_pct'] }}%</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="8" class="py-5 text-center text-outline">No orders in range.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {{-- Transfer Manifest Expected vs Actual Cost Per Parcel --}}
+                    <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 overflow-x-auto">
+                        <h3 class="text-sm font-bold mb-3">Transfer Manifest Trip Cost &amp; Consolidation Efficiency</h3>
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="border-b border-outline-variant text-[11px] uppercase text-on-surface-variant">
+                                    <th class="pb-2">Manifest</th>
+                                    <th class="pb-2">Route</th>
+                                    <th class="pb-2 text-right">Parcels (Actual/Exp)</th>
+                                    <th class="pb-2 text-right">Est. Trip Cost</th>
+                                    <th class="pb-2 text-right">Actual Trip Cost</th>
+                                    <th class="pb-2 text-right">Cost / Parcel</th>
+                                    <th class="pb-2 text-right">Utilization</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-outline-variant/40">
+                                @forelse(($profitability['manifest_costs'] ?? []) as $mc)
+                                    <tr>
+                                        <td class="py-2 font-mono font-bold">{{ $mc['manifest_number'] }}</td>
+                                        <td class="py-2">{{ $mc['route'] }} @if($mc['distance_km'])<span class="text-outline">({{ $mc['distance_km'] }} km)</span>@endif</td>
+                                        <td class="py-2 text-right">{{ $mc['parcels'] }} / {{ $mc['expected_parcels'] ?? 20 }}</td>
+                                        <td class="py-2 text-right">{{ $mc['estimated_trip_cost'] !== null ? '₱' . number_format($mc['estimated_trip_cost'], 2) : '—' }}</td>
+                                        <td class="py-2 text-right font-semibold">₱{{ number_format($mc['total_manifest_cost'], 2) }}</td>
+                                        <td class="py-2 text-right">₱{{ number_format($mc['actual_cost_per_parcel'] ?? 0, 2) }}</td>
+                                        <td class="py-2 text-right">
+                                            @if(!empty($mc['low_volume_warning']))
+                                                <span class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 text-[10px] font-bold">LOW VOLUME</span>
+                                            @else
+                                                <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[10px] font-bold">CONSOLIDATED</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="7" class="py-5 text-center text-outline">No transfer manifests in range.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>

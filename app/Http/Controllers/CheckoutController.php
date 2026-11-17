@@ -51,24 +51,33 @@ class CheckoutController extends Controller
 
         // Group items by seller
         $grouped = $items->groupBy(fn ($item) => $item->product->seller_id);
+        $shippingPricing = app(\App\Services\ShippingPricingService::class);
 
-        // Calculate store weights and shipping fees: ceil(weight)
+        // Calculate store weights and authoritative shipping fees via ShippingPricingService
         $storeWeights = [];
         $storeShippingFees = [];
+        $storeQuotes = [];
         $totalSubtotal = 0;
         $totalShipping = 0;
+        $allServiceable = true;
+        $serviceabilityError = null;
 
         foreach ($grouped as $sellerId => $storeItems) {
-            $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-            $billedWeight = max(1, (int) ceil($rawWeight));
+            $quote = $shippingPricing->calculateSmartQuote($storeItems, (int) $sellerId, $defaultAddress);
             $storeWeights[$sellerId] = [
-                'raw' => $rawWeight,
-                'billed' => $billedWeight,
+                'raw' => $quote['raw_weight_kg'],
+                'volumetric' => $quote['volumetric_weight_kg'],
+                'billed' => $quote['billed_weight_kg'],
+                'is_oversized' => $quote['is_oversized'],
             ];
 
-            // ₱50 for first kg, ₱20 for each additional kg
-            $shippingFee = 50.00 + (20.00 * ($billedWeight - 1));
+            $shippingFee = $quote['shipping_fee'];
             $storeShippingFees[$sellerId] = $shippingFee;
+            $storeQuotes[$sellerId] = $quote;
+            if (! $quote['serviceable']) {
+                $allServiceable = false;
+                $serviceabilityError ??= $quote['serviceability_error'];
+            }
 
             $storeSubtotal = $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
             $totalSubtotal += $storeSubtotal;
@@ -97,9 +106,66 @@ class CheckoutController extends Controller
             'userVouchers',
             'storeWeights',
             'storeShippingFees',
+            'storeQuotes',
+            'allServiceable',
+            'serviceabilityError',
             'totalSubtotal',
             'totalShipping'
         ));
+    }
+
+    /**
+     * Authoritative AJAX quote endpoint so Web Checkout preview updates dynamically on address change.
+     */
+    public function quote(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        $items = $user->cartItems()
+            ->with(['product' => fn ($q) => $q->withTrashed()->with('seller.sellerProfile')])
+            ->where('selected', true)
+            ->get();
+
+        $address = $request->filled('address_id')
+            ? $user->addresses()->find((int) $request->input('address_id'))
+            : null;
+        $locationOverride = $address ? null : $request->only([
+            'province_code', 'province_name', 'municipality_code', 'municipality_name', 'barangay_code', 'barangay_name',
+        ]);
+
+        $shippingPricing = app(\App\Services\ShippingPricingService::class);
+        $grouped = $items->groupBy(fn ($item) => $item->product->seller_id);
+
+        $storeShippingFees = [];
+        $storeDetails = [];
+        $totalShipping = 0.0;
+        $allServiceable = true;
+        $serviceabilityError = null;
+
+        foreach ($grouped as $sellerId => $storeItems) {
+            $q = $shippingPricing->calculateSmartQuote($storeItems, (int) $sellerId, $address, $locationOverride);
+            $storeShippingFees[$sellerId] = $q['shipping_fee'];
+            $storeDetails[$sellerId] = [
+                'shipping_fee' => $q['shipping_fee'],
+                'route_type' => $q['route_type'],
+                'billed_weight_kg' => $q['billed_weight_kg'],
+                'serviceable' => $q['serviceable'],
+                'serviceability_error' => $q['serviceability_error'],
+                'breakdown' => $q['breakdown'],
+            ];
+            $totalShipping += $q['shipping_fee'];
+            if (! $q['serviceable']) {
+                $allServiceable = false;
+                $serviceabilityError ??= $q['serviceability_error'];
+            }
+        }
+
+        return response()->json([
+            'store_shipping_fees' => $storeShippingFees,
+            'store_details' => $storeDetails,
+            'total_shipping' => round($totalShipping, 2),
+            'serviceable' => $allServiceable,
+            'serviceability_error' => $serviceabilityError,
+        ]);
     }
 
     /**
@@ -349,14 +415,14 @@ class CheckoutController extends Controller
 
             // Distribute shipping discount
             $totalShippingDiscount = 0.00;
+            $shippingFunder = $shippingVoucher ? ($shippingVoucher->funding_source ?? 'platform') : 'none';
+            $storeQuotes = [];
+            foreach ($grouped as $sellerId => $storeItems) {
+                $storeQuotes[$sellerId] = $shippingPricing->calculateSmartQuote($storeItems, (int) $sellerId, $address);
+            }
             if ($shippingVoucher) {
                 // Calculate total shipping across all stores
-                $totalBaseShipping = 0;
-                foreach ($grouped as $storeItems) {
-                    $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                    $calc = $shippingPricing->calculateForWeight($rawWeight);
-                    $totalBaseShipping += $calc['shipping_fee'];
-                }
+                $totalBaseShipping = collect($storeQuotes)->sum('shipping_fee');
                 $totalShippingDiscount = $shippingVoucher->calculateDiscount($totalBaseShipping);
             }
             $shippingDiscountRemaining = $totalShippingDiscount;
@@ -367,8 +433,7 @@ class CheckoutController extends Controller
                 $isLast = ($index === $sellerCount);
 
                 $storeSubtotal = $storeItems->sum(fn ($i) => $i->unit_price * $i->quantity);
-                $rawWeight = $storeItems->sum(fn ($i) => (float) ($i->product->weight ?? 1.0) * $i->quantity);
-                $shippingCalc = $shippingPricing->calculateForWeight($rawWeight);
+                $shippingCalc = $storeQuotes[$sellerId];
                 $billedWeight = $shippingCalc['billed_weight_kg'];
                 $storeShippingFee = $shippingCalc['shipping_fee'];
 
@@ -432,12 +497,15 @@ class CheckoutController extends Controller
                     'store_voucher_discount' => round($storeDiscount, 2),
                     'platform_voucher_discount' => round($storePlatformDiscount, 2),
                     'shipping_voucher_discount' => round($storeShippingDiscount, 2),
-                    'platform_shipping_subsidy' => round($storeShippingDiscount, 2),
+                    'platform_shipping_subsidy' => $shippingFunder === 'platform' ? round($storeShippingDiscount, 2) : 0.00,
+                    'shipping_voucher_funder' => $storeShippingDiscount > 0 ? $shippingFunder : null,
                     'shipping_fee' => $effectiveShippingFee,
                     'base_shipping_fee' => round($storeShippingFee, 2),
                     'shipping_weight' => $billedWeight,
                     'shipping_voucher_id' => $shippingVoucher?->id,
                     'shipping_rate_policy_id' => $shippingCalc['policy']->id,
+                    'shipping_route_type' => $shippingCalc['route_type'],
+                    'shipping_quote_breakdown' => $shippingCalc['breakdown'],
                     'store_voucher_id' => $appliedStoreVoucherId,
                     'platform_voucher_id' => $platformVoucher?->id,
                     'total' => $storeTotal,
