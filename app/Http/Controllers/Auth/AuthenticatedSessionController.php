@@ -31,6 +31,12 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
+        if ($remember) {
+            \Illuminate\Support\Facades\Cookie::queue('nexora_remember_email', strtolower($credentials['email']), 60 * 24 * 30);
+        } else {
+            \Illuminate\Support\Facades\Cookie::queue(\Illuminate\Support\Facades\Cookie::forget('nexora_remember_email'));
+        }
+
         $request->session()->regenerate();
 
         $user = Auth::user();

@@ -12,6 +12,7 @@ use App\Http\Resources\Api\Mobile\RiderProfileResource;
 use App\Http\Resources\Api\Mobile\UserResource;
 use App\Models\Address;
 use App\Models\User;
+use App\Services\PasswordResetService;
 use Carbon\Carbon;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
@@ -103,11 +104,15 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken('buyer-app')->plainTextToken;
+        $remember = $request->boolean('remember', true);
+        $expiresAt = $remember ? now()->addDays(30) : now()->addHours(12);
+        $token = $user->createToken('buyer-app', ['*'], $expiresAt)->plainTextToken;
 
         return response()->json([
             'data' => [
                 'token' => $token,
+                'remember' => $remember,
+                'expires_at' => $expiresAt->toIso8601String(),
                 'user' => new UserResource($user),
             ],
             'message' => 'Login successful.',
@@ -331,12 +336,16 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken($user->isCourier() ? 'courier-app' : 'rider-app')->plainTextToken;
+        $remember = $request->boolean('remember', true);
+        $expiresAt = $remember ? now()->addDays(30) : now()->addHours(12);
+        $token = $user->createToken($user->isCourier() ? 'courier-app' : 'rider-app', ['*'], $expiresAt)->plainTextToken;
         $profile = $user->courierProfile()->with(['sortingCenter', 'logisticsCompany', 'assignedHub'])->first();
 
         return response()->json([
             'data' => [
                 'token' => $token,
+                'remember' => $remember,
+                'expires_at' => $expiresAt->toIso8601String(),
                 'role' => $user->role,
                 'user' => new UserResource($user),
                 'courier_profile' => $profile ? new RiderProfileResource($profile) : null,
@@ -459,6 +468,89 @@ class AuthController extends Controller
         return response()->json([
             'data' => null,
             'message' => 'Password updated successfully.',
+        ]);
+    }
+
+    /**
+     * Request a 6-digit Password Reset OTP via email (Buyer, Rider, Transfer Courier, etc.)
+     * POST /api/mobile/v1/auth/forgot-password
+     */
+    public function forgotPassword(Request $request, PasswordResetService $resetService): JsonResponse
+    {
+        $identifier = (string) ($request->input('email') ?? $request->input('email_or_phone') ?? $request->input('identifier') ?? '');
+        $request->merge(['identifier' => $identifier]);
+        $request->validate([
+            'identifier' => ['required', 'string', 'max:255'],
+            'scope' => ['nullable', 'in:buyer,rider,courier'],
+        ]);
+
+        $scope = $request->input('scope') === 'courier' ? 'rider' : $request->input('scope');
+        $res = $resetService->sendResetOtp($identifier, $scope);
+
+        return response()->json([
+            'data' => [
+                'email' => $res['email'],
+                'expires_in_minutes' => $res['expires_in_minutes'],
+            ],
+            'message' => "A 6-digit password reset code has been sent to {$res['email']}.",
+        ]);
+    }
+
+    /**
+     * Verify a 6-digit Password Reset OTP before entering new password
+     * POST /api/mobile/v1/auth/verify-reset-otp
+     */
+    public function verifyResetOtp(Request $request, PasswordResetService $resetService): JsonResponse
+    {
+        $identifier = (string) ($request->input('email') ?? $request->input('email_or_phone') ?? $request->input('identifier') ?? '');
+        $request->merge(['identifier' => $identifier]);
+        $validated = $request->validate([
+            'identifier' => ['required', 'string', 'max:255'],
+            'otp' => ['required', 'string', 'size:6'],
+            'scope' => ['nullable', 'in:buyer,rider,courier'],
+        ]);
+
+        $scope = $validated['scope'] ?? null;
+        if ($scope === 'courier') {
+            $scope = 'rider';
+        }
+        $user = $resetService->verifyResetOtp($validated['identifier'], $validated['otp'], $scope);
+
+        return response()->json([
+            'data' => [
+                'verified' => true,
+                'email' => $user->email,
+            ],
+            'message' => 'Reset code verified. You may now set a new password.',
+        ]);
+    }
+
+    /**
+     * Reset password using verified 6-digit OTP
+     * POST /api/mobile/v1/auth/reset-password
+     */
+    public function resetPassword(Request $request, PasswordResetService $resetService): JsonResponse
+    {
+        $identifier = (string) ($request->input('email') ?? $request->input('email_or_phone') ?? $request->input('identifier') ?? '');
+        $request->merge(['identifier' => $identifier]);
+        $validated = $request->validate([
+            'identifier' => ['required', 'string', 'max:255'],
+            'otp' => ['required', 'string', 'size:6'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'scope' => ['nullable', 'in:buyer,rider,courier'],
+        ]);
+
+        $scope = $validated['scope'] ?? null;
+        if ($scope === 'courier') {
+            $scope = 'rider';
+        }
+        $user = $resetService->resetPassword($validated['identifier'], $validated['otp'], $validated['password'], $scope);
+
+        return response()->json([
+            'data' => [
+                'email' => $user->email,
+            ],
+            'message' => 'Password reset successfully. Please sign in with your new password.',
         ]);
     }
 }

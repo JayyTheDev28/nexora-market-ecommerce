@@ -30,6 +30,12 @@
             </div>
         @endif
 
+        @if (session('status'))
+            <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+                <p class="font-body-sm text-xs font-semibold text-emerald-700 leading-snug">{{ session('status') }}</p>
+            </div>
+        @endif
+
         @if (session('verified'))
             <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
                 <p class="font-body-sm text-xs font-semibold text-emerald-700 leading-snug">Email verified successfully! Please sign in to continue.</p>
@@ -61,7 +67,7 @@
                         type="email"
                         id="email"
                         name="email"
-                        value="{{ old('email') }}"
+                        value="{{ old('email', request()->cookie('nexora_remember_email')) }}"
                         required
                         autofocus
                         placeholder="name@example.com"
@@ -74,7 +80,7 @@
                         <label for="password" class="font-label-md text-xs font-semibold text-on-surface-variant">
                             Password
                         </label>
-                        <a href="#" class="font-label-md text-[11px] text-primary hover:underline font-semibold">Forgot password?</a>
+                        <a href="{{ route('password.request') }}" class="font-label-md text-[11px] text-primary hover:underline font-semibold">Forgot password?</a>
                     </div>
                     <div class="relative">
                         <input
@@ -100,6 +106,8 @@
                         <input
                             type="checkbox"
                             name="remember"
+                            value="1"
+                            @checked(old('remember', (bool) request()->cookie('nexora_remember_email')))
                             class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer">
                         <span class="text-xs text-on-surface-variant font-medium">Remember me</span>
                     </label>

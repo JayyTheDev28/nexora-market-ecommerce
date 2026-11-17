@@ -62,6 +62,17 @@ Route::prefix('mobile/v1')->group(function () {
         Route::post('/rider/login', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'riderLogin'])->name('api.mobile.rider.login');
         Route::post('/rider/activate/{token}', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'riderActivate'])->name('api.mobile.rider.activate');
 
+        // Self-service password reset OTP endpoints (Buyer, Rider, Transfer Courier)
+        Route::post('/forgot-password', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'forgotPassword'])
+            ->middleware('throttle:10,1')
+            ->name('api.mobile.auth.forgot-password');
+        Route::post('/verify-reset-otp', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'verifyResetOtp'])
+            ->middleware('throttle:15,1')
+            ->name('api.mobile.auth.verify-reset-otp');
+        Route::post('/reset-password', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'resetPassword'])
+            ->middleware('throttle:10,1')
+            ->name('api.mobile.auth.reset-password');
+
         // Authenticated session routes
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/me', [\App\Http\Controllers\Api\Mobile\AuthController::class, 'me'])->name('api.mobile.auth.me');
