@@ -103,8 +103,8 @@
                             </div>
                             <div>
                                 <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                                    {{ $order->status === 'placed' ? 'bg-primary/10 text-primary border border-primary/20' : ($order->status === 'cancelled' ? 'bg-error/10 text-error' : ($order->status === 'completed' || $order->status === 'delivered' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-blue-600')) }}">
-                                    {{ str_replace('_', ' ', $order->status) }}
+                                    {{ $order->status === 'placed' ? 'bg-primary/10 text-primary border border-primary/20' : ($order->status === 'cancelled' ? 'bg-error/10 text-error' : ($order->status === 'completed' || $order->status === 'delivered' ? 'bg-emerald-500/10 text-emerald-600' : ($order->status === 'ready_for_pickup' || $order->status === 'assigned' ? 'bg-amber-500/10 text-amber-700 border border-amber-500/20' : 'bg-blue-500/10 text-blue-600'))) }}">
+                                    {{ in_array($order->status, ['ready_for_pickup', 'assigned'], true) ? 'Awaiting Rider Pickup' : ($order->status === 'picked_up' ? 'Picked Up' : str_replace('_', ' ', $order->status)) }}
                                 </span>
                             </div>
                         </div>
@@ -131,6 +131,9 @@
                             <div class="text-xs text-on-surface-variant">
                                 <span>Ship to: <strong class="text-on-surface">{{ $order->address->municipality_name ?? '—' }}, {{ $order->address->province_name ?? '—' }}</strong></span>
                                 <span class="ml-3">Total: <strong class="text-primary font-bold text-sm">₱{{ number_format($order->total, 2) }}</strong></span>
+                                @if($order->pickupCourier && in_array($order->status, ['ready_for_pickup', 'assigned', 'picked_up'], true))
+                                    <span class="ml-3 text-[11px]">Rider: <strong class="text-on-surface">{{ $order->pickupCourier->full_name }}</strong></span>
+                                @endif
                             </div>
 
                             <div class="flex items-center gap-2">

@@ -178,9 +178,69 @@
                                 {{ $actionLabel }}
                             </button>
                         </form>
+                    @elseif($order->status === 'ready_for_pickup' || $order->status === 'assigned')
+                        <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5">
+                            <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold">
+                                <span class="material-symbols-outlined text-[18px]">local_shipping</span>
+                                <span>Status: Awaiting Rider Pickup</span>
+                            </div>
+                            <p class="text-[11px] text-on-surface-variant leading-relaxed">
+                                Your parcel is ready for collection. Wait for the assigned pickup rider to arrive and scan the printed waybill barcode
+                                @if($order->tracking_number)
+                                    (<span class="font-mono font-bold text-on-surface">{{ $order->tracking_number }}</span>)
+                                @endif
+                                to confirm physical pickup.
+                            </p>
+
+                            @if($order->pickupCourier)
+                                <div class="pt-2 border-t border-amber-500/20 space-y-1 text-[11px]">
+                                    <div>
+                                        <span class="text-on-surface-variant">Assigned Rider:</span>
+                                        <strong class="text-on-surface">{{ $order->pickupCourier->full_name }}</strong>
+                                    </div>
+                                    @if($order->pickupCourier->courierProfile?->vehicle_type || $order->pickupCourier->courierProfile?->plate_number)
+                                        <div>
+                                            <span class="text-on-surface-variant">Vehicle:</span>
+                                            <span class="text-on-surface font-medium">
+                                                {{ $order->pickupCourier->courierProfile?->vehicle_type ?? 'Rider' }}
+                                                @if($order->pickupCourier->courierProfile?->plate_number)
+                                                    ({{ $order->pickupCourier->courierProfile->plate_number }})
+                                                @endif
+                                            </span>
+                                        </div>
+                                    @endif
+                                    @if($order->pickupCourier->contact_number)
+                                        <div>
+                                            <span class="text-on-surface-variant">Rider Contact:</span>
+                                            <span class="font-mono text-on-surface">{{ $order->pickupCourier->contact_number }}</span>
+                                        </div>
+                                    @endif
+                                </div>
+                            @else
+                                <p class="pt-2 border-t border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                                    Logistics is currently assigning a pickup rider for this order.
+                                </p>
+                            @endif
+
+                            @if($order->originHub || $order->pickupLogistics)
+                                <div class="text-[11px] text-on-surface-variant">
+                                    <span>Pickup Hub:</span>
+                                    <strong class="text-on-surface">{{ $order->originHub?->name ?? $order->pickupLogistics?->logisticsProfile?->company_name ?? $order->pickupLogistics?->full_name }}</strong>
+                                </div>
+                            @endif
+                        </div>
                     @else
-                        <div class="p-3.5 rounded-xl bg-surface-container-low text-xs text-on-surface-variant">
-                            @if(in_array($order->status, ['picked_up', 'sorting_hub', 'in_transit', 'out_for_delivery']))
+                        <div class="p-3.5 rounded-xl bg-surface-container-low text-xs text-on-surface-variant space-y-1">
+                            @if($order->status === 'picked_up')
+                                <p class="font-bold text-indigo-700 dark:text-indigo-300">Picked Up by Rider</p>
+                                <p class="text-[11px]">
+                                    Collected by <strong>{{ $order->pickupCourier?->full_name ?? 'Assigned Rider' }}</strong>
+                                    @if($order->picked_up_at)
+                                        on {{ $order->picked_up_at->format('M j, Y · g:i A') }}
+                                    @endif
+                                    and en route to origin hub for receiving scan.
+                                </p>
+                            @elseif(in_array($order->status, ['received_at_hub', 'at_hub', 'at_sorting_center', 'sorted', 'in_transit_hub', 'in_transit', 'assigned_to_rider', 'out_for_delivery', 'sorting_hub']))
                                 Parcel handed over to logistics sorting center and courier dispatch.
                             @elseif($order->status === 'delivered' || $order->status === 'completed')
                                 Order has been successfully delivered and completed.

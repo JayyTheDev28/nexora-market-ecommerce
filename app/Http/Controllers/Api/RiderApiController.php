@@ -199,21 +199,36 @@ class RiderApiController extends Controller
         $trackingNumber = trim($validated['tracking_number']);
 
         return IdempotencyService::run($key, $rider->id, "api_pickup_{$trackingNumber}", function () use ($rider, $trackingNumber) {
+            if (! $rider || ! $rider->isRider()) {
+                return response()->json(['error' => 'Only authorized delivery riders can confirm pickup.'], 403);
+            }
+
             $resolvedOrder = Order::findByScanIdentifier($trackingNumber);
 
             if (! $resolvedOrder) {
                 return response()->json(['error' => 'Order not found.'], 404);
             }
 
+            $expectedBarcode = Order::normalizeScanIdentifier((string) ($resolvedOrder->tracking_number ?? ''));
+            $scannedBarcode = Order::normalizeScanIdentifier($trackingNumber);
+            if ($expectedBarcode === '' || $scannedBarcode !== $expectedBarcode) {
+                return response()->json(['error' => 'Scanned barcode does not match the parcel\'s actual waybill barcode.'], 422);
+            }
+
             return DB::transaction(function () use ($rider, $resolvedOrder) {
                 $order = Order::whereKey($resolvedOrder->id)->lockForUpdate()->firstOrFail();
 
-                if ((int) $order->pickup_courier_id !== (int) $rider->id) {
+                $assignedPickupRiderId = (int) ($order->pickup_courier_id ?: $order->pickup_rider_id ?: 0);
+                if ($assignedPickupRiderId !== (int) $rider->id) {
                     return response()->json(['error' => 'You are not assigned as the pickup courier for this parcel.'], 403);
                 }
 
+                if (in_array($order->handling_status, ['quarantined', 'missing'], true)) {
+                    return response()->json(['error' => 'Pickup blocked because this parcel is under an active custody or exception hold.'], 422);
+                }
+
                 if ($order->status === 'picked_up') {
-                    return response()->json(['success' => true, 'message' => 'Already marked as Picked Up.']);
+                    return response()->json(['error' => 'Order has already been marked as Picked Up.'], 422);
                 }
 
                 if (! in_array($order->status, ['ready_for_pickup', 'assigned'], true)) {
@@ -221,12 +236,15 @@ class RiderApiController extends Controller
                 }
 
                 $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
-                $this->payoutService->creditPickupPay($rider, $order);
+                $earning = $this->payoutService->creditPickupPay($rider, $order);
+                $freshOrder = $order->fresh();
 
                 return response()->json([
                     'success' => true,
-                    'message' => "Order {$order->order_number} marked as Picked Up. ₱30.00 pay credited.",
+                    'message' => "Order {$freshOrder->order_number} marked as Picked Up. ₱" . number_format((float) $earning->amount, 2) . ' pay credited.',
                     'order_status' => 'picked_up',
+                    'picked_up_at' => $freshOrder->picked_up_at?->toIso8601String(),
+                    'pickup_rider_id' => (int) $rider->id,
                 ]);
             });
         });

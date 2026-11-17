@@ -269,48 +269,67 @@ class DashboardController extends Controller implements HasMiddleware
         ]);
 
         $rider = $request->user();
+        abort_unless($rider && $rider->isRider(), 403, 'Only authorized delivery riders can confirm parcel pickup.');
+
         $trackingNumber = trim($validated['tracking_number']);
         $idempotencyKey = $validated['idempotency_key'] ?? $request->header('Idempotency-Key');
 
         return IdempotencyService::run($idempotencyKey, $rider->id, "pickup_{$trackingNumber}", function () use ($request, $rider, $trackingNumber) {
-            $order = Order::where(function ($q) use ($trackingNumber) {
-                $q->where('tracking_number', $trackingNumber)
-                  ->orWhere('order_number', $trackingNumber);
-            })->first();
+            $resolvedOrder = Order::findByScanIdentifier($trackingNumber);
 
-            if (! $order) {
+            if (! $resolvedOrder) {
                 $msg = "Order with tracking number '{$trackingNumber}' not found.";
                 return $request->wantsJson()
                     ? response()->json(['success' => false, 'message' => $msg], 404)
                     : back()->withErrors(['tracking_number' => $msg]);
             }
 
-            abort_unless((int) $order->pickup_courier_id === (int) $rider->id, 403, 'You are not assigned as the pickup courier for this parcel.');
-
-            if ($order->status === 'picked_up') {
-                $msg = "Parcel {$order->order_number} is already marked as Picked Up.";
-                return $request->wantsJson() ? response()->json(['success' => true, 'message' => $msg]) : back()->with('info', $msg);
+            $expectedBarcode = Order::normalizeScanIdentifier((string) ($resolvedOrder->tracking_number ?? ''));
+            $scannedBarcode = Order::normalizeScanIdentifier($trackingNumber);
+            if ($expectedBarcode === '' || $scannedBarcode !== $expectedBarcode) {
+                $msg = 'Scanned barcode does not match the parcel\'s actual waybill barcode.';
+                return $request->wantsJson()
+                    ? response()->json(['success' => false, 'message' => $msg], 422)
+                    : back()->withErrors(['tracking_number' => $msg]);
             }
 
-            abort_unless(in_array($order->status, ['ready_for_pickup', 'assigned'], true), 422, "Cannot confirm pickup for parcel in status '{$order->status}'.");
+            return DB::transaction(function () use ($request, $rider, $resolvedOrder) {
+                $order = Order::whereKey($resolvedOrder->id)->lockForUpdate()->firstOrFail();
 
-            // Transition state to picked_up
-            $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
+                $assignedPickupRiderId = (int) ($order->pickup_courier_id ?: $order->pickup_rider_id ?: 0);
+                abort_unless($assignedPickupRiderId === (int) $rider->id, 403, 'You are not assigned as the pickup courier for this parcel.');
 
-            // Credit ₱30.00 pickup pay
-            $this->payoutService->creditPickupPay($rider, $order);
+                if (in_array($order->handling_status, ['quarantined', 'missing'], true)) {
+                    $msg = 'Pickup blocked because this parcel is under an active custody or exception hold.';
+                    return $request->wantsJson()
+                        ? response()->json(['success' => false, 'message' => $msg], 422)
+                        : back()->withErrors(['tracking_number' => $msg]);
+                }
 
-            $msg = "Parcel {$order->order_number} confirmed as Picked Up! ₱30.00 pickup pay credited to your balance.";
+                if ($order->status === 'picked_up') {
+                    $msg = "Parcel {$order->order_number} is already marked as Picked Up.";
+                    return $request->wantsJson()
+                        ? response()->json(['success' => false, 'message' => $msg], 422)
+                        : back()->withErrors(['tracking_number' => $msg]);
+                }
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => $msg,
-                    'order' => $order,
-                ]);
-            }
+                abort_unless(in_array($order->status, ['ready_for_pickup', 'assigned'], true), 422, "Cannot confirm pickup for parcel in status '{$order->status}'.");
 
-            return back()->with('status', $msg);
+                $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
+                $earning = $this->payoutService->creditPickupPay($rider, $order);
+
+                $msg = "Parcel {$order->order_number} confirmed as Picked Up! ₱" . number_format((float) $earning->amount, 2) . ' pickup pay credited to your balance.';
+
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $msg,
+                        'order' => $order->fresh(),
+                    ]);
+                }
+
+                return back()->with('status', $msg);
+            });
         });
     }
 

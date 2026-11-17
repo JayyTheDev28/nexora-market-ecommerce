@@ -263,11 +263,11 @@ class EndToEndLogisticsWorkflowTest extends TestCase
         ])->assertOk();
         $this->assertEquals(30.00, (float) $pickupResp->json('data.earned_pay'));
 
-        // Negative: Duplicate scan does not duplicate compensation
+        // Negative: Duplicate scan is rejected and does not duplicate compensation
         $this->postJson('/api/mobile/v1/rider/pickup', [
             'tracking_number' => $order->tracking_number,
             'expected_order_id' => $order->id,
-        ])->assertOk();
+        ])->assertStatus(422);
         $this->assertSame(1, RiderEarning::where('courier_id', $lagunaPickupRider->id)->where('order_id', $order->id)->where('type', 'pickup')->count());
 
         // ISSUE 1 CHECK: Rider Home (/profile) & Earnings (/earnings) both report 30.00 today

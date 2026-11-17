@@ -202,13 +202,12 @@ class MobileRiderApiTest extends TestCase
         $this->assertEquals('picked_up', $order->fresh()->status);
         $this->assertEquals(30.00, (float) $this->courierProfile->fresh()->earnings_balance);
 
-        // Test Idempotency / Already picked up
+        // Test duplicate pickup rejection (without reusing idempotency key)
         $pickupRes2 = $this->withHeader('Idempotency-Key', 'mobile-pickup-2')
             ->postJson('/api/mobile/v1/rider/pickup', [
                 'tracking_number' => $order->tracking_number,
             ]);
-        $pickupRes2->assertOk()
-            ->assertJsonPath('data.order_status', 'picked_up');
+        $pickupRes2->assertStatus(422);
     }
 
     public function test_mobile_rider_active_deliveries_and_history(): void

@@ -21,14 +21,12 @@ class OrderController extends Controller
         'placed' => 'confirmed',
         'confirmed' => 'preparing',
         'preparing' => 'ready_for_pickup',
-        'ready_for_pickup' => 'picked_up',
     ];
 
     private const ACTION_LABELS = [
         'confirmed' => 'Accept Order',
         'preparing' => 'Start Packing & Preparing',
         'ready_for_pickup' => 'Mark Ready for Courier Pickup',
-        'picked_up' => 'Confirm Courier Handover',
     ];
 
     public function index(Request $request): View
@@ -43,6 +41,8 @@ class OrderController extends Controller
             'items' => fn ($q) => $q->whereHas('product', fn ($sq) => $sq->where('seller_id', $sellerId)),
             'buyer',
             'address',
+            'pickupCourier.courierProfile',
+            'originHub',
         ])
         ->latest('placed_at')
         ->latest('id');
@@ -109,7 +109,16 @@ class OrderController extends Controller
     {
         $this->authorizeSellerInvolved($request, $order);
 
-        $order->load(['items.product', 'buyer', 'address', 'statusHistory.changedBy', 'dispute']);
+        $order->load([
+            'items.product',
+            'buyer',
+            'address',
+            'statusHistory.changedBy',
+            'dispute',
+            'pickupCourier.courierProfile',
+            'pickupLogistics.logisticsProfile',
+            'originHub',
+        ]);
 
         $nextStatus = self::SELLER_TRANSITIONS[$order->status] ?? null;
         $actionLabel = $nextStatus ? self::ACTION_LABELS[$nextStatus] : null;
@@ -120,6 +129,11 @@ class OrderController extends Controller
     public function advance(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeSellerInvolved($request, $order);
+
+        $requestedTarget = $request->input('status') ?? $request->input('next_status');
+        if ($requestedTarget === 'picked_up' || $order->status === 'ready_for_pickup') {
+            abort(403, 'Sellers cannot mark an order as picked up. Only the assigned pickup rider can confirm collection by scanning the waybill barcode.');
+        }
 
         $nextStatus = self::SELLER_TRANSITIONS[$order->status] ?? null;
 

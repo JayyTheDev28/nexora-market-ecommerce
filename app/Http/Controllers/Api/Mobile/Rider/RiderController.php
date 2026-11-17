@@ -356,6 +356,7 @@ class RiderController extends Controller
     {
         /** @var User $rider */
         $rider = $request->user();
+        abort_unless($rider && $rider->isRider(), 403, 'Only authorized delivery riders can confirm parcel pickup.');
 
         $validated = $request->validate([
             'tracking_number' => ['required', 'string', 'max:100'],
@@ -376,6 +377,15 @@ class RiderController extends Controller
                 ], 404);
             }
 
+            $expectedBarcode = Order::normalizeScanIdentifier((string) ($resolvedOrder->tracking_number ?? ''));
+            $scannedBarcode = Order::normalizeScanIdentifier($trackingNumber);
+            if ($expectedBarcode === '' || $scannedBarcode !== $expectedBarcode) {
+                return response()->json([
+                    'message' => 'Scanned barcode does not match the parcel\'s actual waybill barcode.',
+                    'errors' => ['tracking_number' => ['Invalid waybill barcode scanned.']],
+                ], 422);
+            }
+
             if ($expectedOrderId !== null && (int) $resolvedOrder->id !== $expectedOrderId) {
                 return response()->json([
                     'message' => "Scanned barcode '{$trackingNumber}' does not match your active pickup order.",
@@ -386,23 +396,26 @@ class RiderController extends Controller
             return DB::transaction(function () use ($rider, $resolvedOrder) {
                 $order = Order::whereKey($resolvedOrder->id)->lockForUpdate()->firstOrFail();
 
-                if ((int) $order->pickup_courier_id !== (int) $rider->id) {
+                $assignedPickupRiderId = (int) ($order->pickup_courier_id ?: $order->pickup_rider_id ?: 0);
+                if ($assignedPickupRiderId !== (int) $rider->id) {
                     return response()->json([
                         'message' => 'You are not assigned as the pickup courier for this parcel.',
                         'errors' => ['courier' => ['You are not assigned as the pickup courier for this parcel.']],
                     ], 403);
                 }
 
+                if (in_array($order->handling_status, ['quarantined', 'missing'], true)) {
+                    return response()->json([
+                        'message' => 'Pickup blocked because this parcel is under an active custody or exception hold.',
+                        'errors' => ['handling_status' => ['Parcel is under handling hold.']],
+                    ], 422);
+                }
+
                 if ($order->status === 'picked_up') {
                     return response()->json([
-                        'data' => [
-                            'order_id' => $order->id,
-                            'order_number' => $order->order_number,
-                            'tracking_number' => $order->tracking_number,
-                            'order_status' => 'picked_up',
-                        ],
-                        'message' => 'Already marked as Picked Up.',
-                    ]);
+                        'message' => "Order {$order->order_number} has already been marked as Picked Up.",
+                        'errors' => ['status' => ['Duplicate pickup confirmation is not allowed.']],
+                    ], 422);
                 }
 
                 if (! in_array($order->status, ['ready_for_pickup', 'assigned'], true)) {
@@ -414,16 +427,19 @@ class RiderController extends Controller
 
                 $this->stateMachine->transition($order, 'picked_up', $rider, 'Picked up from merchant seller.');
                 $earning = $this->payoutService->creditPickupPay($rider, $order);
+                $freshOrder = $order->fresh();
 
                 return response()->json([
                     'data' => [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'tracking_number' => $order->tracking_number,
+                        'order_id' => $freshOrder->id,
+                        'order_number' => $freshOrder->order_number,
+                        'tracking_number' => $freshOrder->tracking_number,
                         'order_status' => 'picked_up',
+                        'pickup_rider_id' => (int) $rider->id,
+                        'picked_up_at' => $freshOrder->picked_up_at?->toIso8601String(),
                         'earned_pay' => (float) $earning->amount,
                     ],
-                    'message' => "Order {$order->order_number} marked as Picked Up. ₱" . number_format((float) $earning->amount, 2) . ' pay credited.',
+                    'message' => "Order {$freshOrder->order_number} marked as Picked Up. ₱" . number_format((float) $earning->amount, 2) . ' pay credited.',
                 ]);
             });
         });
@@ -521,7 +537,7 @@ class RiderController extends Controller
 
             if ($isPickupTask) {
                 $pickupEarning = $earningsByOrderType->get($order->id . ':pickup')?->first();
-                $completedAt = $pickupHistory?->changed_at ?? $pickupEarning?->earned_at ?? $order->updated_at;
+                $completedAt = $order->picked_up_at ?? $pickupHistory?->changed_at ?? $pickupEarning?->earned_at ?? $order->updated_at;
                 $formatted = $this->formatRiderOrder($order, $rider, 'pickup');
                 $formatted['task_type'] = 'pickup';
                 $formatted['task_status'] = 'completed';
@@ -1098,6 +1114,7 @@ class RiderController extends Controller
                 'quantity' => $item->quantity,
                 'price' => (float) $item->price,
             ]),
+            'picked_up_at' => $order->picked_up_at?->toIso8601String(),
             'created_at' => $order->created_at?->toIso8601String(),
             'updated_at' => $order->updated_at?->toIso8601String(),
         ];

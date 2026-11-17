@@ -59,6 +59,14 @@ class ShipmentStateMachineService
 
         $updates = ['status' => $newStatus];
 
+        if ($newStatus === 'picked_up') {
+            $updates['picked_up_at'] = $order->picked_up_at ?? now();
+            if ($actor) {
+                $updates['pickup_courier_id'] = $order->pickup_courier_id ?? $actor->id;
+                $updates['pickup_rider_id'] = $order->pickup_rider_id ?? $order->pickup_courier_id ?? $actor->id;
+            }
+        }
+
         if ($newStatus === 'out_for_delivery' && empty($order->delivery_otp)) {
             $updates['delivery_otp'] = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
             $updates['delivery_otp_failed_attempts'] = 0;

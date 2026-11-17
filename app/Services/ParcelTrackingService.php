@@ -184,7 +184,7 @@ class ParcelTrackingService
             'confirmed' => 'Seller Confirmed',
             'preparing' => 'Preparing Parcel',
             'ready_for_pickup' => 'Ready for Pickup',
-            'picked_up' => 'Picked Up by Logistics',
+            'picked_up' => 'Parcel Picked Up',
             'received_at_hub' => 'Received at Sorting Hub',
             'in_transit_hub' => 'In Transit Between Hubs',
             'at_sorting_center' => 'At Destination Hub',

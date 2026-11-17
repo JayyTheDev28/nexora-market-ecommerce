@@ -263,11 +263,11 @@ class BarcodeWaybillAndScanningTest extends TestCase
             ->count();
         $this->assertEquals(1, $earningsCountAfterFirst);
 
-        // Duplicate scan cannot duplicate earnings or break state
+        // Duplicate scan is rejected and cannot duplicate earnings or break state
         $this->postJson(route('api.mobile.rider.pickup'), [
             'tracking_number' => $orderA->tracking_number,
             'expected_order_id' => $orderA->id,
-        ])->assertStatus(200);
+        ])->assertStatus(422);
 
         $this->assertEquals(
             1,

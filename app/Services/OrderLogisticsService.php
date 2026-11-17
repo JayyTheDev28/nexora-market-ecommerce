@@ -76,6 +76,10 @@ class OrderLogisticsService
                 'status' => $newStatus,
             ], $extraAttributes);
 
+            if ($newStatus === 'picked_up' && empty($lockedOrder->picked_up_at) && ! array_key_exists('picked_up_at', $attributes)) {
+                $attributes['picked_up_at'] = now();
+            }
+
             if (empty(trim((string) $lockedOrder->tracking_number))) {
                 $attributes['tracking_number'] = self::generateUniqueTrackingNumber();
             }
