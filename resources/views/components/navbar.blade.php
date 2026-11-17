@@ -6,7 +6,7 @@
     $cartCount = (auth()->check() && auth()->user()->isBuyer()) ? (int) auth()->user()->cartItems()->count() : 0;
 @endphp
 
-<header
+<div
     x-data="{
         mobileMenuOpen: false,
         categoryDropdownOpen: false,
@@ -23,7 +23,10 @@
         }
     }"
     @cart-updated.window="cartCount = $event.detail.count"
-    class="sticky top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant shadow-xs">
+    @keydown.escape.window="mobileMenuOpen = false"
+    class="contents">
+
+<header class="sticky top-0 w-full z-40 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant shadow-xs">
 
     {{-- Top Mini Utility Bar (Desktop & Tablet) --}}
     <div class="hidden sm:block border-b border-outline-variant/60 bg-surface-container-low/60 text-on-surface-variant text-[11px] font-medium">
@@ -456,14 +459,17 @@
             </div>
         </div>
     @endif
+</header>
 
-    {{-- Mobile Slide-Over Drawer --}}
+{{-- Mobile Slide-Over Drawer (outside sticky backdrop-blur header so fixed inset-0 spans the full viewport) --}}
+<template x-teleport="body">
     <div
         x-show="mobileMenuOpen"
         x-cloak
-        class="fixed inset-0 z-50 md:hidden"
-        style="top: 0;">
-        
+        class="fixed inset-0 z-[70] h-[100dvh] w-screen md:hidden"
+        role="dialog"
+        aria-modal="true">
+
         {{-- Backdrop --}}
         <div
             x-show="mobileMenuOpen"
@@ -661,5 +667,5 @@
 
         </div>
     </div>
-
-</header>
+</template>
+</div>
