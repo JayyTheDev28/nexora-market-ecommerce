@@ -1,2 +1,4 @@
 *
 !.gitignore
+!seed_products/
+!seed_products/*.jpg
