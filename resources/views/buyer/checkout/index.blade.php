@@ -74,24 +74,30 @@
 
                     {{-- 1. Delivery Address Selection --}}
                     <div class="bg-surface-container-lowest rounded-3xl border border-outline-variant/70 p-5 md:p-6 shadow-xs flex flex-col gap-4">
-                        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/60 pb-3">
                             <h2 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
                                 <span class="material-symbols-outlined text-[16px] text-primary">location_on</span>
                                 <span>1. Delivery Address</span>
                             </h2>
-                            <button
-                                type="button"
-                                @click="isNewAddress = !isNewAddress; selectedAddressId = null"
-                                class="text-xs font-semibold text-primary hover:underline">
-                                <span x-text="isNewAddress ? 'Choose from Address Book' : '+ Use a Different Address'"></span>
-                            </button>
+                            <div class="flex items-center gap-3">
+                                <a href="{{ route('buyer.account', ['tab' => 'addresses']) }}" class="text-xs font-semibold text-on-surface-variant hover:text-primary hover:underline">
+                                    Manage / Edit Book
+                                </a>
+                                <span class="text-outline-variant">•</span>
+                                <button
+                                    type="button"
+                                    @click="isNewAddress = !isNewAddress; selectedAddressId = isNewAddress ? null : (addresses[0]?.id ?? null)"
+                                    class="text-xs font-semibold text-primary hover:underline">
+                                    <span x-text="isNewAddress ? 'Choose from Address Book' : '+ Use a Different Address'"></span>
+                                </button>
+                            </div>
                         </div>
 
                         {{-- Saved Address Selector --}}
                         <div x-show="!isNewAddress && addresses.length > 0" class="flex flex-col gap-3">
                             <template x-for="addr in addresses" :key="addr.id">
                                 <label class="p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3"
-                                    :class="selectedAddressId === addr.id ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-outline-variant bg-surface hover:bg-surface-container-low/50'">
+                                    :class="Number(selectedAddressId) === Number(addr.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-outline-variant bg-surface hover:bg-surface-container-low/50'">
                                     <input
                                         type="radio"
                                         name="address_id"
@@ -99,17 +105,29 @@
                                         x-model="selectedAddressId"
                                         @change="refreshShippingQuote()"
                                         class="mt-1 text-primary focus:ring-primary">
-                                    <div class="flex-1">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-xs font-bold text-on-surface" x-text="addr.recipient_name || 'Recipient'"></span>
-                                            <span class="text-xs text-on-surface-variant font-mono" x-text="addr.recipient_phone"></span>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-xs font-bold text-on-surface" x-text="addr.recipient_name || '{{ addslashes(auth()->user()->full_name) }}'"></span>
+                                            <span class="text-xs text-on-surface-variant font-mono" x-text="addr.recipient_phone || '{{ addslashes(auth()->user()->contact_number) }}'"></span>
                                             <template x-if="addr.is_default">
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary text-on-primary">
                                                     Default
                                                 </span>
                                             </template>
                                         </div>
-                                        <p class="text-xs text-on-surface leading-relaxed mt-1" x-text="addr.full_address"></p>
+                                        <p class="text-xs text-on-surface leading-relaxed mt-1"
+                                           x-text="addr.full_address || [addr.house_number, addr.street, addr.barangay_name, addr.municipality_name, addr.province_name, addr.region_name, addr.postal_code].filter(Boolean).join(', ') || 'Saved address'"></p>
+                                        <p class="text-[11px] text-on-surface-variant mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                                            <template x-if="addr.barangay_name">
+                                                <span x-text="'Brgy. ' + addr.barangay_name"></span>
+                                            </template>
+                                            <template x-if="addr.municipality_name">
+                                                <span x-text="addr.municipality_name + (addr.province_name ? ', ' + addr.province_name : '')"></span>
+                                            </template>
+                                            <template x-if="addr.postal_code">
+                                                <span class="font-mono" x-text="'Postal: ' + addr.postal_code"></span>
+                                            </template>
+                                        </p>
                                     </div>
                                 </label>
                             </template>
@@ -182,9 +200,13 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-3 gap-3">
-                                <div class="col-span-2 flex flex-col gap-1">
-                                    <label class="text-xs font-semibold text-on-surface">Street / Unit Details</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div class="flex flex-col gap-1">
+                                    <label class="text-xs font-semibold text-on-surface">House / Unit No.</label>
+                                    <input type="text" name="house_number" placeholder="e.g. Blk 4 Lot 2" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                </div>
+                                <div class="sm:col-span-2 flex flex-col gap-1">
+                                    <label class="text-xs font-semibold text-on-surface">Street / Building / Subdivision</label>
                                     <input type="text" name="street" placeholder="e.g. 45 Rizal Street" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                                 </div>
                                 <div class="flex flex-col gap-1">

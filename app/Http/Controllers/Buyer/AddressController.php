@@ -21,7 +21,9 @@ class AddressController extends Controller
 
         // Enforce maximum 10 addresses per buyer (Rule B2)
         if ($user->addresses()->count() >= 10) {
-            return back()->withErrors(['address' => 'You have reached the maximum limit of 10 addresses. Please delete an existing address to add a new one.']);
+            return back()
+                ->withErrors(['address' => 'You have reached the maximum limit of 10 addresses. Please delete an existing address to add a new one.'])
+                ->with('address_tab', true);
         }
 
         $validated = $request->validate([
@@ -54,7 +56,7 @@ class AddressController extends Controller
             ]));
         });
 
-        return back()->with('status', 'Address added successfully.');
+        return back()->with('status', 'Address added successfully.')->with('address_tab', true);
     }
 
     /**
@@ -82,15 +84,19 @@ class AddressController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $address, $validated) {
-            if (! empty($validated['is_default'])) {
+            $wantsDefault = $request->boolean('is_default');
+
+            if ($wantsDefault) {
                 $request->user()->addresses()->where('id', '!=', $address->id)->update(['is_default' => false]);
-                $address->is_default = true;
             }
 
-            $address->update($validated);
+            $payload = $validated;
+            $payload['is_default'] = $address->is_default || $wantsDefault;
+
+            $address->update($payload);
         });
 
-        return back()->with('status', 'Address updated successfully.');
+        return back()->with('status', 'Address updated successfully.')->with('address_tab', true);
     }
 
     /**
@@ -105,7 +111,7 @@ class AddressController extends Controller
             $address->update(['is_default' => true]);
         });
 
-        return back()->with('status', 'Default address updated.');
+        return back()->with('status', 'Default address updated.')->with('address_tab', true);
     }
 
     /**
@@ -137,10 +143,10 @@ class AddressController extends Controller
                 $address->delete();
             });
 
-            return back()->with('status', 'Address removed successfully.');
+            return back()->with('status', 'Address removed successfully.')->with('address_tab', true);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error("Failed to delete address {$address->id}: " . $e->getMessage());
-            return back()->withErrors(['address' => 'Unable to remove address at this time. Please try again.']);
+            return back()->withErrors(['address' => 'Unable to remove address at this time. Please try again.'])->with('address_tab', true);
         }
     }
 }

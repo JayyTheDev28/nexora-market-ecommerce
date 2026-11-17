@@ -9,6 +9,8 @@ class Address extends Model
 {
     use SoftDeletes;
 
+    protected $appends = ['full_address'];
+
     protected $fillable = [
         'user_id',
         'region_code',

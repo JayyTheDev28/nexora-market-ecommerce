@@ -54,7 +54,7 @@ class DisputeController extends Controller
             'order.buyer.address',
             'order.seller.sellerProfile',
             'order.items.product',
-            'order.statusHistory.changer',
+            'order.statusHistory.changedBy',
             'raisedBy',
         ]);
 

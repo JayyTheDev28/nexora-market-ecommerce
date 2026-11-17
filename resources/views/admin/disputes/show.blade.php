@@ -148,10 +148,14 @@
                                 @foreach($dispute->order->items as $item)
                                     <tr>
                                         <td class="px-4 py-3 font-semibold text-on-surface">
-                                            {{ $item->product->name ?? 'Product' }}
+                                            {{ $item->product?->name ?? $item->product_name ?? 'Product' }}
                                         </td>
                                         <td class="px-4 py-3 text-on-surface-variant">
-                                            {{ $item->variant ?? 'Standard' }}
+                                            @if(is_array($item->variant))
+                                                {{ collect($item->variant)->reject(fn($v, $k) => in_array(strtolower((string)$k), ['image', 'image_url', 'img', 'row_id', 'has_file']) || str_starts_with((string)$v, '/storage/') || str_starts_with((string)$v, 'http://') || str_starts_with((string)$v, 'https://'))->map(fn($v, $k) => is_string($k) ? "$k: $v" : $v)->filter()->implode(', ') ?: 'Standard' }}
+                                            @else
+                                                {{ $item->variant ?? 'Standard' }}
+                                            @endif
                                         </td>
                                         <td class="px-4 py-3 text-right font-medium">
                                             {{ $item->quantity }}
@@ -184,16 +188,16 @@
                     <div class="space-y-3 text-xs">
                         <div class="p-3 rounded-2xl bg-surface-container-low border border-outline-variant">
                             <span class="text-[10px] text-primary font-bold uppercase tracking-wider block">Buyer (Complainant)</span>
-                            <span class="font-bold text-on-surface block mt-1">{{ $dispute->order->buyer->full_name ?? 'Buyer' }}</span>
-                            <span class="text-on-surface-variant block">{{ $dispute->order->buyer->email }}</span>
-                            <span class="text-on-surface-variant block">{{ $dispute->order->buyer->contact_number }}</span>
+                            <span class="font-bold text-on-surface block mt-1">{{ $dispute->order->buyer?->full_name ?? 'Buyer' }}</span>
+                            <span class="text-on-surface-variant block">{{ $dispute->order->buyer?->email }}</span>
+                            <span class="text-on-surface-variant block">{{ $dispute->order->buyer?->contact_number }}</span>
                         </div>
 
                         <div class="p-3 rounded-2xl bg-surface-container-low border border-outline-variant">
                             <span class="text-[10px] text-secondary font-bold uppercase tracking-wider block">Seller (Merchant)</span>
-                            <span class="font-bold text-on-surface block mt-1">{{ $dispute->order->seller->sellerProfile->business_name ?? $dispute->order->seller->full_name }}</span>
-                            <span class="text-on-surface-variant block">{{ $dispute->order->seller->email }}</span>
-                            <span class="text-on-surface-variant block">{{ $dispute->order->seller->contact_number }}</span>
+                            <span class="font-bold text-on-surface block mt-1">{{ $dispute->order->seller?->sellerProfile?->business_name ?? $dispute->order->seller?->full_name ?? 'Seller' }}</span>
+                            <span class="text-on-surface-variant block">{{ $dispute->order->seller?->email }}</span>
+                            <span class="text-on-surface-variant block">{{ $dispute->order->seller?->contact_number }}</span>
                         </div>
                     </div>
                 </div>

@@ -322,7 +322,7 @@
                 </div>
                 <button
                     type="button"
-                    @click="showAddressModal = true"
+                    @click="openAddAddressModal()"
                     :disabled="{{ $addresses->count() }} >= 10"
                     class="px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
                     <span class="material-symbols-outlined text-[16px]">add_location_alt</span>
@@ -368,15 +368,24 @@
                                 <span class="text-xs text-outline font-medium">Default Protection Active</span>
                             @endif
 
-                            <form method="POST" action="{{ route('buyer.addresses.destroy', $addr->id) }}" onsubmit="return confirm('Are you sure you want to delete this address?');">
-                                @csrf
-                                @method('DELETE')
+                            <div class="flex items-center gap-3">
                                 <button
-                                    type="submit"
-                                    class="text-xs font-semibold text-rose-600 hover:text-rose-800">
-                                    Delete
+                                    type="button"
+                                    @click="openEditAddressModal(@js($addr))"
+                                    class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer">
+                                    <span class="material-symbols-outlined text-[15px]">edit</span>
+                                    <span>Edit</span>
                                 </button>
-                            </form>
+                                <form method="POST" action="{{ route('buyer.addresses.destroy', $addr->id) }}" onsubmit="return confirm('Are you sure you want to delete this address?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button
+                                        type="submit"
+                                        class="text-xs font-semibold text-rose-600 hover:text-rose-800 cursor-pointer">
+                                        Delete
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 @empty
@@ -388,7 +397,7 @@
                 @endforelse
             </div>
 
-            {{-- Add Address Modal with Cascading Selector (Region -> Province -> City -> Barangay) --}}
+            {{-- Add / Edit Address Modal with Cascading Selector (Region -> Province -> City -> Barangay) --}}
             <div
                 x-show="showAddressModal"
                 x-cloak
@@ -399,7 +408,7 @@
                     
                     <div class="flex items-center justify-between pb-3 border-b border-outline-variant/60">
                         <div>
-                            <h3 class="text-base font-bold text-on-surface">Add New Address</h3>
+                            <h3 class="text-base font-bold text-on-surface" x-text="isEditingAddress ? 'Edit Delivery Address' : 'Add New Address'"></h3>
                             <p class="text-xs text-on-surface-variant">Cascading location selector: Region → Province → City → Barangay</p>
                         </div>
                         <button type="button" @click="showAddressModal = false" class="text-on-surface-variant hover:text-on-surface">
@@ -407,17 +416,20 @@
                         </button>
                     </div>
 
-                    <form method="POST" action="{{ route('buyer.addresses.store') }}" class="flex flex-col gap-4">
+                    <form method="POST" :action="addressFormAction" class="flex flex-col gap-4">
                         @csrf
+                        <template x-if="isEditingAddress">
+                            <input type="hidden" name="_method" value="PUT">
+                        </template>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div class="flex flex-col gap-1">
                                 <label class="text-xs font-semibold text-on-surface">Recipient Full Name</label>
-                                <input type="text" name="recipient_name" required value="{{ old('recipient_name', $user->full_name) }}" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <input type="text" name="recipient_name" required x-model="addressForm.recipient_name" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                             </div>
                             <div class="flex flex-col gap-1">
                                 <label class="text-xs font-semibold text-on-surface">Recipient Phone Number</label>
-                                <input type="text" name="recipient_phone" required value="{{ old('recipient_phone', $user->contact_number) }}" placeholder="09XXXXXXXXX" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <input type="text" name="recipient_phone" required x-model="addressForm.recipient_phone" placeholder="09XXXXXXXXX" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                             </div>
                         </div>
 
@@ -463,7 +475,7 @@
                                 <select
                                     x-model="selectedMunicipality"
                                     @change="onMunicipalityChange()"
-                                    :disabled="!selectedProvince"
+                                    :disabled="!selectedProvince && municipalities.length === 0"
                                     required
                                     class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
                                     <option value="">Select City/Municipality</option>
@@ -480,7 +492,7 @@
                                 <label class="text-xs font-semibold text-on-surface">Barangay</label>
                                 <select
                                     x-model="selectedBarangay"
-                                    :disabled="!selectedMunicipality"
+                                    :disabled="!selectedMunicipality && barangays.length === 0"
                                     required
                                     class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
                                     <option value="">Select Barangay</option>
@@ -493,19 +505,23 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-3 gap-3">
-                            <div class="col-span-2 flex flex-col gap-1">
-                                <label class="text-xs font-semibold text-on-surface">Street / Building / Unit No.</label>
-                                <input type="text" name="street" placeholder="e.g. 123 Rizal Ave, Bldg A" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-xs font-semibold text-on-surface">House / Unit No.</label>
+                                <input type="text" name="house_number" x-model="addressForm.house_number" placeholder="e.g. Unit 4B" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                            </div>
+                            <div class="sm:col-span-2 flex flex-col gap-1">
+                                <label class="text-xs font-semibold text-on-surface">Street / Building / Subdivision</label>
+                                <input type="text" name="street" x-model="addressForm.street" placeholder="e.g. 123 Rizal Ave, Bldg A" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                             </div>
                             <div class="flex flex-col gap-1">
                                 <label class="text-xs font-semibold text-on-surface">Postal Code</label>
-                                <input type="text" name="postal_code" placeholder="e.g. 1000" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
+                                <input type="text" name="postal_code" x-model="addressForm.postal_code" placeholder="e.g. 1000" class="rounded-xl border border-outline-variant px-3 py-2 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary">
                             </div>
                         </div>
 
                         <div class="flex items-center gap-2 pt-2">
-                            <input type="checkbox" id="is_default_check" name="is_default" value="1" class="rounded border-outline-variant text-primary focus:ring-primary">
+                            <input type="checkbox" id="is_default_check" name="is_default" value="1" x-model="addressForm.is_default" class="rounded border-outline-variant text-primary focus:ring-primary">
                             <label for="is_default_check" class="text-xs font-semibold text-on-surface">Set as default delivery address</label>
                         </div>
 
@@ -514,7 +530,7 @@
                                 Cancel
                             </button>
                             <button type="submit" class="px-5 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:opacity-90">
-                                Save Address
+                                <span x-text="isEditingAddress ? 'Update Address' : 'Save Address'"></span>
                             </button>
                         </div>
                     </form>
@@ -531,9 +547,82 @@
 @push('scripts')
 <script>
     function accountDashboard() {
+        const storeAddressUrl = @json(route('buyer.addresses.store'));
+        const defaultRecipientName = @json($user->full_name);
+        const defaultRecipientPhone = @json($user->contact_number);
+
         return {
-            activeTab: 'profile',
+            activeTab: @json(request('tab') === 'addresses' || session('address_tab') ? 'addresses' : 'profile'),
             showAddressModal: false,
+            isEditingAddress: false,
+            editingAddressId: null,
+            addressForm: {
+                recipient_name: defaultRecipientName,
+                recipient_phone: defaultRecipientPhone,
+                house_number: '',
+                street: '',
+                postal_code: '',
+                is_default: false,
+            },
+
+            get addressFormAction() {
+                return this.isEditingAddress && this.editingAddressId
+                    ? `/buyer/addresses/${this.editingAddressId}`
+                    : storeAddressUrl;
+            },
+
+            openAddAddressModal() {
+                this.isEditingAddress = false;
+                this.editingAddressId = null;
+                this.addressForm = {
+                    recipient_name: defaultRecipientName,
+                    recipient_phone: defaultRecipientPhone,
+                    house_number: '',
+                    street: '',
+                    postal_code: '',
+                    is_default: false,
+                };
+                this.selectedRegion = '';
+                this.selectedProvince = '';
+                this.selectedMunicipality = '';
+                this.selectedBarangay = '';
+                this.provinces = [];
+                this.municipalities = [];
+                this.barangays = [];
+                this.showAddressModal = true;
+            },
+
+            async openEditAddressModal(addr) {
+                this.isEditingAddress = true;
+                this.editingAddressId = addr.id;
+                this.addressForm = {
+                    recipient_name: addr.recipient_name || defaultRecipientName,
+                    recipient_phone: addr.recipient_phone || defaultRecipientPhone,
+                    house_number: addr.house_number || '',
+                    street: addr.street || '',
+                    postal_code: addr.postal_code || '',
+                    is_default: Boolean(addr.is_default),
+                };
+
+                if (addr.region_code && !this.regions.some(r => r.code === addr.region_code)) {
+                    this.regions.push({ code: addr.region_code, name: addr.region_name || addr.region_code });
+                }
+                this.provinces = addr.province_code ? [{ code: addr.province_code, name: addr.province_name || addr.province_code }] : [];
+                this.municipalities = addr.municipality_code ? [{ code: addr.municipality_code, name: addr.municipality_name || addr.municipality_code }] : [];
+                this.barangays = addr.barangay_code ? [{ code: addr.barangay_code, name: addr.barangay_name || addr.barangay_code }] : [];
+
+                this.selectedRegion = addr.region_code || '';
+                this.selectedProvince = addr.province_code || '';
+                this.selectedMunicipality = addr.municipality_code || '';
+                this.selectedBarangay = addr.barangay_code || '';
+                this.showAddressModal = true;
+
+                await Promise.all([
+                    this.selectedRegion ? this.onRegionChange(true) : Promise.resolve(),
+                    this.selectedProvince ? this.onProvinceChange(true) : Promise.resolve(),
+                    this.selectedMunicipality ? this.onMunicipalityChange(true) : Promise.resolve(),
+                ]);
+            },
 
             // Cascading Location Selector Data
             regions: [],
@@ -578,13 +667,16 @@
                 }
             },
 
-            async onRegionChange() {
-                this.provinces = [];
-                this.municipalities = [];
-                this.barangays = [];
-                this.selectedProvince = '';
-                this.selectedMunicipality = '';
-                this.selectedBarangay = '';
+            async onRegionChange(preserveSelection = false) {
+                const prevProv = preserveSelection ? this.selectedProvince : '';
+                if (!preserveSelection) {
+                    this.provinces = [];
+                    this.municipalities = [];
+                    this.barangays = [];
+                    this.selectedProvince = '';
+                    this.selectedMunicipality = '';
+                    this.selectedBarangay = '';
+                }
                 if (!this.selectedRegion) return;
 
                 try {
@@ -592,6 +684,9 @@
                     const data = await res.json();
                     if (data && data.length > 0) {
                         this.provinces = data.sort((a, b) => a.name.localeCompare(b.name));
+                        if (preserveSelection && prevProv) {
+                            this.selectedProvince = prevProv;
+                        }
                     } else {
                         // In case region has no provinces (like NCR), load cities-municipalities directly
                         const cityRes = await fetch(`https://psgc.gitlab.io/api/regions/${this.selectedRegion}/cities-municipalities/`);
@@ -604,29 +699,41 @@
                 }
             },
 
-            async onProvinceChange() {
-                this.municipalities = [];
-                this.barangays = [];
-                this.selectedMunicipality = '';
-                this.selectedBarangay = '';
+            async onProvinceChange(preserveSelection = false) {
+                const prevMun = preserveSelection ? this.selectedMunicipality : '';
+                if (!preserveSelection) {
+                    this.municipalities = [];
+                    this.barangays = [];
+                    this.selectedMunicipality = '';
+                    this.selectedBarangay = '';
+                }
                 if (!this.selectedProvince) return;
 
                 try {
                     const res = await fetch(`https://psgc.gitlab.io/api/provinces/${this.selectedProvince}/cities-municipalities/`);
                     this.municipalities = (await res.json()).sort((a, b) => a.name.localeCompare(b.name));
+                    if (preserveSelection && prevMun) {
+                        this.selectedMunicipality = prevMun;
+                    }
                 } catch (e) {
                     console.error('Failed to load municipalities', e);
                 }
             },
 
-            async onMunicipalityChange() {
-                this.barangays = [];
-                this.selectedBarangay = '';
+            async onMunicipalityChange(preserveSelection = false) {
+                const prevBrgy = preserveSelection ? this.selectedBarangay : '';
+                if (!preserveSelection) {
+                    this.barangays = [];
+                    this.selectedBarangay = '';
+                }
                 if (!this.selectedMunicipality) return;
 
                 try {
                     const res = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${this.selectedMunicipality}/barangays/`);
                     this.barangays = (await res.json()).sort((a, b) => a.name.localeCompare(b.name));
+                    if (preserveSelection && prevBrgy) {
+                        this.selectedBarangay = prevBrgy;
+                    }
                 } catch (e) {
                     console.error('Failed to load barangays', e);
                 }

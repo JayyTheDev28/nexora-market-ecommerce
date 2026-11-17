@@ -81,7 +81,7 @@ class LogisticsMonitoringController extends Controller
                 'pickupCourier',
                 'deliveryCourier',
                 'currentCustodyLogistics.logisticsProfile',
-                'statusHistory.changer',
+                'statusHistory.changedBy',
                 'parcelIncidents.events',
                 'transferManifestItems.manifest.originHub',
                 'transferManifestItems.manifest.destinationHub',
