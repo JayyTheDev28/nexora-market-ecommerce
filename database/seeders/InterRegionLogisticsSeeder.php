@@ -175,7 +175,7 @@ class InterRegionLogisticsSeeder extends Seeder
         $this->attachBarangaysToZone($lagunaZone3, '043404000', ['043404001', '043404002', '043404011', '043404042', '043404050']);
         $this->attachBarangaysToZone($lagunaZone4, '043419000', ['043419001', '043419002', '043419003', '043419004', '043419009']);
 
-        // Laguna Riders
+        // Laguna Riders (strictly 1 delivery zone per rider)
         $lagunaRider1 = $this->createOrUpdateRider(
             'laguna.rider1@nexora.test',
             'Eduardo',
@@ -184,7 +184,7 @@ class InterRegionLogisticsSeeder extends Seeder
             $lagunaCompany->id,
             'Motorcycle',
             'MC-LAG-101',
-            [$lagunaZone1->id, $lagunaZone2->id]
+            [$lagunaZone1->id]
         );
 
         $lagunaRider2 = $this->createOrUpdateRider(
@@ -201,7 +201,7 @@ class InterRegionLogisticsSeeder extends Seeder
         // Also ensure default rider accounts are assigned to their respective real coverage zones
         $defaultRiders = User::whereIn('email', ['rider@nexora.test', 'rider1@nexora.test'])->get();
         foreach ($defaultRiders as $dRider) {
-            $dRider->assignedZones()->syncWithoutDetaching([$lagunaZone1->id]);
+            $dRider->assignedZones()->sync([$lagunaZone1->id]);
             if ($dRider->courierProfile) {
                 $dRider->courierProfile->update([
                     'logistics_company_id' => $lagunaCompany->id,

@@ -134,6 +134,8 @@ class ZoneController extends Controller
             'rider_ids.*' => ['exists:users,id'],
         ]);
 
+        $this->validateHubCityAndRiders($companyId, $validated);
+
         // Enforce: Area exclusivity across all logistics providers ("Must not have a same logistics within the same area")
         $existingCoverage = ZoneBarangay::whereIn('barangay_code', $validated['barangay_codes'])
             ->with(['zone', 'logisticsCompany.logisticsProfile', 'logisticsCompany'])
@@ -180,10 +182,8 @@ class ZoneController extends Controller
                 ]);
             }
 
-            // Attach assigned riders
-            if (! empty($validated['rider_ids'])) {
-                $zone->riders()->sync($validated['rider_ids']);
-            }
+            // Assign riders cleanly (strictly 1 zone per rider; replaces any previous zone)
+            $this->syncSingleZoneRiders($zone, $validated['rider_ids'] ?? []);
         });
 
         return redirect()->route('logistics.zones.index')->with('status', "Coverage Zone '{$validated['name']}' created successfully.");
@@ -261,6 +261,8 @@ class ZoneController extends Controller
             'rider_ids.*' => ['exists:users,id'],
         ]);
 
+        $this->validateHubCityAndRiders($companyId, $validated);
+
         // Enforce: Area exclusivity across all logistics providers (excluding this zone)
         $existingCoverage = ZoneBarangay::where('zone_id', '!=', $zone->id)
             ->whereIn('barangay_code', $validated['barangay_codes'])
@@ -307,8 +309,8 @@ class ZoneController extends Controller
                 ]);
             }
 
-            // Sync riders
-            $zone->riders()->sync($validated['rider_ids'] ?? []);
+            // Sync riders (strictly 1 zone per rider)
+            $this->syncSingleZoneRiders($zone, $validated['rider_ids'] ?? [], detachRemoved: true);
         });
 
         return redirect()->route('logistics.zones.index')->with('status', "Zone '{$zone->name}' updated successfully.");
@@ -326,6 +328,62 @@ class ZoneController extends Controller
         $zone->delete();
 
         return redirect()->route('logistics.zones.index')->with('status', "Zone '{$name}' deleted successfully.");
+    }
+
+    protected function validateHubCityAndRiders(int $companyId, array $validated): void
+    {
+        if (! empty($validated['hub_id'])) {
+            $hub = Hub::where('id', $validated['hub_id'])
+                ->where('logistics_company_id', $companyId)
+                ->first();
+
+            if (! $hub) {
+                throw ValidationException::withMessages([
+                    'hub_id' => 'Selected hub does not belong to your logistics company.',
+                ]);
+            }
+
+            if ($hub->province_code !== $validated['province_code'] || $hub->city_code !== $validated['city_code']) {
+                throw ValidationException::withMessages([
+                    'hub_id' => "Zone city/province ({$validated['city_name']}, {$validated['province_name']}) must match hub {$hub->name} ({$hub->city_name}, {$hub->province_name}).",
+                ]);
+            }
+        }
+
+        if (! empty($validated['rider_ids'])) {
+            $validCount = User::whereIn('id', $validated['rider_ids'])
+                ->where('role', 'rider')
+                ->whereHas('courierProfile', fn ($q) => $q->where('logistics_company_id', $companyId)->orWhere('sorting_center_id', $companyId))
+                ->count();
+
+            if ($validCount !== count(array_unique($validated['rider_ids']))) {
+                throw ValidationException::withMessages([
+                    'rider_ids' => 'Assigned riders must be active delivery riders belonging to your logistics company.',
+                ]);
+            }
+        }
+    }
+
+    protected function syncSingleZoneRiders(Zone $zone, array $riderIds, bool $detachRemoved = false): void
+    {
+        $cleanIds = array_values(array_unique(array_map('intval', $riderIds)));
+
+        if ($detachRemoved) {
+            if (empty($cleanIds)) {
+                $zone->riders()->detach();
+            } else {
+                $zone->riders()->whereNotIn('users.id', $cleanIds)->detach();
+            }
+        }
+
+        if (empty($cleanIds)) {
+            return;
+        }
+
+        $riders = User::whereIn('id', $cleanIds)->get();
+        foreach ($riders as $rider) {
+            $rider->assignedZones()->sync([$zone->id]);
+        }
     }
 }
 

@@ -316,51 +316,39 @@ class ShippingPricingService
             return ['serviceable' => true, 'error' => null];
         }
 
-        $covered = Hub::where('is_active', true)
-            ->where(function ($q) use ($provinceCode, $cityCode, $provinceName, $cityName) {
-                if ($provinceCode) {
-                    $q->where('province_code', $provinceCode);
-                }
-                if ($cityCode) {
-                    $q->orWhere('city_code', $cityCode);
-                }
-                if ($provinceName) {
-                    $q->orWhere('province_name', 'LIKE', "%{$provinceName}%");
-                }
-                if ($cityName) {
-                    $q->orWhere('city_name', 'LIKE', "%{$cityName}%")
-                        ->orWhere('name', 'LIKE', "%{$cityName}%");
-                }
-            })->exists();
+        // Check strictly at barangay/city level (never infer serviceability from province alone)
+        $covered = false;
 
-        if (! $covered) {
-            $covered = Zone::where('is_active', true)
-                ->where(function ($q) use ($provinceCode, $cityCode, $provinceName, $cityName) {
-                    if ($provinceCode) {
-                        $q->where('province_code', $provinceCode);
-                    }
+        if ($cityCode || $cityName) {
+            $covered = Hub::where('is_active', true)
+                ->where(function ($q) use ($cityCode, $cityName) {
                     if ($cityCode) {
-                        $q->orWhere('city_code', $cityCode);
-                    }
-                    if ($provinceName) {
-                        $q->orWhere('province_name', 'LIKE', "%{$provinceName}%");
+                        $q->where('city_code', $cityCode);
                     }
                     if ($cityName) {
-                        $q->orWhere('city_name', 'LIKE', "%{$cityName}%")
+                        $method = $cityCode ? 'orWhere' : 'where';
+                        $q->{$method}('city_name', 'LIKE', "%{$cityName}%")
                             ->orWhere('name', 'LIKE', "%{$cityName}%");
                     }
                 })->exists();
-        }
 
-        if (! $covered && DeliveryArea::exists()) {
-            $covered = DeliveryArea::where(function ($q) use ($provinceName, $cityName) {
-                if ($provinceName) {
-                    $q->where('name', 'LIKE', "%{$provinceName}%");
-                }
-                if ($cityName) {
-                    $q->orWhere('name', 'LIKE', "%{$cityName}%");
-                }
-            })->exists();
+            if (! $covered) {
+                $covered = Zone::where('is_active', true)
+                    ->where(function ($q) use ($cityCode, $cityName) {
+                        if ($cityCode) {
+                            $q->where('city_code', $cityCode);
+                        }
+                        if ($cityName) {
+                            $method = $cityCode ? 'orWhere' : 'where';
+                            $q->{$method}('city_name', 'LIKE', "%{$cityName}%")
+                                ->orWhere('name', 'LIKE', "%{$cityName}%");
+                        }
+                    })->exists();
+            }
+
+            if (! $covered && DeliveryArea::exists() && $cityName) {
+                $covered = DeliveryArea::where('name', 'LIKE', "%{$cityName}%")->exists();
+            }
         }
 
         if (! $covered) {

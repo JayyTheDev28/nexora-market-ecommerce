@@ -189,13 +189,34 @@ class RiderController extends Controller
     {
         /** @var User $rider */
         $rider = $request->user();
+        $assignedZone = $rider->assignedZones()->with('barangays')->first();
+        $allowedBarangays = $assignedZone ? $assignedZone->barangays->pluck('barangay_code')->all() : [];
 
         $offers = JobOffer::where('courier_id', $rider->id)
             ->where('status', 'pending')
             ->where('expires_at', '>=', now())
-            ->with(['order.items.product'])
+            ->with(['order.items.product', 'order.seller.address', 'order.address'])
             ->orderBy('created_at', 'desc')
             ->get()
+            ->filter(function (JobOffer $o) use ($assignedZone, $allowedBarangays) {
+                if (! $assignedZone || ! $o->order) {
+                    return true;
+                }
+                $order = $o->order;
+                $targetZoneId = $o->type === 'pickup' ? $order->pickup_zone_id : $order->delivery_zone_id;
+                if ($targetZoneId !== null) {
+                    return (int) $targetZoneId === (int) $assignedZone->id;
+                }
+                $addr = $o->type === 'pickup' ? $order->seller?->address : $order->address;
+                if ($addr?->barangay_code && ! empty($allowedBarangays)) {
+                    return in_array($addr->barangay_code, $allowedBarangays, true);
+                }
+                if ($addr?->municipality_code && $assignedZone->city_code) {
+                    return $addr->municipality_code === $assignedZone->city_code;
+                }
+
+                return true;
+            })
             ->map(function ($o) {
                 return [
                     'id' => $o->id,

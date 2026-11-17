@@ -323,6 +323,15 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Zone::class, 'rider_zones', 'rider_id', 'zone_id')->withTimestamps();
     }
 
+    public function getAssignedZoneAttribute(): ?Zone
+    {
+        if ($this->relationLoaded('assignedZones')) {
+            return $this->assignedZones->first();
+        }
+
+        return $this->assignedZones()->with(['hub', 'barangays'])->first();
+    }
+
     public function sentTransfers()
     {
         return $this->hasMany(HubTransfer::class, 'sender_logistics_id');

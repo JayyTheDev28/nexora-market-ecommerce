@@ -31,7 +31,7 @@ use RuntimeException;
 /**
  * Fresh, no-orders national TEST dataset for Nexora Market.
  * Run ONLY on a disposable, isolated database after backing up any necessary data.
- * 100 buyers, 50 sellers, 1000 products, 22 logistics, 74 riders, 10 couriers.
+ * 100 buyers, 50 sellers, 100 products (2 per seller), 22 logistics, 59 hubs, 59 single-city zones, 74 single-zone riders, 10 couriers.
  * Requires public PSGC API access for cities/municipalities not in existing PsgcSeeder.
  * Does not create orders, parcels, manifests, deliveries, cash movements, or payouts.
  */
@@ -240,24 +240,30 @@ class NationalMarketplaceDemoSeeder extends Seeder
                 ]);
                 $hubs[] = $hub;
             }
-            // Every municipality/city in the selected province gets a coverage zone.
+            // Strictly 1 hub-city Zone per Hub, covering 3–5 valid barangays in that exact city only.
             $zones = [];
-            foreach ($cities as $cityIndex => $city) {
-                $matchingHub = collect($hubs)->first(fn ($h) => $h->city_code === $city->code);
-                $hub = $matchingHub ?: $hubs[$cityIndex % count($hubs)];
-                $zone = Zone::updateOrCreate(['logistics_company_id' => $company->id, 'city_code' => $city->code], [
-                    'hub_id' => $hub->id, 'name' => "{$city->name} Delivery Zone", 'code' => 'NX-Z-'.$city->code,
+            foreach ($hubs as $hub) {
+                $city = $cities->firstWhere('code', $hub->city_code);
+                if (! $city) {
+                    continue;
+                }
+                $zone = Zone::updateOrCreate(['logistics_company_id' => $company->id, 'city_code' => $hub->city_code], [
+                    'hub_id' => $hub->id, 'name' => "{$hub->city_name} Central Zone", 'code' => 'NX-Z-'.$hub->city_code,
                     'province_code' => $province->code, 'province_name' => $province->name,
-                    'city_name' => $city->name, 'is_active' => true,
+                    'city_name' => $hub->city_name, 'is_active' => true,
                 ]);
                 $zones[] = $zone;
-                // Attach known valid barangays for specificity, without inventing geographic codes.
-                foreach (PsgcBarangay::where('city_code', $city->code)->cursor() as $brgy) {
+
+                $zoneBarangays = PsgcBarangay::where('city_code', $hub->city_code)
+                    ->orderBy('name')
+                    ->limit(5)
+                    ->get();
+                foreach ($zoneBarangays as $brgy) {
                     ZoneBarangay::updateOrCreate(
                         ['logistics_company_id' => $company->id, 'barangay_code' => $brgy->code],
                         ['zone_id' => $zone->id, 'province_code' => $province->code,
-                         'province_name' => $province->name, 'city_code' => $city->code,
-                         'city_name' => $city->name, 'barangay_name' => $brgy->name]
+                         'province_name' => $province->name, 'city_code' => $hub->city_code,
+                         'city_name' => $hub->city_name, 'barangay_name' => $brgy->name]
                     );
                 }
             }
@@ -296,9 +302,10 @@ class NationalMarketplaceDemoSeeder extends Seeder
                     'Rider', sprintf('%03d', $counter), 300000000+$counter);
                 $hub = $item['hubs'][($j-1) % count($item['hubs'])];
                 $this->createCourierProfile($rider,$item['company'],$hub,'Motorcycle','NX-R-'.str_pad((string)$counter,5,'0',STR_PAD_LEFT));
-                $z = collect($item['zones'])->filter(fn ($zone) => (int)$zone->hub_id === (int)$hub->id)->pluck('id')->take(8)->all();
-                if (!$z) $z = [collect($item['zones'])->first()->id];
-                $rider->assignedZones()->sync($z);
+                $hubZone = collect($item['zones'])->firstWhere('hub_id', $hub->id) ?? collect($item['zones'])->first();
+                if ($hubZone) {
+                    $rider->assignedZones()->sync([$hubZone->id]);
+                }
             }
             if ($region === '040000000') {
                 for ($j=1;$j<=2;$j++) {
@@ -392,18 +399,16 @@ class NationalMarketplaceDemoSeeder extends Seeder
                 ['name'=>'New Arrivals','order_index'=>2,'is_visible'=>true]);
             $templates=$byCategory->get($cat->slug,collect());
             if ($templates->isEmpty()) throw new RuntimeException("No product image templates for category {$cat->slug}");
-            $templateList=$templates->values();
-            for ($j=1;$j<=20;$j++) {
-                $p=$templateList[($i*7+$j-1)%$templateList->count()];
+            $studioFirst=$templates->sortBy(fn ($item) => preg_match('/p0(?:[0-6][0-9]|70)\.jpg$/', $item['image'] ?? '') ? 0 : 1)->values();
+            for ($j=1;$j<=2;$j++) {
+                $p=$studioFirst[($i*2+$j-1)%$studioFirst->count()];
                 $variant=$j%4;
                 $name=$p['name']." — ".['Core','Plus','Compact','Premium'][$variant].' '.sprintf('%02d',$j);
                 $sku=sprintf('NX-DEMO-%03d-%02d',$i+1,$j);
                 $basePrice=round((float)$p['price']*(1+(($j%5)-2)*0.035),2);
                 $stockA=9+(($i+$j*3)%30);$stockB=6+(($i*7+$j)%25);
                 $main='/storage/seed_products/'.$p['image'];
-                $second=$templateList[($i*7+$j)%$templateList->count()];
                 $gallery=[$main];
-                if ($second['image']!==$p['image']) $gallery[]='/storage/seed_products/'.$second['image'];
                 $variants=[
                     ['name'=>'Standard','sku'=>$sku.'-STD','color'=>'Standard','size'=>'Standard','price'=>$basePrice,'stock'=>$stockA,'image'=>$main],
                     ['name'=>'Premium','sku'=>$sku.'-PRM','color'=>'Premium','size'=>'Premium','price'=>round($basePrice*1.15,2),'stock'=>$stockB,'image'=>$main],
@@ -462,12 +467,18 @@ class NationalMarketplaceDemoSeeder extends Seeder
             $actual=User::where('role',$role)->count();
             if ($actual!==$count) throw new RuntimeException("Expected {$count} {$role} accounts, found {$actual}");
         }
-        if (Product::count()!==1000) throw new RuntimeException('Expected exactly 1000 products');
+        if (Product::count()!==100) throw new RuntimeException('Expected exactly 100 products');
+        if (DB::table('rider_zones')->select('rider_id')->groupBy('rider_id')->havingRaw('COUNT(*) > 1')->count() !== 0) {
+            throw new RuntimeException('Expected strictly one zone per rider');
+        }
+        if (Zone::whereHas('hub', fn ($hq) => $hq->whereColumn('hubs.city_code', '!=', 'zones.city_code'))->exists()) {
+            throw new RuntimeException('Found cross-city zone assignment to hub');
+        }
         foreach (['orders','order_items','hub_transfers','transfer_manifests','transfer_manifest_items','rider_earnings','cod_collections','delivery_attempts','job_offers'] as $table) {
             if (\Illuminate\Support\Facades\Schema::hasTable($table) && DB::table($table)->count()!==0)
                 throw new RuntimeException("{$table} is not empty; this seed must not create parcels or financial activity");
         }
-        $this->command?->info('Nexora demo dataset: 100 buyers, 50 sellers, 22 logistics, 74 riders, 10 couriers, 1000 products, 0 orders/parcels.');
+        $this->command?->info('Nexora demo dataset: 100 buyers, 50 sellers, 22 logistics, 59 hubs, 59 zones, 74 single-zone riders, 10 couriers, 100 products, 0 orders/parcels.');
         $this->command?->info('Test password for these demo users: '.self::PASSWORD.' (LOCAL/TEST ONLY)');
     }
 }

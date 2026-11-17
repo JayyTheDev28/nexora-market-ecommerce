@@ -530,7 +530,8 @@ class LogisticsOperationsTest extends TestCase
             ->get("/logistics/riders/{$this->courier1->id}");
 
         $showResponse->assertStatus(200);
-        $showResponse->assertSee('Assigned Coverage Zones');
+        $showResponse->assertSee('Assigned Hub & Delivery Zone');
+        $showResponse->assertSee('Select Single Delivery Zone');
         $showResponse->assertSee('Zone Beta - Liliw');
     }
 }

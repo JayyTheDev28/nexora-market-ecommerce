@@ -224,7 +224,7 @@
                             <tr>
                                 <th class="px-5 py-3.5">Rider Details</th>
                                 <th class="px-5 py-3.5">Vehicle & Plate</th>
-                                <th class="px-5 py-3.5">Assigned Zones</th>
+                                <th class="px-5 py-3.5">Assigned Hub &amp; Zone</th>
                                 <th class="px-5 py-3.5">Workload</th>
                                 <th class="px-5 py-3.5">Status</th>
                                 <th class="px-5 py-3.5">Documents</th>
@@ -268,25 +268,29 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-4">
-                                        @if($rider->assignedZones->isNotEmpty())
-                                            <div class="flex flex-wrap gap-1">
-                                                @foreach($rider->assignedZones as $zone)
-                                                    <span class="px-2 py-0.5 rounded-md bg-secondary/10 text-secondary font-semibold text-[10px]" title="{{ $zone->city_name }}, {{ $zone->province_name }} ({{ $zone->barangays->count() }} barangays)">
-                                                        {{ $zone->name }}
-                                                    </span>
-                                                @endforeach
-                                            </div>
-                                        @elseif($rider->deliveryAreas->isNotEmpty())
-                                            <div class="flex flex-wrap gap-1">
-                                                @foreach($rider->deliveryAreas as $area)
-                                                    <span class="px-2 py-0.5 rounded-md bg-secondary/10 text-secondary font-semibold text-[10px]">
+                                        @php $primaryZone = $rider->assignedZones->first(); @endphp
+                                        <div class="flex flex-col gap-1">
+                                            @if($rider->courierProfile?->assignedHub)
+                                                <span class="text-[10px] font-semibold text-on-surface-variant">
+                                                    Hub: {{ $rider->courierProfile->assignedHub->name }}
+                                                </span>
+                                            @endif
+                                            @if($primaryZone)
+                                                <span class="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/10 text-secondary font-semibold text-[10px]" title="{{ $primaryZone->barangays->pluck('barangay_name')->join(', ') }}">
+                                                    {{ $primaryZone->name }} ({{ $primaryZone->barangays->count() }} brgys)
+                                                </span>
+                                            @elseif($rider->deliveryAreas->isNotEmpty())
+                                                @foreach($rider->deliveryAreas->take(1) as $area)
+                                                    <span class="inline-flex w-fit px-2 py-0.5 rounded-md bg-secondary/10 text-secondary font-semibold text-[10px]">
                                                         {{ $area->name }}
                                                     </span>
                                                 @endforeach
-                                            </div>
-                                        @else
-                                            <span class="text-[11px] text-on-surface-variant italic">No zone assigned</span>
-                                        @endif
+                                            @elseif($rider->isCourier())
+                                                <span class="text-[10px] text-indigo-700 font-medium">Hub-to-hub transfer</span>
+                                            @else
+                                                <span class="text-[11px] text-on-surface-variant italic">No zone assigned</span>
+                                            @endif
+                                        </div>
                                     </td>
                                     <td class="px-5 py-4">
                                         <div class="flex flex-col gap-0.5">

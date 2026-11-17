@@ -95,10 +95,9 @@ class InterRegionLogisticsService
      * Resolve zone, hub, and company covering a given location using:
      * 1. Exact barangay code match
      * 2. Barangay name + city name match
-     * 3. City code fallback match
-     * 4. City name fallback match
-     * 5. Province code fallback match
-     * 6. Direct Hub location match
+     * 3. City code match
+     * 4. Normalized city name match
+     * Uncovered areas return null instead of falling back to another city via province match.
      */
     public function resolveCoverage(
         ?string $barangayCode,
@@ -231,51 +230,7 @@ class InterRegionLogisticsService
             }
         }
 
-        // 5. Province code fallback match
-        if ($provinceCode) {
-            $zb = ZoneBarangay::where('province_code', $provinceCode)
-                ->whereHas('zone', fn ($q) => $q->where('is_active', true)->whereHas('hub', fn ($hq) => $hq->where('is_active', true)))
-                ->with('zone')
-                ->first();
-            if ($zb && $zb->zone) {
-                return [
-                    'match_level' => 'province_code',
-                    'zone_id' => $zb->zone_id,
-                    'logistics_company_id' => $zb->logistics_company_id,
-                    'hub_id' => $zb->zone->hub_id,
-                ];
-            }
-
-            $hub = Hub::where('is_active', true)
-                ->where('province_code', $provinceCode)
-                ->first();
-            if ($hub) {
-                $hubZone = Zone::where('hub_id', $hub->id)->where('is_active', true)->first();
-                return [
-                    'match_level' => 'hub_province_code',
-                    'zone_id' => $hubZone?->id,
-                    'logistics_company_id' => $hub->logistics_company_id,
-                    'hub_id' => $hub->id,
-                ];
-            }
-        }
-
-        // 6. Province name fallback match
-        if ($provinceName) {
-            $hub = Hub::where('is_active', true)
-                ->where('province_name', 'like', "%{$provinceName}%")
-                ->first();
-            if ($hub) {
-                $hubZone = Zone::where('hub_id', $hub->id)->where('is_active', true)->first();
-                return [
-                    'match_level' => 'hub_province',
-                    'zone_id' => $hubZone?->id,
-                    'logistics_company_id' => $hub->logistics_company_id,
-                    'hub_id' => $hub->id,
-                ];
-            }
-        }
-
+        // Uncovered municipalities return null so uncovered areas are never falsely routed via province fallback
         return null;
     }
 

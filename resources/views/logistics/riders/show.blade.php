@@ -220,59 +220,97 @@
                         <div>
                             <h3 class="font-headline-sm text-base font-bold text-on-surface flex items-center gap-2">
                                 <span class="material-symbols-outlined text-secondary text-[20px]">share_location</span>
-                                Assigned Coverage Zones
+                                Assigned Hub &amp; Delivery Zone
                             </h3>
-                            <p class="text-xs text-on-surface-variant mt-0.5">Select the destination coverage zones this rider is authorized to deliver to. Delivery assignments are automatically routed based on the barangays mapped to these zones.</p>
+                            <p class="text-xs text-on-surface-variant mt-0.5">Each rider may hold strictly one active delivery zone matching their Logistics company and assigned hub.</p>
                         </div>
                     </div>
 
-                    @if(! $rider->isApproved() || ! $rider->isActive())
+                    @php
+                        $assignedZone = $rider->assignedZones->first();
+                        $companyName = $rider->courierProfile?->logisticsCompany?->logisticsProfile?->company_name
+                            ?? $rider->courierProfile?->sortingCenter?->logisticsProfile?->company_name
+                            ?? $rider->courierProfile?->logisticsCompany?->full_name
+                            ?? $rider->courierProfile?->sortingCenter?->full_name
+                            ?? 'Unassigned Logistics Company';
+                        $assignedHub = $rider->courierProfile?->assignedHub ?? $assignedZone?->hub;
+                    @endphp
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5 p-4 rounded-xl bg-surface-container-low border border-outline-variant text-xs">
+                        <div>
+                            <p class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wide">Assigned Logistics Company</p>
+                            <p class="font-bold text-on-surface mt-0.5">{{ $companyName }}</p>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wide">Assigned Hub</p>
+                            <p class="font-bold text-on-surface mt-0.5">
+                                {{ $assignedHub ? "{$assignedHub->name} ({$assignedHub->city_name})" : 'No hub assigned' }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wide">Assigned Delivery Zone</p>
+                            <p class="font-bold text-secondary mt-0.5">
+                                {{ $assignedZone ? "{$assignedZone->name} — {$assignedZone->city_name}, {$assignedZone->province_name}" : 'No zone assigned' }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wide">Covered Barangays ({{ $assignedZone ? $assignedZone->barangays->count() : 0 }})</p>
+                            @if($assignedZone && $assignedZone->barangays->isNotEmpty())
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    @foreach($assignedZone->barangays as $brgy)
+                                        <span class="px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[10px] font-semibold">
+                                            {{ $brgy->barangay_name }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @else
+                                <p class="text-on-surface-variant italic mt-0.5">None</p>
+                            @endif
+                        </div>
+                    </div>
+
+                    @if($rider->isCourier())
+                        <div class="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-800 text-xs">
+                            <p class="font-bold">Transfer Courier Account</p>
+                            <p class="mt-0.5">Transfer couriers perform hub-to-hub manifest transfers and are not assigned local delivery zones.</p>
+                        </div>
+                    @elseif(! $rider->isApproved() || ! $rider->isActive())
                         <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 text-xs mb-4">
                             <p class="font-bold">Zone Assignment Locked</p>
-                            <p class="mt-0.5">Rider must be both approved and active before coverage zones can be assigned.</p>
+                            <p class="mt-0.5">Rider must be both approved and active before a delivery zone can be assigned.</p>
                         </div>
                     @else
                         <form method="POST" action="{{ route('logistics.riders.assign-zones', $rider) }}" class="flex flex-col gap-4">
                             @csrf
                             @if($availableZones->isEmpty())
                                 <div class="p-6 rounded-xl bg-surface-container-low text-center">
-                                    <p class="text-xs text-on-surface-variant">No coverage zones configured for this logistics company yet.</p>
+                                    <p class="text-xs text-on-surface-variant">No matching coverage zones configured for this rider's hub yet.</p>
                                     <a href="{{ route('logistics.zones.index') }}" class="text-xs text-primary font-semibold underline mt-2 inline-block">
                                         Go to Coverage Zones to configure
                                     </a>
                                 </div>
                             @else
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    @foreach($availableZones as $zone)
-                                        @php
-                                            $isAssignedToThisRider = $rider->assignedZones->contains('id', $zone->id);
-                                            $otherRiders = $zone->riders->where('id', '!=', $rider->id);
-                                        @endphp
-                                        <label class="flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all {{ $isAssignedToThisRider ? 'bg-secondary/10 border-secondary' : 'bg-surface-container-low border-outline-variant hover:border-outline' }}">
-                                            <input
-                                                type="checkbox" name="zone_ids[]" value="{{ $zone->id }}"
-                                                {{ $isAssignedToThisRider ? 'checked' : '' }}
-                                                class="mt-0.5 rounded border-outline-variant text-secondary focus:ring-secondary">
-                                            <div class="flex-1 text-xs">
-                                                <div class="flex items-center justify-between gap-2">
-                                                    <p class="font-bold text-on-surface">{{ $zone->name }}</p>
-                                                    <span class="text-[10px] text-on-surface-variant font-medium bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">
-                                                        {{ $zone->city_name }}
-                                                    </span>
-                                                </div>
-                                                <p class="text-[11px] text-on-surface-variant mt-0.5">{{ $zone->province_name }} &bull; {{ $zone->barangays->count() }} barangays</p>
-                                                @if($zone->hub)
-                                                    <p class="text-[10px] text-on-surface-variant mt-0.5">Hub: {{ $zone->hub->name }}</p>
-                                                @endif
-                                                @if($isAssignedToThisRider)
-                                                    <p class="text-[10px] text-secondary font-semibold mt-1">Assigned to this rider</p>
-                                                @endif
-                                                @if($otherRiders->isNotEmpty())
-                                                    <p class="text-[10px] text-on-surface-variant mt-0.5">Also assigned: {{ $otherRiders->pluck('full_name')->join(', ') }}</p>
-                                                @endif
-                                            </div>
-                                        </label>
-                                    @endforeach
+                                <div class="flex flex-col gap-1.5">
+                                    <label for="zone_id" class="text-xs font-bold text-on-surface">
+                                        Select Single Delivery Zone
+                                    </label>
+                                    <select
+                                        id="zone_id"
+                                        name="zone_id"
+                                        class="w-full rounded-xl border border-outline-variant bg-surface px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary">
+                                        <option value="">-- No Zone Assigned (Unassigned) --</option>
+                                        @foreach($availableZones as $zone)
+                                            @php
+                                                $isSelected = old('zone_id', $assignedZone?->id) == $zone->id;
+                                            @endphp
+                                            <option value="{{ $zone->id }}" {{ $isSelected ? 'selected' : '' }}>
+                                                {{ $zone->name }} — {{ $zone->city_name }}, {{ $zone->province_name }} ({{ $zone->barangays->count() }} barangays){{ $zone->hub ? " · {$zone->hub->name}" : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('zone_id')
+                                        <p class="text-[11px] text-rose-600 font-semibold mt-0.5">{{ $message }}</p>
+                                    @enderror
                                 </div>
 
                                 <div class="flex justify-between items-center pt-2">
@@ -281,7 +319,7 @@
                                         <span>Configure Zones &amp; Barangays</span>
                                     </a>
                                     <button type="submit" class="px-5 py-2.5 rounded-full bg-secondary text-on-secondary font-semibold text-xs shadow-xs hover:bg-secondary/90 transition-all cursor-pointer">
-                                        Save Zone Assignments
+                                        Save Zone Assignment
                                     </button>
                                 </div>
                             @endif

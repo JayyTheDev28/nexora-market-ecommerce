@@ -38,6 +38,7 @@ class RiderController extends Controller
             ->whereHas('courierProfile', fn ($cp) => $cp->where('sorting_center_id', $sortingCenterId)->orWhere('logistics_company_id', $sortingCenterId))
             ->with([
                 'courierProfile.assignedHub',
+                'courierProfile.logisticsCompany.logisticsProfile',
                 'address',
                 'assignedZones.barangays',
                 'assignedZones.hub',
@@ -323,7 +324,9 @@ class RiderController extends Controller
         $sortingCenterId = $request->user()->id;
 
         $rider->load([
-            'courierProfile',
+            'courierProfile.assignedHub',
+            'courierProfile.logisticsCompany.logisticsProfile',
+            'courierProfile.sortingCenter.logisticsProfile',
             'address',
             'assignedZones.barangays',
             'assignedZones.hub',
@@ -334,6 +337,13 @@ class RiderController extends Controller
         ]);
 
         $availableZones = Zone::where('logistics_company_id', $sortingCenterId)
+            ->where('is_active', true)
+            ->when(
+                $rider->courierProfile?->assigned_hub_id,
+                fn ($q, $hubId) => $q->where(function ($hq) use ($hubId) {
+                    $hq->where('hub_id', $hubId)->orWhereNull('hub_id');
+                })
+            )
             ->with(['hub', 'barangays', 'riders'])
             ->orderBy('name')
             ->get();
@@ -505,29 +515,72 @@ class RiderController extends Controller
     {
         $this->authorizeRiderBelongsToCenter($request, $rider);
 
+        abort_unless($rider->isRider(), 422, 'Only delivery riders may be assigned a delivery zone.');
         // Prevent deactivated, pending activation, or unapproved riders from receiving new assignments
         abort_unless($rider->isApproved(), 422, 'Unapproved riders cannot be assigned delivery coverage.');
         abort_unless($rider->isActive(), 422, 'Only active riders can be assigned delivery coverage.');
 
         $validated = $request->validate([
+            'zone_id' => ['nullable', 'integer', 'exists:zones,id'],
             'zone_ids' => ['nullable', 'array'],
             'zone_ids.*' => ['integer', 'exists:zones,id'],
             'area_ids' => ['nullable', 'array'],
             'area_ids.*' => ['integer', 'exists:delivery_areas,id'],
         ]);
 
+        if ($request->has('zone_ids') && count($validated['zone_ids'] ?? []) > 1) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'zone_id' => 'Each rider may only be assigned to a single delivery zone.',
+            ]);
+        }
+
         $sortingCenterId = $request->user()->id;
+        $hasZoneInput = $request->has('zone_id') || $request->has('zone_ids');
+        $targetZoneId = $validated['zone_id'] ?? ($validated['zone_ids'][0] ?? null);
+        $targetZoneId = $targetZoneId ? (int) $targetZoneId : null;
 
-        DB::transaction(function () use ($sortingCenterId, $rider, $validated, $request) {
-            // 1. Coverage Zones (modern zone system)
-            if ($request->has('zone_ids')) {
-                $rawZoneIds = $validated['zone_ids'] ?? [];
-                $validZoneIds = Zone::where('logistics_company_id', $sortingCenterId)
-                    ->whereIn('id', $rawZoneIds)
-                    ->pluck('id')
-                    ->all();
+        if ($hasZoneInput && $targetZoneId !== null) {
+            $zone = Zone::where('id', $targetZoneId)
+                ->where('logistics_company_id', $sortingCenterId)
+                ->where('is_active', true)
+                ->first();
 
-                $rider->assignedZones()->sync($validZoneIds);
+            if (! $zone) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'zone_id' => 'Selected delivery zone does not belong to your logistics company or is inactive.',
+                ]);
+            }
+
+            $assignedHubId = $rider->courierProfile?->assigned_hub_id;
+            if ($assignedHubId && $zone->hub_id && (int) $zone->hub_id !== (int) $assignedHubId) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'zone_id' => 'Selected delivery zone must belong to the rider\'s assigned hub.',
+                ]);
+            }
+        }
+
+        $conflictingOrders = collect();
+        if ($hasZoneInput) {
+            $conflictingOrders = Order::where('delivery_courier_id', $rider->id)
+                ->whereIn('status', ['assigned_to_rider', 'out_for_delivery'])
+                ->when($targetZoneId !== null, fn ($q) => $q->where(function ($zq) use ($targetZoneId) {
+                    $zq->whereNull('delivery_zone_id')->orWhere('delivery_zone_id', '!=', $targetZoneId);
+                }))
+                ->pluck('order_number');
+        }
+
+        DB::transaction(function () use ($sortingCenterId, $rider, $validated, $request, $hasZoneInput, $targetZoneId) {
+            // 1. Coverage Zone (strictly 1 zone per rider; replaces any previous assignment)
+            if ($hasZoneInput) {
+                if ($targetZoneId !== null) {
+                    $rider->assignedZones()->sync([$targetZoneId]);
+                    $zone = Zone::find($targetZoneId);
+                    if ($zone?->hub_id && $rider->courierProfile && $rider->courierProfile->assigned_hub_id === null) {
+                        $rider->courierProfile->update(['assigned_hub_id' => $zone->hub_id]);
+                    }
+                } else {
+                    $rider->assignedZones()->detach();
+                }
             }
 
             // 2. Legacy DeliveryArea assignment (if area_ids provided)
@@ -546,7 +599,12 @@ class RiderController extends Controller
             }
         });
 
-        return back()->with('status', "Updated delivery coverage assignments for rider {$rider->full_name}.");
+        $message = "Updated delivery coverage assignment for rider {$rider->full_name}.";
+        if ($conflictingOrders->isNotEmpty()) {
+            $message .= ' Note: Existing active parcel assignments were preserved (' . $conflictingOrders->implode(', ') . ') — review coverage conflicts.';
+        }
+
+        return back()->with('status', $message);
     }
 
     /**

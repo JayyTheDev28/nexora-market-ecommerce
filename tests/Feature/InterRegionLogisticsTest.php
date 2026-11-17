@@ -244,8 +244,8 @@ class InterRegionLogisticsTest extends TestCase
             'status' => 'assigned_to_rider',
         ]);
 
-        // Also assign Laguna Rider 2 to the Santa Cruz Zone
-        $this->lagunaZone->riders()->syncWithoutDetaching([$this->lagunaRider2->id]);
+        // Move Laguna Rider 2 into the Santa Cruz Zone (single zone per rider)
+        $this->lagunaRider2->assignedZones()->sync([$this->lagunaZone->id]);
 
         $tieBreakRider = $this->service->findBestEligibleRider(
             logisticsCompanyId: $this->lagunaCompany->id,
