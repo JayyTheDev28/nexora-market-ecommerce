@@ -1,0 +1,794 @@
+[
+  {
+    "image": "p001.jpg",
+    "category": "sports",
+    "name": "Running Sneakers",
+    "price": 1890,
+    "weight": 0.8,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p002.jpg",
+    "category": "electronics",
+    "name": "Wireless Headphones",
+    "price": 950,
+    "weight": 0.4,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p003.jpg",
+    "category": "gaming",
+    "name": "RGB Mechanical Keyboard",
+    "price": 1550,
+    "weight": 0.7,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p004.jpg",
+    "category": "gaming",
+    "name": "Gaming Mouse",
+    "price": 650,
+    "weight": 0.3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p005.jpg",
+    "category": "gaming",
+    "name": "Wireless Controller",
+    "price": 1200,
+    "weight": 0.5,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p006.jpg",
+    "category": "electronics",
+    "name": "Notebook Laptop",
+    "price": 19500,
+    "weight": 2.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p007.jpg",
+    "category": "electronics",
+    "name": "Smartphone",
+    "price": 6500,
+    "weight": 0.4,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p008.jpg",
+    "category": "accessories",
+    "name": "Digital Wrist Watch",
+    "price": 1100,
+    "weight": 0.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p009.jpg",
+    "category": "electronics",
+    "name": "Slim Power Bank",
+    "price": 990,
+    "weight": 0.35,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p010.jpg",
+    "category": "electronics",
+    "name": "Wireless Earbuds",
+    "price": 890,
+    "weight": 0.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p011.jpg",
+    "category": "fashion",
+    "name": "City Travel Backpack",
+    "price": 799,
+    "weight": 0.6,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p012.jpg",
+    "category": "fashion",
+    "name": "Crossbody Shoulder Bag",
+    "price": 699,
+    "weight": 0.45,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p013.jpg",
+    "category": "fashion",
+    "name": "Cotton Baseball Cap",
+    "price": 250,
+    "weight": 0.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p014.jpg",
+    "category": "fashion",
+    "name": "Polarized Sunglasses",
+    "price": 499,
+    "weight": 0.1,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p015.jpg",
+    "category": "accessories",
+    "name": "Analog Wrist Watch",
+    "price": 1850,
+    "weight": 0.25,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p016.jpg",
+    "category": "fashion",
+    "name": "Classic Leather Belt",
+    "price": 390,
+    "weight": 0.3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p017.jpg",
+    "category": "fashion",
+    "name": "Compact Wallet",
+    "price": 360,
+    "weight": 0.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p018.jpg",
+    "category": "beauty",
+    "name": "Eau de Parfum Spray",
+    "price": 850,
+    "weight": 0.3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p019.jpg",
+    "category": "beauty",
+    "name": "Moisturizing Skin Lotion",
+    "price": 350,
+    "weight": 0.25,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p020.jpg",
+    "category": "sports",
+    "name": "Stainless Steel Sports Bottle",
+    "price": 440,
+    "weight": 0.35,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p021.jpg",
+    "category": "fashion",
+    "name": "Cotton Crew T-shirt",
+    "price": 299,
+    "weight": 0.25,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p022.jpg",
+    "category": "fashion",
+    "name": "Classic Pullover Hoodie",
+    "price": 699,
+    "weight": 0.6,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p023.jpg",
+    "category": "fashion",
+    "name": "Windbreaker Jacket",
+    "price": 950,
+    "weight": 0.65,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p024.jpg",
+    "category": "fashion",
+    "name": "Chino Trousers",
+    "price": 795,
+    "weight": 0.55,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p025.jpg",
+    "category": "sports",
+    "name": "Training Shorts",
+    "price": 349,
+    "weight": 0.25,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p026.jpg",
+    "category": "fashion",
+    "name": "Sports Crew Socks",
+    "price": 199,
+    "weight": 0.15,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p027.jpg",
+    "category": "sports",
+    "name": "Basketball Jersey",
+    "price": 490,
+    "weight": 0.3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p028.jpg",
+    "category": "sports",
+    "name": "Indoor Outdoor Basketball",
+    "price": 620,
+    "weight": 0.7,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p029.jpg",
+    "category": "health",
+    "name": "Protein Shake Powder",
+    "price": 1590,
+    "weight": 1.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p030.jpg",
+    "category": "sports",
+    "name": "Protein Shaker Bottle",
+    "price": 299,
+    "weight": 0.3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p031.jpg",
+    "category": "home-living",
+    "name": "Nonstick Frying Pan",
+    "price": 799,
+    "weight": 1.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p032.jpg",
+    "category": "home-living",
+    "name": "Stainless Cooking Pot",
+    "price": 1250,
+    "weight": 2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p033.jpg",
+    "category": "home-living",
+    "name": "Knife Block Kitchen Set",
+    "price": 1350,
+    "weight": 2.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p034.jpg",
+    "category": "home-living",
+    "name": "Electric Rice Cooker",
+    "price": 1890,
+    "weight": 2.8,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p035.jpg",
+    "category": "home-living",
+    "name": "Compact Air Fryer",
+    "price": 2450,
+    "weight": 3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p036.jpg",
+    "category": "home-living",
+    "name": "Countertop Blender",
+    "price": 1350,
+    "weight": 2.5,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p037.jpg",
+    "category": "home-living",
+    "name": "Electric Kettle",
+    "price": 875,
+    "weight": 1.3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p038.jpg",
+    "category": "home-living",
+    "name": "Portable Table Fan",
+    "price": 795,
+    "weight": 1.4,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p039.jpg",
+    "category": "home-living",
+    "name": "LED Light Bulb",
+    "price": 149,
+    "weight": 0.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p040.jpg",
+    "category": "home-living",
+    "name": "Adjustable Desk Lamp",
+    "price": 650,
+    "weight": 1.2,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p041.jpg",
+    "category": "home-living",
+    "name": "Storage Drawer Organizer",
+    "price": 790,
+    "weight": 3,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p042.jpg",
+    "category": "home-living",
+    "name": "Modular Display Bookshelf",
+    "price": 1650,
+    "weight": 5,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p043.jpg",
+    "category": "home-living",
+    "name": "Ergonomic Office Chair",
+    "price": 3950,
+    "weight": 8,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p044.jpg",
+    "category": "home-living",
+    "name": "Minimalist Work Desk",
+    "price": 3200,
+    "weight": 10,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p045.jpg",
+    "category": "home-living",
+    "name": "Bedding Set",
+    "price": 1490,
+    "weight": 4,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p046.jpg",
+    "category": "home-living",
+    "name": "Soft Throw Pillow",
+    "price": 320,
+    "weight": 0.6,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p047.jpg",
+    "category": "home-living",
+    "name": "Woven Blanket",
+    "price": 850,
+    "weight": 1.5,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p048.jpg",
+    "category": "home-living",
+    "name": "Indoor Potted Plant",
+    "price": 490,
+    "weight": 1,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p049.jpg",
+    "category": "home-living",
+    "name": "Decorative Wall Clock",
+    "price": 620,
+    "weight": 1,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p050.jpg",
+    "category": "books-stationery",
+    "name": "Framed Art Print",
+    "price": 650,
+    "weight": 1.1,
+    "source": "AI-generated catalog tile"
+  },
+  {
+    "image": "p051.jpg",
+    "category": "electronics",
+    "name": "Noise Cancelling Earbuds",
+    "price": 1290,
+    "weight": 0.2,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p052.jpg",
+    "category": "electronics",
+    "name": "USB-C Fast Charger",
+    "price": 599,
+    "weight": 0.2,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p053.jpg",
+    "category": "electronics",
+    "name": "Full HD Webcam",
+    "price": 1490,
+    "weight": 0.3,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p054.jpg",
+    "category": "electronics",
+    "name": "Aluminum Power Bank",
+    "price": 1190,
+    "weight": 0.4,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p055.jpg",
+    "category": "electronics",
+    "name": "Studio Headphones",
+    "price": 1890,
+    "weight": 0.5,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p056.jpg",
+    "category": "gaming",
+    "name": "RGB Backlit Keyboard",
+    "price": 1390,
+    "weight": 0.8,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p057.jpg",
+    "category": "gaming",
+    "name": "Honeycomb Gaming Mouse",
+    "price": 890,
+    "weight": 0.3,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p058.jpg",
+    "category": "gaming",
+    "name": "Bluetooth Gamepad",
+    "price": 1090,
+    "weight": 0.5,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p059.jpg",
+    "category": "electronics",
+    "name": "Portable Bluetooth Speaker",
+    "price": 1190,
+    "weight": 0.8,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p060.jpg",
+    "category": "home-living",
+    "name": "Reading LED Desk Lamp",
+    "price": 890,
+    "weight": 1,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p061.jpg",
+    "category": "home-living",
+    "name": "Insulated Travel Tumbler",
+    "price": 550,
+    "weight": 0.4,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p062.jpg",
+    "category": "home-living",
+    "name": "Ceramic Coffee Mug",
+    "price": 340,
+    "weight": 0.5,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p063.jpg",
+    "category": "home-living",
+    "name": "Wooden Table Clock",
+    "price": 730,
+    "weight": 0.5,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p064.jpg",
+    "category": "home-living",
+    "name": "Cool Mist Humidifier",
+    "price": 1850,
+    "weight": 1.5,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p065.jpg",
+    "category": "home-living",
+    "name": "Knitted Sofa Cushion",
+    "price": 440,
+    "weight": 0.6,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p066.jpg",
+    "category": "fashion",
+    "name": "Navy Travel Backpack",
+    "price": 1290,
+    "weight": 0.7,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p067.jpg",
+    "category": "sports",
+    "name": "Comfort Running Shoes",
+    "price": 1890,
+    "weight": 1,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p068.jpg",
+    "category": "fashion",
+    "name": "Denim Jeans",
+    "price": 799,
+    "weight": 0.6,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p069.jpg",
+    "category": "accessories",
+    "name": "Classic Silver Watch",
+    "price": 1790,
+    "weight": 0.25,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p070.jpg",
+    "category": "fashion",
+    "name": "Leather Crossbody Bag",
+    "price": 950,
+    "weight": 0.5,
+    "source": "AI-generated studio product photo"
+  },
+  {
+    "image": "p071.jpg",
+    "category": "kids",
+    "name": "Wooden Shape Sorting Toy",
+    "price": 540,
+    "weight": 0.6,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p072.jpg",
+    "category": "kids",
+    "name": "Soft Plush Bunny",
+    "price": 420,
+    "weight": 0.45,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p073.jpg",
+    "category": "kids",
+    "name": "Colorful Building Blocks",
+    "price": 690,
+    "weight": 0.85,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p074.jpg",
+    "category": "kids",
+    "name": "Baby Feeding Bottle",
+    "price": 290,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p075.jpg",
+    "category": "kids",
+    "name": "Kids Learning Puzzle",
+    "price": 370,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p076.jpg",
+    "category": "groceries",
+    "name": "Whole Grain Cereal Pack",
+    "price": 280,
+    "weight": 0.6,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p077.jpg",
+    "category": "groceries",
+    "name": "Ground Coffee Pouch",
+    "price": 390,
+    "weight": 0.5,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p078.jpg",
+    "category": "groceries",
+    "name": "Organic Jasmine Rice",
+    "price": 420,
+    "weight": 2,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p079.jpg",
+    "category": "groceries",
+    "name": "Peanut Butter Jar",
+    "price": 240,
+    "weight": 0.5,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p080.jpg",
+    "category": "groceries",
+    "name": "Dried Fruit Snack Pack",
+    "price": 160,
+    "weight": 0.25,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p081.jpg",
+    "category": "automotive",
+    "name": "Automotive Microfiber Cloth",
+    "price": 190,
+    "weight": 0.2,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p082.jpg",
+    "category": "automotive",
+    "name": "Car Air Freshener",
+    "price": 180,
+    "weight": 0.1,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p083.jpg",
+    "category": "automotive",
+    "name": "Motorcycle Tool Set",
+    "price": 850,
+    "weight": 1.7,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p084.jpg",
+    "category": "automotive",
+    "name": "Vehicle Phone Holder",
+    "price": 420,
+    "weight": 0.2,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p085.jpg",
+    "category": "automotive",
+    "name": "Car Wash Shampoo",
+    "price": 370,
+    "weight": 1.1,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p086.jpg",
+    "category": "pet-supplies",
+    "name": "Pet Food Bowl",
+    "price": 230,
+    "weight": 0.4,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p087.jpg",
+    "category": "pet-supplies",
+    "name": "Dog Leash and Collar",
+    "price": 380,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p088.jpg",
+    "category": "pet-supplies",
+    "name": "Cat Scratching Ball",
+    "price": 295,
+    "weight": 0.5,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p089.jpg",
+    "category": "pet-supplies",
+    "name": "Pet Toy Bone",
+    "price": 240,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p090.jpg",
+    "category": "pet-supplies",
+    "name": "Pet Grooming Brush",
+    "price": 360,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p091.jpg",
+    "category": "books-stationery",
+    "name": "Spiral Notebook",
+    "price": 145,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p092.jpg",
+    "category": "books-stationery",
+    "name": "Colored Pencil Pack",
+    "price": 225,
+    "weight": 0.4,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p093.jpg",
+    "category": "books-stationery",
+    "name": "Desk Pen Holder",
+    "price": 189,
+    "weight": 0.4,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p094.jpg",
+    "category": "books-stationery",
+    "name": "Acrylic Paint Set",
+    "price": 580,
+    "weight": 0.7,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p095.jpg",
+    "category": "beauty",
+    "name": "Lip Balm Set",
+    "price": 190,
+    "weight": 0.2,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p096.jpg",
+    "category": "beauty",
+    "name": "Face Cleanser",
+    "price": 450,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p097.jpg",
+    "category": "health",
+    "name": "First Aid Kit",
+    "price": 650,
+    "weight": 0.6,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p098.jpg",
+    "category": "health",
+    "name": "Reusable Ice Pack",
+    "price": 190,
+    "weight": 0.3,
+    "source": "Original generated illustration"
+  },
+  {
+    "image": "p099.jpg",
+    "category": "health",
+    "name": "Resistance Stretch Band",
+    "price": 440,
+    "weight": 0.4,
+    "source": "Original generated illustration"
+  }
+]
