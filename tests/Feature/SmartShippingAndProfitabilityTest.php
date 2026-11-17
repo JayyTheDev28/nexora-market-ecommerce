@@ -312,6 +312,21 @@ class SmartShippingAndProfitabilityTest extends TestCase
             'selected' => true,
         ]);
 
+        // 0. Web Cart, Cart Quote, and Product Detail show real ₱90.00 calculation (no hardcoded ₱50/1st kg!)
+        $this->actingAs($buyer)->get(route('cart.index'))
+            ->assertOk()
+            ->assertDontSee('Weight-based: ₱50/1st kg + ₱20/kg')
+            ->assertSee('90.00')
+            ->assertSee('Smart Pricing');
+
+        $this->actingAs($buyer)->postJson(route('cart.quote'))
+            ->assertOk()
+            ->assertJsonPath('estimated_shipping', 90);
+
+        $this->actingAs($buyer)->get(route('products.show', $product->id))
+            ->assertOk()
+            ->assertSee('90.00');
+
         // 1. Web Checkout Quote & Index both return ₱90.00 (no hardcoded ₱50 mismatch!)
         $this->actingAs($buyer)->get(route('checkout.index'))
             ->assertOk()
@@ -322,8 +337,13 @@ class SmartShippingAndProfitabilityTest extends TestCase
             ->assertJsonPath('total_shipping', 90)
             ->assertJsonPath('serviceable', true);
 
-        // 2. Mobile Checkout Summary API returns exact same ₱90.00 + voucher preview
+        // 2. Mobile Checkout Summary API (Cart + Direct Buy) returns exact same ₱90.00 + breakdown
         Sanctum::actingAs($buyer);
+        $this->getJson('/api/mobile/v1/buyer/checkout/summary?direct_product_id=' . $product->id . '&direct_quantity=1&address_id=' . $caviteAddr->id)
+            ->assertOk()
+            ->assertJsonPath('data.total_shipping', 90)
+            ->assertJsonPath('data.stores.0.shipping_breakdown.total_estimated_cost', 70);
+
         $this->getJson('/api/mobile/v1/buyer/checkout/summary?address_id=' . $caviteAddr->id . '&shipping_voucher_id=' . $shippingVoucher->id)
             ->assertOk()
             ->assertJsonPath('data.total_shipping', 90)

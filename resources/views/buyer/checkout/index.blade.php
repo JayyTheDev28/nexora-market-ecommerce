@@ -55,7 +55,7 @@
                     addresses: {{ json_encode($addresses) }},
                     defaultAddressId: {{ $defaultAddress?->id ?? 'null' }},
                     storeShippingFees: {{ json_encode($storeShippingFees) }},
-                    storeDetails: {{ json_encode(collect($storeQuotes)->map(fn($q) => ['shipping_fee' => $q['shipping_fee'], 'route_type' => $q['route_type'], 'serviceable' => $q['serviceable'], 'serviceability_error' => $q['serviceability_error']])->all()) }},
+                    storeDetails: {{ json_encode(collect($storeQuotes)->map(fn($q) => ['shipping_fee' => $q['shipping_fee'], 'route_type' => $q['route_type'], 'serviceable' => $q['serviceable'], 'serviceability_error' => $q['serviceability_error'], 'breakdown' => $q['breakdown']])->all()) }},
                     serviceable: {{ ($allServiceable ?? true) ? 'true' : 'false' }},
                     serviceabilityError: {{ json_encode($serviceabilityError ?? null) }},
                     totalSubtotal: {{ (float) $totalSubtotal }},
@@ -275,6 +275,23 @@
                                         <div>
                                             <span class="text-on-surface-variant">Shipping Fee:</span>
                                             <strong class="text-on-surface ml-1">₱<span x-text="Number(storeShippingFees['{{ $sellerId }}'] ?? {{ $shippingFee }}).toFixed(2)">{{ number_format($shippingFee, 2) }}</span></strong>
+                                        </div>
+                                        <div class="w-full text-[11px] text-outline mt-1" x-show="storeDetails['{{ $sellerId }}']?.breakdown">
+                                            <template x-if="storeDetails['{{ $sellerId }}']?.breakdown?.pricing_mode === 'smart_cost_margin'">
+                                                <span>
+                                                    Smart Calculation: Est. Cost ₱<span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.total_estimated_cost).toFixed(2)"></span>
+                                                    (Pickup ₱<span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.estimated_pickup_cost).toFixed(0)"></span>
+                                                    + Delivery ₱<span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.estimated_delivery_cost).toFixed(0)"></span>
+                                                    + Transfer ₱<span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.estimated_transfer_cost).toFixed(0)"></span>
+                                                    + Hub ₱<span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.estimated_hub_cost).toFixed(0)"></span>)
+                                                    ÷ (1 − <span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.target_profit_margin_pct).toFixed(0)"></span>% margin)
+                                                </span>
+                                            </template>
+                                            <template x-if="storeDetails['{{ $sellerId }}']?.breakdown && storeDetails['{{ $sellerId }}']?.breakdown?.pricing_mode !== 'smart_cost_margin'">
+                                                <span>
+                                                    Tariff Breakdown: Policy Minimum/Base + Add'l Weight (₱<span x-text="Number(storeDetails['{{ $sellerId }}'].breakdown.additional_weight_fee || 0).toFixed(2)"></span>) + Route/Oversized Surcharges
+                                                </span>
+                                            </template>
                                         </div>
                                     </div>
                                 </div>

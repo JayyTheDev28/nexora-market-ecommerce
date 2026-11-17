@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Services\ShippingPricingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,6 +12,59 @@ use Illuminate\View\View;
 
 class CartController extends Controller
 {
+    /**
+     * Build authoritative shipping preview for a user's selected cart items.
+     */
+    protected function buildCartShippingPreview($user, $items): array
+    {
+        $shippingPricing = app(ShippingPricingService::class);
+        $policy = $shippingPricing->getActivePolicy();
+        $defaultAddress = $user->addresses()->orderByDesc('is_default')->latest()->first();
+
+        $selectedItems = $items->filter(fn ($i) => (bool) $i->selected && $i->product);
+        $groupedSelected = $selectedItems->groupBy(fn ($i) => (int) ($i->product->seller_id ?? 0));
+
+        $storeQuotes = [];
+        $totalShipping = 0.0;
+        $routeLabels = [];
+
+        foreach ($groupedSelected as $sellerId => $storeItems) {
+            $q = $shippingPricing->calculateSmartQuote($storeItems, $sellerId ?: null, $defaultAddress);
+            $storeQuotes[$sellerId] = [
+                'shipping_fee' => $q['shipping_fee'],
+                'route_type' => $q['route_type'],
+                'billed_weight_kg' => $q['billed_weight_kg'],
+                'raw_weight_kg' => $q['raw_weight_kg'],
+                'serviceable' => $q['serviceable'],
+                'serviceability_error' => $q['serviceability_error'],
+                'breakdown' => $q['breakdown'],
+            ];
+            $totalShipping += $q['shipping_fee'];
+            $routeLabels[] = ucwords(str_replace('_', ' ', $q['route_type']));
+        }
+
+        $policySummary = ($policy->pricing_mode ?? 'weight_tiered') === 'smart_cost_margin'
+            ? sprintf(
+                'Smart Pricing: Est. Logistics Cost ÷ (1 − %.0f%% margin)%s',
+                (float) $policy->target_profit_margin_pct,
+                (float) $policy->rounding_increment > 0 ? ' · Rounded ₱' . number_format((float) $policy->rounding_increment, 0) : ''
+            )
+            : sprintf(
+                'Policy: ₱%s base (%.0fkg) + ₱%s/add\'l kg',
+                number_format((float) $policy->base_fee, 0),
+                (float) $policy->base_weight_kg,
+                number_format((float) $policy->per_additional_kg_fee, 0)
+            );
+
+        return [
+            'estimated_shipping' => round($totalShipping, 2),
+            'store_quotes' => $storeQuotes,
+            'route_summary' => ! empty($routeLabels) ? implode(', ', array_unique($routeLabels)) : 'No items selected',
+            'policy_summary' => $policySummary,
+            'has_default_address' => (bool) $defaultAddress,
+        ];
+    }
+
     /**
      * B6: Persistent cart across sessions, grouping items by store
      */
@@ -37,7 +91,23 @@ class CartController extends Controller
             ->wherePivotNull('used_at')
             ->get();
 
-        return view('buyer.cart.index', compact('items', 'grouped', 'claimedVouchers'));
+        $shippingPreview = $this->buildCartShippingPreview($user, $items);
+
+        return view('buyer.cart.index', compact('items', 'grouped', 'claimedVouchers', 'shippingPreview'));
+    }
+
+    /**
+     * Authoritative real-time shipping quote for selected cart items.
+     */
+    public function quote(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $items = $user->cartItems()
+            ->with(['product' => fn ($q) => $q->withTrashed()->with('seller.sellerProfile')])
+            ->latest()
+            ->get();
+
+        return response()->json($this->buildCartShippingPreview($user, $items));
     }
 
     /**

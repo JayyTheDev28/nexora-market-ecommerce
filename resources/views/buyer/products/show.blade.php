@@ -374,6 +374,27 @@
                     </p>
                 @endif
 
+                {{-- Estimated Shipping Calculation Banner --}}
+                @if(isset($shippingQuote))
+                    <div class="mt-3 p-3.5 rounded-2xl border border-gray-200/80 bg-[#fafafa] space-y-1 text-xs">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-semibold text-gray-800 flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[17px] text-[#543b4b]">local_shipping</span>
+                                <span>Estimated Shipping ({{ ucwords(str_replace('_', ' ', $shippingQuote['route_type'])) }})</span>
+                            </span>
+                            <strong class="text-sm font-bold text-[#543b4b]">₱{{ number_format($shippingQuote['shipping_fee'], 2) }}</strong>
+                        </div>
+                        <p class="text-[11px] text-gray-500">
+                            {{ $shippingQuote['billed_weight_kg'] }} kg billed ·
+                            @if(($shippingQuote['pricing_mode'] ?? 'weight_tiered') === 'smart_cost_margin')
+                                Est. Cost ₱{{ number_format($shippingQuote['breakdown']['total_estimated_cost'] ?? 0, 2) }} ÷ (1 − {{ number_format($shippingQuote['breakdown']['target_profit_margin_pct'] ?? 20, 0) }}% margin)
+                            @else
+                                Active Tariff: Base ₱{{ number_format($shippingQuote['policy']->base_fee ?? 50, 2) }} + ₱{{ number_format($shippingQuote['policy']->per_additional_kg_fee ?? 20, 2) }}/add'l kg
+                            @endif
+                        </p>
+                    </div>
+                @endif
+
                 {{-- Store Banner / Verification --}}
                 <div class="mt-3 p-3.5 rounded-2xl border border-gray-200/80 bg-[#fafafa] flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 min-w-0">

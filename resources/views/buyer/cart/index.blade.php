@@ -4,22 +4,26 @@
 
 @section('content')
 <div
-    x-data="cartPage({{ $items->map(fn ($item) => [
-        'key' => (string) $item->id,
-        'id' => $item->product_id,
-        'name' => $item->product->name,
-        'image' => $item->product->getVariantImageUrl($item->variant),
-        'price' => (float) $item->unit_price,
-        'regularPrice' => (float) $item->product->price,
-        'isFlashSale' => $item->product->isFlashSaleActive(),
-        'sellerId' => (int) ($item->product->seller_id ?? 0),
-        'seller' => $item->product->seller->sellerProfile->business_name ?? $item->product->seller->full_name ?? 'Merchant',
-        'variant' => $item->variant,
-        'qty' => $item->quantity,
-        'selected' => (bool) $item->selected,
-        'stock' => (int) $item->product->stock,
-        'weight' => (float) ($item->product->weight ?? 1.0),
-    ])->values()->toJson() }})"
+    x-data="cartPage({
+        items: {{ $items->map(fn ($item) => [
+            'key' => (string) $item->id,
+            'id' => $item->product_id,
+            'name' => $item->product->name,
+            'image' => $item->product->getVariantImageUrl($item->variant),
+            'price' => (float) $item->unit_price,
+            'regularPrice' => (float) $item->product->price,
+            'isFlashSale' => $item->product->isFlashSaleActive(),
+            'sellerId' => (int) ($item->product->seller_id ?? 0),
+            'seller' => $item->product->seller->sellerProfile->business_name ?? $item->product->seller->full_name ?? 'Merchant',
+            'variant' => $item->variant,
+            'qty' => $item->quantity,
+            'selected' => (bool) $item->selected,
+            'stock' => (int) $item->product->stock,
+            'weight' => (float) ($item->product->weight ?? 1.0),
+        ])->values()->toJson() }},
+        shippingPreview: {{ json_encode($shippingPreview) }},
+        quoteUrl: '{{ route('cart.quote') }}'
+    })"
     class="w-full bg-surface py-5 md:py-6 min-h-[75vh] pb-20 md:pb-10">
     
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -214,16 +218,23 @@
                             <span class="font-semibold text-on-surface" x-text="selectedStoresCount"></span>
                         </div>
                         <div class="flex items-center justify-between text-on-surface-variant">
-                            <span>Shipping Fees (Calculated at Checkout)</span>
-                            <span class="text-[11px] text-outline">Weight-based: ₱50/1st kg + ₱20/kg</span>
+                            <span>Shipping Fees <span class="text-[10px] text-primary font-semibold" x-show="routeSummary" x-text="'(' + routeSummary + ')'">({{ $shippingPreview['route_summary'] }})</span></span>
+                            <span class="font-semibold text-on-surface">₱<span x-text="estimatedShipping.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})">{{ number_format($shippingPreview['estimated_shipping'], 2) }}</span></span>
                         </div>
+                        <p class="text-[11px] text-outline leading-snug" x-text="policySummary">{{ $shippingPreview['policy_summary'] }}</p>
                     </div>
 
-                    <div class="pt-3 border-t border-outline-variant/60 flex items-baseline justify-between">
-                        <span class="text-xs font-bold text-on-surface">Estimated Subtotal</span>
-                        <span class="text-xl font-extrabold text-primary">
-                            ₱<span x-text="subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></span>
-                        </span>
+                    <div class="pt-3 border-t border-outline-variant/60 space-y-1">
+                        <div class="flex items-baseline justify-between text-xs text-on-surface-variant">
+                            <span>Merchandise Subtotal</span>
+                            <span class="font-semibold text-on-surface">₱<span x-text="subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></span></span>
+                        </div>
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-xs font-bold text-on-surface">Estimated Total</span>
+                            <span class="text-xl font-extrabold text-primary">
+                                ₱<span x-text="(subtotal + estimatedShipping).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></span>
+                            </span>
+                        </div>
                     </div>
 
                     {{-- Proceed to Checkout Button --}}
@@ -249,9 +260,13 @@
 
 @push('scripts')
 <script>
-    function cartPage(initialItems) {
+    function cartPage(cfg) {
         return {
-            items: initialItems,
+            items: cfg.items || [],
+            estimatedShipping: Number(cfg.shippingPreview?.estimated_shipping ?? 0),
+            routeSummary: cfg.shippingPreview?.route_summary || '',
+            policySummary: cfg.shippingPreview?.policy_summary || '',
+            quoteUrl: cfg.quoteUrl || '/cart/quote',
 
             get uniqueSellers() {
                 return [...new Set(this.items.map(i => i.sellerId))];
@@ -295,6 +310,24 @@
                 return storeItems.length > 0 && storeItems.every(i => i.selected);
             },
 
+            async refreshShippingQuote() {
+                try {
+                    const res = await fetch(this.quoteUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json',
+                        },
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    this.estimatedShipping = Number(data.estimated_shipping ?? 0);
+                    this.routeSummary = data.route_summary || '';
+                    this.policySummary = data.policy_summary || '';
+                } catch (e) { console.error('Failed to refresh shipping quote', e); }
+            },
+
             async toggleSelectAll(checked) {
                 this.items.forEach(i => i.selected = checked);
                 try {
@@ -307,6 +340,7 @@
                         },
                         body: JSON.stringify({ selected: checked }),
                     });
+                    await this.refreshShippingQuote();
                 } catch (e) {
                     console.error('Failed to select all', e);
                 }
@@ -324,6 +358,7 @@
                         },
                         body: JSON.stringify({ selected: checked }),
                     });
+                    await this.refreshShippingQuote();
                 } catch (e) {
                     console.error('Failed to select store', e);
                 }
@@ -341,6 +376,7 @@
                         },
                         body: JSON.stringify({ selected: checked }),
                     });
+                    await this.refreshShippingQuote();
                 } catch (e) {
                     console.error('Failed to update item select', e);
                 }
@@ -367,6 +403,7 @@
                         item.qty = oldQty;
                     } else if (data.cartCount !== undefined) {
                         window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
+                        await this.refreshShippingQuote();
                     }
                 } catch (e) {
                     console.error('Failed to update quantity', e);
@@ -391,6 +428,7 @@
                         if (data.cartCount !== undefined) {
                             window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: data.cartCount } }));
                         }
+                        await this.refreshShippingQuote();
                     }
                 } catch (e) {
                     console.error('Failed to delete item', e);

@@ -507,6 +507,7 @@ Route::middleware('role:buyer')->group(function () {
 
     // B6: Cart
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+    Route::post('/cart/quote', [CartController::class, 'quote'])->name('cart.quote');
     Route::post('/cart/items', [CartController::class, 'store'])->name('cart.items.store');
     Route::patch('/cart/items/{cartItem}', [CartController::class, 'update'])->name('cart.items.update');
     Route::delete('/cart/items/{cartItem}', [CartController::class, 'destroy'])->name('cart.items.destroy');

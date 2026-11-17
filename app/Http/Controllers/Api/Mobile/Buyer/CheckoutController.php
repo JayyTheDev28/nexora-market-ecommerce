@@ -41,7 +41,10 @@ class CheckoutController extends Controller
             ]);
         }
 
-        $summary = $this->checkoutService->getSummary($request->user(), $cartItemIds, $addressId, $locationOverride);
+        $directProductId = $request->filled('direct_product_id') ? (int) $request->query('direct_product_id') : null;
+        $directQuantity = $request->filled('direct_quantity') ? max(1, (int) $request->query('direct_quantity')) : 1;
+
+        $summary = $this->checkoutService->getSummary($request->user(), $cartItemIds, $addressId, $locationOverride, $directProductId, $directQuantity);
         $voucherPreview = $this->checkoutService->previewVouchers($request->user(), $summary, [
             'platform_voucher_id' => $request->query('platform_voucher_id'),
             'shipping_voucher_id' => $request->query('shipping_voucher_id'),

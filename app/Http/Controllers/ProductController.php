@@ -157,10 +157,18 @@ class ProductController extends Controller
             'sellerProductsCount' => $sellerProductsCount,
         ];
 
+        $defaultAddress = $user?->addresses()->orderByDesc('is_default')->latest()->first();
+        $shippingQuote = app(\App\Services\ShippingPricingService::class)->calculateSmartQuote(
+            [$product],
+            $product->seller_id,
+            $defaultAddress
+        );
+
         return view('buyer.products.show', [
             'product' => $productArray,
             'related' => $related,
             'reviews' => $reviews,
+            'shippingQuote' => $shippingQuote,
         ]);
     }
 }

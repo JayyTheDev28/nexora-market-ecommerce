@@ -63,21 +63,40 @@ class MobileCheckoutService
         User $user,
         ?array $cartItemIds = null,
         ?int $addressId = null,
-        ?array $locationOverride = null
+        ?array $locationOverride = null,
+        ?int $directProductId = null,
+        int $directQuantity = 1
     ): array {
-        $query = $user->cartItems()
-            ->with(['product' => fn ($q) => $q->withTrashed()->with('seller.sellerProfile')]);
+        $items = collect();
 
-        if ($cartItemIds !== null && ! empty($cartItemIds)) {
-            $requestedIds = array_values(array_unique(array_map('intval', $cartItemIds)));
-            $items = $query->whereIn('id', $requestedIds)->get();
-            if ($items->count() !== count($requestedIds)) {
-                throw ValidationException::withMessages([
-                    'cart_item_ids' => ['One or more selected cart items are invalid or no longer belong to your cart.'],
+        if ($directProductId && $directProductId > 0) {
+            $directProduct = Product::with('seller.sellerProfile')->find($directProductId);
+            if ($directProduct && $directProduct->status === 'active') {
+                $virtualItem = new \App\Models\CartItem([
+                    'user_id' => $user->id,
+                    'product_id' => $directProduct->id,
+                    'quantity' => max(1, $directQuantity),
+                    'unit_price' => (float) $directProduct->effective_price,
+                    'selected' => true,
                 ]);
+                $virtualItem->setRelation('product', $directProduct);
+                $items = collect([$virtualItem]);
             }
         } else {
-            $items = $query->where('selected', true)->get();
+            $query = $user->cartItems()
+                ->with(['product' => fn ($q) => $q->withTrashed()->with('seller.sellerProfile')]);
+
+            if ($cartItemIds !== null && ! empty($cartItemIds)) {
+                $requestedIds = array_values(array_unique(array_map('intval', $cartItemIds)));
+                $items = $query->whereIn('id', $requestedIds)->get();
+                if ($items->count() !== count($requestedIds)) {
+                    throw ValidationException::withMessages([
+                        'cart_item_ids' => ['One or more selected cart items are invalid or no longer belong to your cart.'],
+                    ]);
+                }
+            } else {
+                $items = $query->where('selected', true)->get();
+            }
         }
 
         $addresses = $user->addresses()->orderByDesc('is_default')->latest()->get();
