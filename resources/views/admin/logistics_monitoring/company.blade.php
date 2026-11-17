@@ -6,7 +6,7 @@
     <main class="flex-1 p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
             <div>
                 <a href="{{ route('admin.logistics-monitoring.index') }}" class="text-xs font-semibold text-primary hover:underline">&larr; Back to Logistics Monitoring</a>
-                <h1 class="text-2xl font-bold text-on-surface mt-1">{{ $company->logisticsProfile?->company_name ?? $company->full_name }}</h1>
+                <h1 class="text-2xl font-bold text-on-surface mt-1">{{ $company->logisticsProfile?->company_name ?? $company->sortingCenterProfile?->business_name ?? $company->full_name }}</h1>
                 <p class="text-sm text-on-surface-variant">{{ $company->email }} &bull; {{ $company->contact_number }}</p>
             </div>
 

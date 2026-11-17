@@ -269,4 +269,42 @@ class DisputeShowAndBuyerAddressUiTest extends TestCase
             ->assertSee('full_address')
             ->assertSee('Manage / Edit Book');
     }
+
+    public function test_admin_logistics_monitoring_company_inspect_page_renders_without_error(): void
+    {
+        $admin = User::create([
+            'first_name' => 'Inspect',
+            'last_name' => 'Admin',
+            'sex' => 'other',
+            'birthday' => '1990-01-01',
+            'age' => 35,
+            'contact_number' => '09175550001',
+            'email' => 'inspect_admin_' . uniqid() . '@nexora.test',
+            'password' => Hash::make('password'),
+            'role' => 'admin',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+
+        $logistics = User::create([
+            'first_name' => 'FastFlow',
+            'last_name' => 'Logistics',
+            'sex' => 'other',
+            'birthday' => '1990-01-01',
+            'age' => 35,
+            'contact_number' => '09175550002',
+            'email' => 'inspect_log_' . uniqid() . '@nexora.test',
+            'password' => Hash::make('password'),
+            'role' => 'logistics',
+            'approval_status' => 'approved',
+            'account_status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.logistics-monitoring.company', $logistics))
+            ->assertOk()
+            ->assertSee('FastFlow Logistics');
+    }
 }

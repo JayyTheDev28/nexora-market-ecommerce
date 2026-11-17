@@ -124,23 +124,27 @@ class LogisticsMonitoringController extends Controller
             ->get();
 
         $completedTransfersCount = TransferManifest::where(fn ($q) => $q->where('sender_logistics_id', $company->id)->orWhere('receiver_logistics_id', $company->id))
-            ->whereIn('status', [TransferManifest::STATUS_RECEIVED, TransferManifest::STATUS_CLOSED_WITH_EXCEPTIONS])
+            ->whereIn('status', [TransferManifest::STATUS_COMPLETED, TransferManifest::STATUS_CLOSED_WITH_EXCEPTIONS])
             ->count();
 
         $deliveredCount = Order::where('delivery_logistics_id', $company->id)->whereIn('status', ['delivered', 'completed'])->count();
-        $failedCount = Order::where('delivery_logistics_id', $company->id)->where('status', 'failed_delivery')->count();
+        $failedCount = Order::where('delivery_logistics_id', $company->id)->whereIn('status', ['failed_delivery', 'delivery_failed'])->count();
 
         $openIncidents = ParcelIncident::whereHas('hub', fn ($q) => $q->where('logistics_company_id', $company->id))
-            ->whereIn('investigation_status', ['open', 'investigating', 'escalated'])
+            ->whereIn('investigation_status', ParcelIncident::UNRESOLVED_STATUSES)
             ->with(['order', 'hub'])
             ->latest('reported_at')
             ->latest('id')
             ->get();
 
         $remittances = LogisticsAdminRemittance::where('logistics_id', $company->id)->latest('updated_at')->latest('id')->limit(10)->get();
-        $shippingAllocations = (float) InterCompanyShippingAllocation::where('logistics_company_id', $company->id)->sum('allocated_amount');
+        $shippingAllocations = (float) InterCompanyShippingAllocation::where('pickup_logistics_id', $company->id)->sum('pickup_share_amount')
+            + (float) InterCompanyShippingAllocation::where('transfer_logistics_id', $company->id)->sum('transfer_share_amount')
+            + (float) InterCompanyShippingAllocation::where('delivery_logistics_id', $company->id)->sum('delivery_share_amount');
         $courierExpenses = (float) RiderEarning::whereIn('courier_id', $riders->pluck('id')->merge($couriers->pluck('id')))->sum('amount');
-        $verifiedCodTotal = (float) CodCollection::where('logistics_id', $company->id)->where('status', 'verified')->sum('amount');
+        $verifiedCodTotal = (float) CodCollection::where('collecting_logistics_id', $company->id)
+            ->where('status', CodCollection::STATUS_VERIFIED)
+            ->sum('verified_remitted_amount');
 
         return view('admin.logistics_monitoring.company', compact(
             'company',
