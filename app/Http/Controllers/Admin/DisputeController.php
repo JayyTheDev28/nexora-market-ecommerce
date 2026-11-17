@@ -35,7 +35,7 @@ class DisputeController extends Controller
             });
         }
 
-        $disputes = $query->latest()->paginate(15)->withQueryString();
+        $disputes = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
 
         $counts = [
             'all' => Dispute::count(),

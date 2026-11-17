@@ -27,7 +27,8 @@ class RemittanceController extends Controller
 
         $query = CodRemittance::where('sorting_center_id', $companyId)
             ->with(['courier.courierProfile', 'reviewer', 'collectingHub', 'allocations.order'])
-            ->latest('remitted_at');
+            ->latest('remitted_at')
+            ->latest('id');
 
         if ($request->filled('status')) {
             $status = $request->string('status')->toString();

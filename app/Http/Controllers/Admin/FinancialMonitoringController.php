@@ -56,9 +56,9 @@ class FinancialMonitoringController extends Controller
 
         $reconciliation = $reconciliationService->runReconciliationReport();
 
-        $recentAdminRemittances = LogisticsAdminRemittance::with('logistics.logisticsProfile')->latest()->limit(8)->get();
-        $recentSellerPayouts = SellerPayoutRequest::with('seller.sellerProfile')->latest()->limit(8)->get();
-        $recentAdjustments = FinancialAdjustment::latest()->limit(8)->get();
+        $recentAdminRemittances = LogisticsAdminRemittance::with('logistics.logisticsProfile')->latest('updated_at')->latest('id')->limit(8)->get();
+        $recentSellerPayouts = SellerPayoutRequest::with('seller.sellerProfile')->latest('updated_at')->latest('id')->limit(8)->get();
+        $recentAdjustments = FinancialAdjustment::latest()->latest('id')->limit(8)->get();
 
         return view('admin.financial_monitoring.index', compact(
             'overview',

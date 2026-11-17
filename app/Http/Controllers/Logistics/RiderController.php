@@ -68,7 +68,7 @@ class RiderController extends Controller
             default => null, // 'all' shows all couriers for this center
         };
 
-        $riders = $query->latest()->paginate(15)->withQueryString();
+        $riders = $query->latest()->latest('id')->paginate(15)->withQueryString();
 
         $baseCount = fn () => User::whereIn('role', ['rider', 'courier'])
             ->when($category === 'riders', fn ($q) => $q->where('role', 'rider'))
@@ -330,7 +330,7 @@ class RiderController extends Controller
             'deliveryAreas' => fn ($q) => $q->where('sorting_center_id', $sortingCenterId),
             'activeDeliveries.buyer',
             'activeDeliveries.address',
-            'completedDeliveries' => fn ($q) => $q->latest()->limit(10),
+            'completedDeliveries' => fn ($q) => $q->latest('delivered_at')->latest('id')->limit(10),
         ]);
 
         $availableZones = Zone::where('logistics_company_id', $sortingCenterId)

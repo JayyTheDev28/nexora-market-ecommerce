@@ -32,7 +32,7 @@ class FraudAlertController extends Controller
             $query->where('severity', $severity);
         }
 
-        $alerts = $query->latest('detected_at')->paginate(15)->withQueryString();
+        $alerts = $query->latest('detected_at')->latest('id')->paginate(15)->withQueryString();
 
         $counts = ['all' => RiskAlert::count()];
         foreach (RiskAlert::STATUSES as $st) {

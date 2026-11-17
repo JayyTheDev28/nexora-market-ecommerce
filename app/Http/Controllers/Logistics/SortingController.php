@@ -129,7 +129,7 @@ class SortingController extends Controller
             });
         }
 
-        $parcels = $query->latest()->paginate(15)->withQueryString();
+        $parcels = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
 
         $baseCountQuery = fn () => Order::where($eligibleForLocalSorting);
 

@@ -65,6 +65,7 @@ class DashboardController extends Controller implements HasMiddleware
             ->where('expires_at', '>=', now())
             ->with(['order.items.product', 'order.address', 'order.primary_seller'])
             ->latest()
+            ->latest('id')
             ->get();
 
         // 2. Assigned Pickups (ready_for_pickup or assigned)
@@ -72,6 +73,7 @@ class DashboardController extends Controller implements HasMiddleware
             ->whereIn('status', ['ready_for_pickup', 'assigned'])
             ->with(['seller.sellerProfile', 'seller.address', 'items.product'])
             ->latest('updated_at')
+            ->latest('id')
             ->get();
 
         // 3. Active Deliveries (out_for_delivery or assigned_to_rider)
@@ -79,6 +81,7 @@ class DashboardController extends Controller implements HasMiddleware
             ->whereIn('status', ['assigned_to_rider', 'out_for_delivery'])
             ->with(['buyer', 'address', 'items.product', 'deliveryAttempts'])
             ->latest('updated_at')
+            ->latest('id')
             ->get();
 
         // 4. Completed Deliveries
@@ -86,6 +89,7 @@ class DashboardController extends Controller implements HasMiddleware
             ->whereIn('status', ['delivered', 'completed'])
             ->with(['buyer', 'address', 'proofOfDelivery'])
             ->latest('delivered_at')
+            ->latest('id')
             ->limit(10)
             ->get();
 
@@ -483,6 +487,7 @@ class DashboardController extends Controller implements HasMiddleware
         ->whereBetween('updated_at', [$startDate, $endDate])
         ->with(['buyer', 'seller', 'riderEarnings' => fn ($q) => $q->where('courier_id', $rider->id)])
         ->latest('updated_at')
+        ->latest('id')
         ->paginate(15);
 
         // 2. Earnings Aggregates
@@ -507,11 +512,13 @@ class DashboardController extends Controller implements HasMiddleware
         $codLedger = CodLedgerEntry::where('courier_id', $rider->id)
             ->with('order')
             ->latest()
+            ->latest('id')
             ->limit(20)
             ->get();
 
         $remittances = CodRemittance::where('courier_id', $rider->id)
             ->latest('remitted_at')
+            ->latest('id')
             ->get();
 
         $unremittedCod = $profile ? (float) $profile->unremitted_cod_balance : 0.00;

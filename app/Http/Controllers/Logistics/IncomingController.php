@@ -106,7 +106,7 @@ class IncomingController extends Controller
             });
         }
 
-        $parcels = $query->latest()->paginate(15)->withQueryString();
+        $parcels = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
         $counts = $this->buildCounts((int) $companyId);
 
         // Delivery areas managed by this sorting center for quick destination matching

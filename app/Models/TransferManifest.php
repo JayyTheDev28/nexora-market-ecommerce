@@ -182,16 +182,22 @@ class TransferManifest extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(TransferManifestItem::class, 'manifest_id');
+        return $this->hasMany(TransferManifestItem::class, 'manifest_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
     }
 
     public function hubTransfers(): HasMany
     {
-        return $this->hasMany(HubTransfer::class, 'manifest_id');
+        return $this->hasMany(HubTransfer::class, 'manifest_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
     }
 
     public function incidents(): HasMany
     {
-        return $this->hasMany(ParcelIncident::class, 'manifest_id');
+        return $this->hasMany(ParcelIncident::class, 'manifest_id')
+            ->orderByDesc('reported_at')
+            ->orderByDesc('id');
     }
 }

@@ -87,7 +87,7 @@ class HubController extends Controller
             });
         }
 
-        $parcels = $query->latest()->paginate(15)->withQueryString();
+        $parcels = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
 
         $allAtHub = Order::where(function ($q) use ($hub) {
                 $q->where('current_hub_id', $hub->id)

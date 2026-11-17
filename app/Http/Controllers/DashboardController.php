@@ -22,6 +22,7 @@ class DashboardController extends Controller
         $recentOrders = Order::where('buyer_id', $buyerId)
             ->with('items')
             ->latest('placed_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 
@@ -55,13 +56,16 @@ class DashboardController extends Controller
         })
         ->with(['buyer', 'items'])
         ->latest('placed_at')
+        ->latest('id')
         ->limit(6)
         ->get();
 
         $actionableOrders = Order::where('seller_id', $sellerId)
             ->whereIn('status', ['placed', 'confirmed', 'preparing'])
             ->with(['buyer', 'items'])
-            ->oldest('placed_at')
+            ->latest('updated_at')
+            ->latest('placed_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 
@@ -69,6 +73,7 @@ class DashboardController extends Controller
             ->where('seller_status', 'pending')
             ->with(['order.buyer', 'raisedBy'])
             ->latest()
+            ->latest('id')
             ->limit(3)
             ->get();
 
@@ -102,7 +107,8 @@ class DashboardController extends Controller
         $pendingPickups = Order::where('status', 'ready_for_pickup')
             ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
             ->with(['items.product.seller', 'address', 'pickupCourier'])
-            ->latest('placed_at')
+            ->latest('updated_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 
@@ -110,6 +116,7 @@ class DashboardController extends Controller
             ->where(fn ($q) => $q->where('pickup_logistics_id', $sortingCenterId)->orWhere('current_custody_logistics_id', $sortingCenterId)->orWhere('sorting_center_id', $sortingCenterId))
             ->with(['buyer', 'address', 'pickupCourier', 'items.product.seller'])
             ->latest('updated_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 
@@ -117,6 +124,7 @@ class DashboardController extends Controller
             ->where('status', 'at_sorting_center')
             ->with(['buyer', 'address', 'deliveryArea'])
             ->latest('updated_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 
@@ -124,6 +132,7 @@ class DashboardController extends Controller
             ->where('status', 'sorted')
             ->with(['buyer', 'address', 'deliveryArea'])
             ->latest('updated_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 

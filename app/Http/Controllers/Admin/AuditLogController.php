@@ -45,7 +45,7 @@ class AuditLogController extends Controller
             });
         }
 
-        $logs = $query->latest('created_at')->paginate(20)->withQueryString();
+        $logs = $query->latest('created_at')->latest('id')->paginate(20)->withQueryString();
 
         $actions = AuditLog::select('action')->distinct()->pluck('action')->all();
         $operators = User::whereIn('id', AuditLog::select('operator_id')->distinct()->pluck('operator_id'))->get();

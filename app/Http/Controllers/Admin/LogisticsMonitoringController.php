@@ -56,12 +56,14 @@ class LogisticsMonitoringController extends Controller
         $incidentsQuery = ParcelIncident::with(['order', 'hub', 'reporter'])
             ->when($companyFilter, fn ($q) => $q->whereHas('hub', fn ($hq) => $hq->where('logistics_company_id', $companyFilter)))
             ->when($statusFilter, fn ($q) => $q->where('investigation_status', $statusFilter))
-            ->latest();
+            ->latest()
+            ->latest('id');
         $recentIncidents = $incidentsQuery->paginate(10, ['*'], 'incidents_page')->withQueryString();
 
         $manifests = TransferManifest::with(['originHub', 'destinationHub', 'assignedCourier', 'senderLogistics', 'receiverLogistics'])
             ->when($companyFilter, fn ($q) => $q->where(fn ($sq) => $sq->where('sender_logistics_id', $companyFilter)->orWhere('receiver_logistics_id', $companyFilter)))
-            ->latest()
+            ->latest('updated_at')
+            ->latest('id')
             ->limit(15)
             ->get();
 
@@ -117,7 +119,8 @@ class LogisticsMonitoringController extends Controller
         $activeManifests = TransferManifest::where(fn ($q) => $q->where('sender_logistics_id', $company->id)->orWhere('receiver_logistics_id', $company->id))
             ->whereIn('status', TransferManifest::ACTIVE_STATUSES)
             ->with(['originHub', 'destinationHub', 'assignedCourier'])
-            ->latest()
+            ->latest('updated_at')
+            ->latest('id')
             ->get();
 
         $completedTransfersCount = TransferManifest::where(fn ($q) => $q->where('sender_logistics_id', $company->id)->orWhere('receiver_logistics_id', $company->id))
@@ -130,10 +133,11 @@ class LogisticsMonitoringController extends Controller
         $openIncidents = ParcelIncident::whereHas('hub', fn ($q) => $q->where('logistics_company_id', $company->id))
             ->whereIn('investigation_status', ['open', 'investigating', 'escalated'])
             ->with(['order', 'hub'])
-            ->latest()
+            ->latest('reported_at')
+            ->latest('id')
             ->get();
 
-        $remittances = LogisticsAdminRemittance::where('logistics_id', $company->id)->latest()->limit(10)->get();
+        $remittances = LogisticsAdminRemittance::where('logistics_id', $company->id)->latest('updated_at')->latest('id')->limit(10)->get();
         $shippingAllocations = (float) InterCompanyShippingAllocation::where('logistics_company_id', $company->id)->sum('allocated_amount');
         $courierExpenses = (float) RiderEarning::whereIn('courier_id', $riders->pluck('id')->merge($couriers->pluck('id')))->sum('amount');
         $verifiedCodTotal = (float) CodCollection::where('logistics_id', $company->id)->where('status', 'verified')->sum('amount');

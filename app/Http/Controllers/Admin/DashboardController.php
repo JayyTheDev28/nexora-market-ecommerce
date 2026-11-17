@@ -39,21 +39,25 @@ class DashboardController extends Controller
             ->whereIn('role', ['buyer', 'seller', 'logistics', 'sorting_center'])
             ->with(['sellerProfile', 'sortingCenterProfile', 'logisticsProfile'])
             ->latest()
+            ->latest('id')
             ->limit(5)
             ->get();
 
         $recentDisputes = Dispute::with(['order.buyer', 'order.seller.sellerProfile'])
             ->latest()
+            ->latest('id')
             ->limit(5)
             ->get();
 
         $recentAuditLogs = AuditLog::with('operator')
             ->latest('created_at')
+            ->latest('id')
             ->limit(6)
             ->get();
 
         $recentOrders = Order::with(['buyer', 'seller.sellerProfile'])
             ->latest('placed_at')
+            ->latest('id')
             ->limit(5)
             ->get();
 

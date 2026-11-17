@@ -88,7 +88,7 @@ class OrderDetailResource extends JsonResource
                 'variant' => $item->variant,
                 'image' => $toAbsoluteUrl($item->product?->getVariantImageUrl(is_array($item->variant) ? $item->variant : null)),
             ]),
-            'status_history' => $this->statusHistory->map(fn ($h) => [
+            'status_history' => $this->statusHistory->sortBy([['changed_at', 'asc'], ['id', 'asc']])->values()->map(fn ($h) => [
                 'id' => $h->id,
                 'status' => $h->status,
                 'note' => app(\App\Services\ParcelTrackingService::class)->sanitizeStatusNote($h->note, (string) $h->status),

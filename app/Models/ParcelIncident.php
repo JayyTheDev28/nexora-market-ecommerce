@@ -254,7 +254,9 @@ class ParcelIncident extends Model
 
     public function events(): HasMany
     {
-        return $this->hasMany(ParcelIncidentEvent::class, 'incident_id')->orderBy('occurred_at')->orderBy('id');
+        return $this->hasMany(ParcelIncidentEvent::class, 'incident_id')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id');
     }
 
     public function scopeUnresolved(Builder $query): Builder

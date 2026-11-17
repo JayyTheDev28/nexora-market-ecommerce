@@ -72,7 +72,7 @@ class MonitoringController extends Controller
             });
         }
 
-        $deliveries = $query->latest('updated_at')->paginate(15)->withQueryString();
+        $deliveries = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
 
         $counts = [
             'in_flight' => Order::where('sorting_center_id', $sortingCenterId)->whereIn('status', ['assigned_to_rider', 'out_for_delivery'])->count(),

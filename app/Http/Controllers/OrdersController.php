@@ -47,7 +47,8 @@ class OrdersController extends Controller
                 'incidents',
                 'proofOfDelivery',
             ])
-            ->latest('placed_at');
+            ->latest('placed_at')
+            ->latest('id');
 
         // Apply Tab Filter (Rule B10 - System is exclusively COD)
         match ($activeTab) {

@@ -31,7 +31,7 @@ class ParcelTrackingService
 
         $milestones = [];
 
-        foreach ($order->statusHistory as $history) {
+        foreach ($order->statusHistory->sortBy([['changed_at', 'asc'], ['id', 'asc']]) as $history) {
             if (! $history->changed_at) {
                 continue;
             }

@@ -44,7 +44,8 @@ class OrderController extends Controller
             'buyer',
             'address',
         ])
-        ->latest('placed_at');
+        ->latest('placed_at')
+        ->latest('id');
 
         // Status filter tab
         $statusTab = $request->query('status', 'all');

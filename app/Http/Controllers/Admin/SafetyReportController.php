@@ -53,7 +53,7 @@ class SafetyReportController extends Controller
             });
         }
 
-        $reports = $query->latest()->paginate(15)->withQueryString();
+        $reports = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
 
         $counts = ['all' => SafetyReport::count()];
         foreach (SafetyReport::STATUSES as $st) {

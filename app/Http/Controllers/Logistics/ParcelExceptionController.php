@@ -126,7 +126,7 @@ class ParcelExceptionController extends Controller
         $companyId = $request->user()->logisticsCompanyId();
         $investigators = User::where(function ($q) use ($companyId) {
             $q->where('id', $companyId)->orWhere('role', 'admin');
-        })->where('status', 'active')->orderBy('first_name')->get();
+        })->where('account_status', 'active')->orderBy('first_name')->get();
 
         $allActiveHubs = Hub::where('is_active', true)->orderBy('name')->get();
 

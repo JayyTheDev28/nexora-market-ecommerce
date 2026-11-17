@@ -52,7 +52,7 @@ class PickupController extends Controller
             });
         }
 
-        $orders = $query->latest('placed_at')->paginate(15)->withQueryString();
+        $orders = $query->latest('updated_at')->latest('placed_at')->latest('id')->paginate(15)->withQueryString();
 
         $baseCountQuery = Order::where(function ($q) use ($companyId) {
             $q->where('pickup_logistics_id', $companyId)

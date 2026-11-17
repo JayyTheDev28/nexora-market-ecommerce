@@ -475,7 +475,9 @@ class Order extends Model
 
     public function statusHistory()
     {
-        return $this->hasMany(OrderStatusHistory::class)->orderBy('changed_at');
+        return $this->hasMany(OrderStatusHistory::class)
+            ->orderByDesc('changed_at')
+            ->orderByDesc('id');
     }
 
     public function dispute()

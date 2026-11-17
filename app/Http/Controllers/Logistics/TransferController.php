@@ -92,7 +92,7 @@ class TransferController extends Controller
             default => $baseQuery()->where('receiver_logistics_id', $companyId)->where('status', 'in_transit'),
         };
 
-        $transfers = $query->latest('dispatched_at')->paginate(15)->withQueryString();
+        $transfers = $query->orderByDesc('dispatched_at')->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString();
 
         $counts = [
             'incoming' => HubTransfer::where('receiver_logistics_id', $companyId)->where('status', 'in_transit')->count(),
@@ -123,6 +123,7 @@ class TransferController extends Controller
             })
             ->with(['buyer', 'address', 'currentHub.logisticsCompany', 'originHub.logisticsCompany', 'destinationHub.logisticsCompany', 'pickupLogistics', 'deliveryLogistics', 'unresolvedIncidents'])
             ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->get();
 
         // Separate cleanly routed parcels from parcels requiring routing review
@@ -148,7 +149,8 @@ class TransferController extends Controller
                   ->orWhere('receiver_logistics_id', $companyId);
             })
             ->with(['originHub', 'destinationHub', 'assignedCourier', 'senderLogistics', 'receiverLogistics', 'items', 'incidents'])
-            ->latest()
+            ->latest('updated_at')
+            ->latest('id')
             ->limit(25)
             ->get();
 
@@ -161,7 +163,8 @@ class TransferController extends Controller
                 TransferManifest::STATUS_READY_TO_DISPATCH,
             ])
             ->with(['originHub', 'destinationHub', 'assignedCourier'])
-            ->latest()
+            ->latest('updated_at')
+            ->latest('id')
             ->get();
 
         // Approved active Transfer Couriers belonging to this company
@@ -304,6 +307,7 @@ class TransferController extends Controller
             ->where('auditable_id', $manifest->id)
             ->with('operator')
             ->latest('created_at')
+            ->latest('id')
             ->get();
 
         return view('logistics.transfers.manifest_show', compact('manifest', 'receivingCounts', 'transferCouriers', 'auditLogs'));
